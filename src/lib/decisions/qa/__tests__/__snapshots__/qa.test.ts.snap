@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`decision regression snapshot > produces stable QA ranking signature 1`] = `
+[
+  "key-a|high|15% Automatic Discount|90",
+  "key-b|high|15% Automatic Discount|85",
+]
+`;
+
+exports[`decision regression snapshot > produces stable ranking for fixture scenarios 1`] = `
+[
+  "dead_inventory:pause_ads:53",
+  "roas_collapse:do_nothing:157",
+  "winning_campaign:increase_google_budget:310",
+  "inventory_overstock:increase_google_budget:156",
+  "seasonal_sales_drop:do_nothing:49",
+  "high_cpc:increase_google_budget:124",
+  "low_conversion:increase_google_budget:56",
+]
+`;

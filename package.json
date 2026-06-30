@@ -1,0 +1,32 @@
+{
+  "name": "storepilot-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate": "vitest run src/lib/validation/__tests__",
+    "test:quality": "vitest run src/lib/decision-quality-lab/__tests__ src/lib/simulation-lab/__tests__",
+    "quality:gate": "vitest run src/lib/decision-quality-lab/__tests__/release-gate.test.ts",
+    "verify:google": "vitest run src/lib/google-ads/__tests__/live-api.test.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

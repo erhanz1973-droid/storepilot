@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/ga4-sync",
+      "schedule": "0 */4 * * *"
+    }
+  ]
+}

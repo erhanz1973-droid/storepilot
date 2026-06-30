@@ -1,0 +1,52 @@
+import { parseRevenueImpact } from "@/lib/approvals/revenue";
+import { revenueToNetProfitImpact } from "@/lib/opportunities/profit-impact";
+import type { Opportunity, OpportunityCategory, Recommendation } from "@/lib/types";
+
+export type RevenueImpactEstimate = {
+  monthlyRevenue: number;
+  monthlyProfit: number;
+  confidencePct: number;
+  label: string;
+};
+
+export function estimateFromOpportunity(
+  opportunity: Opportunity,
+): RevenueImpactEstimate {
+  const monthlyRevenue = opportunity.estimatedMonthlyRevenueImpact;
+  const monthlyProfit = opportunity.estimatedMonthlyNetProfitImpact;
+  return {
+    monthlyRevenue,
+    monthlyProfit,
+    confidencePct: Math.round(opportunity.confidenceScore * 100),
+    label: formatImpactLabel(monthlyRevenue, monthlyProfit),
+  };
+}
+
+export function estimateFromRecommendation(
+  rec: Recommendation,
+  netMarginPct?: number,
+): RevenueImpactEstimate {
+  const monthlyRevenue = parseRevenueImpact(rec.expectedImpact);
+  const monthlyProfit = revenueToNetProfitImpact(
+    monthlyRevenue,
+    rec.category as unknown as OpportunityCategory,
+    netMarginPct,
+  );
+  return {
+    monthlyRevenue,
+    monthlyProfit,
+    confidencePct: Math.round(rec.confidenceScore * 100),
+    label: formatImpactLabel(monthlyRevenue, monthlyProfit),
+  };
+}
+
+export function formatImpactLabel(revenue: number, profit: number): string {
+  if (profit > 0) return `+$${profit.toLocaleString()}/mo profit`;
+  if (revenue > 0) return `+$${revenue.toLocaleString()}/mo revenue`;
+  return "Operational efficiency gain";
+}
+
+export function formatCurrency(amount: number): string {
+  const prefix = amount >= 0 ? "+" : "";
+  return `${prefix}$${Math.abs(amount).toLocaleString()}`;
+}
