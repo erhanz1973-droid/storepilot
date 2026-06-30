@@ -69,7 +69,7 @@ function resolveBreakEvenRoas(
   profitDashboard?: ProfitDashboard | null,
 ): number | null {
   if (profitDashboard) {
-    const fromAttribution = resolveBreakEvenModel(profitDashboard, null).breakEvenRoas;
+    const fromAttribution = resolveBreakEvenModel(profitDashboard, 0.58).breakEvenRoas;
     if (fromAttribution > 0) return fromAttribution;
     const estimated = estimateBreakEvenRoas(profitDashboard);
     if (estimated != null && estimated > 0) return estimated;
@@ -298,7 +298,8 @@ export function generatePrimaryStoreInsight(input: GenerateInput): ValidatedStor
       metricsConflict,
       recommendation: snapshot
         ? advertisingRecommendation(snapshot, opportunities)
-        : advertisingRecommendation({ campaigns: [], products: [] } as StoreSnapshot, opportunities),
+        : opportunities[0]?.recommendation ??
+          "Trim spend on the lowest-performing ad sets and creatives before pausing full campaigns. Shift budget to audiences and placements that consistently exceed break-even ROAS.",
     };
   }
 
@@ -332,7 +333,8 @@ export function generatePrimaryStoreInsight(input: GenerateInput): ValidatedStor
       metricsConflict,
       recommendation: snapshot
         ? advertisingRecommendation(snapshot, opportunities)
-        : advertisingRecommendation({ campaigns: [], products: [] } as StoreSnapshot, opportunities),
+        : opportunities[0]?.recommendation ??
+          "Trim spend on the lowest-performing ad sets and creatives before pausing full campaigns. Shift budget to audiences and placements that consistently exceed break-even ROAS.",
     };
   }
 

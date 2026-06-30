@@ -31,7 +31,7 @@ function statusEmoji(score: number): string {
   return "🔴";
 }
 
-type LegacyDashboard = Partial<BusinessHealthDashboard> & {
+type LegacyDashboard = Partial<Omit<BusinessHealthDashboard, "domains">> & {
   overallScore?: number;
   overallLabel?: string;
   trend?: BusinessHealthTrend;

@@ -19,7 +19,7 @@ import {
   scoreAllStrategies,
   strategyShortLabel,
 } from "./decision-context";
-import { sortActionsByPriority } from "./action-priority";
+import { sortActionsByPriority, type PrioritizedActionCore, type UnrankedStrategyAction } from "./action-priority";
 import type {
   ActionRiskLevel,
   AttributionBusinessObjective,
@@ -208,10 +208,10 @@ function buildActionsForStrategy(input: {
   creatives: CreativeAttributionRow[];
   acquisition: AcquisitionMetrics;
   breakEvenRoas: number;
-}): AttributionStrategyActionCore[] {
+}): PrioritizedActionCore[] {
   const { strategy, businessObjective, campaigns, channels, creatives, acquisition, breakEvenRoas } = input;
   const breakEven = breakEvenRoas;
-  const actions: Omit<AttributionStrategyActionCore, "rank">[] = [];
+  const actions: UnrankedStrategyAction[] = [];
   const paid = campaigns.filter((c) => c.adSpend > 50);
   const prospecting = paid.filter((c) => campaignTone(c.campaignName) === "prospecting");
   const retargeting = paid.filter((c) => campaignTone(c.campaignName) === "retargeting");
@@ -550,7 +550,7 @@ export function buildAttributionStrategyPlan(input: {
   );
 
   const netProfit =
-    input.channels.reduce((s, c) => s + c.netProfit, 0) ||
+    input.channels.reduce((s, c) => s + c.attributedProfit, 0) ||
     input.profitDashboard?.primary.netProfit ||
     0;
   const storeRevenue =

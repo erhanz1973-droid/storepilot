@@ -55,7 +55,7 @@ function resolveBreakEvenRoas(
   profitDashboard?: ProfitDashboard | null,
 ): number | null {
   if (profitDashboard) {
-    const fromAttribution = resolveBreakEvenModel(profitDashboard, null).breakEvenRoas;
+    const fromAttribution = resolveBreakEvenModel(profitDashboard, 0.58).breakEvenRoas;
     if (fromAttribution > 0) return fromAttribution;
     const estimated = estimateBreakEvenRoas(profitDashboard);
     if (estimated != null && estimated > 0) return estimated;

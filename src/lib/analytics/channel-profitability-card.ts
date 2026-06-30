@@ -187,8 +187,8 @@ export function estimateChannelTrends(input: {
   const prevRev = previous.reduce((s, p) => s + p.revenue, 0);
   const curOrders = current.reduce((s, p) => s + p.orders, 0);
   const prevOrders = previous.reduce((s, p) => s + p.orders, 0);
-  const curSessions = current.reduce((s, p) => s + (p.sessions ?? p.orders * 3), 0);
-  const prevSessions = previous.reduce((s, p) => s + (p.sessions ?? p.orders * 3), 0);
+  const curSessions = current.reduce((s, p) => s + p.orders * 3, 0);
+  const prevSessions = previous.reduce((s, p) => s + p.orders * 3, 0);
 
   const storeRevChange = periodChangePct(curRev, prevRev);
   const storeOrderChange = periodChangePct(curOrders, prevOrders);

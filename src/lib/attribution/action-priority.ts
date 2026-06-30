@@ -20,6 +20,12 @@ export type PrioritizedActionCore = AttributionStrategyActionCore & {
   rankExplanation: string;
 };
 
+/** Action before rank / priority metadata is assigned by sortActionsByPriority */
+export type UnrankedStrategyAction = Omit<
+  AttributionStrategyActionCore,
+  "rank" | "priorityScore" | "rankExplanation"
+>;
+
 const RISK_POINTS: Record<ActionRiskLevel, number> = {
   Low: 100,
   Medium: 68,
@@ -27,7 +33,7 @@ const RISK_POINTS: Record<ActionRiskLevel, number> = {
 };
 
 export function computeActionPriorityScore(input: {
-  action: AttributionStrategyActionCore;
+  action: UnrankedStrategyAction;
   strategy: AttributionStrategyId;
   businessObjective: AttributionBusinessObjective;
   maxProfit: number;
@@ -92,7 +98,7 @@ export function computeActionPriorityScore(input: {
 }
 
 function buildRankExplanation(input: {
-  action: AttributionStrategyActionCore;
+  action: UnrankedStrategyAction;
   profitComponent: number;
   riskComponent: number;
   alignmentComponent: number;
@@ -120,7 +126,7 @@ function buildRankExplanation(input: {
 }
 
 export function sortActionsByPriority(
-  actions: AttributionStrategyActionCore[],
+  actions: UnrankedStrategyAction[],
   strategy: AttributionStrategyId,
   businessObjective: AttributionBusinessObjective,
 ): PrioritizedActionCore[] {

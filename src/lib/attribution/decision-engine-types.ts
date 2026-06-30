@@ -211,7 +211,10 @@ export type AttributionStrategyPlanCore = {
   };
 };
 
-export type AttributionStrategyPlan = AttributionStrategyPlanCore & {
+export type AttributionStrategyPlan = Omit<
+  AttributionStrategyPlanCore,
+  "actions" | "simulation"
+> & {
   confidenceBreakdown: ConfidenceBreakdown;
   expiration: RecommendationExpiration;
   assumptions: StrategyAssumption[];

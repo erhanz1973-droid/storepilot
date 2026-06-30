@@ -794,7 +794,7 @@ function handleInventoryIntelligence(
   sources: CopilotDataSource[],
   matched: ReturnType<typeof findMatchingInsights>,
 ): CopilotStructuredResponse {
-  const dead = bundle.context.slowProducts.filter((p) => p.inventoryQuantity > 50 && p.unitsSold30d < 5);
+  const dead = bundle.context.slowProducts.filter((p) => p.inventory > 50 && p.unitsSold30d < 5);
   const lowStock = bundle.context.lowStockProducts;
 
   if (dead.length === 0 && lowStock.length === 0 && matched.length === 0) {
@@ -803,7 +803,7 @@ function handleInventoryIntelligence(
 
   const summary =
     dead.length > 0
-      ? `**Inventory Intelligence** — ${dead.length} SKUs flagged as dead/slow inventory. Lead with **${dead[0]!.title}** (${dead[0]!.inventoryQuantity} units, ${dead[0]!.unitsSold30d} sold in 30d).`
+      ? `**Inventory Intelligence** — ${dead.length} SKUs flagged as dead/slow inventory. Lead with **${dead[0]!.title}** (${dead[0]!.inventory} units, ${dead[0]!.unitsSold30d} sold in 30d).`
       : lowStock.length > 0
         ? `**Inventory Intelligence** — ${lowStock.length} SKUs need restock. Priority: **${lowStock[0]!.title}** (~${lowStock[0]!.daysOfCover.toFixed(0)} days of cover).`
         : matched[0]?.description ?? "Review inventory risks in Analytics → Inventory.";
@@ -839,8 +839,11 @@ function handleMarketingIntelligence(
     return insufficient(sources, "marketing_intelligence");
   }
 
+  const googleRoas30d =
+    dash?.channels.find((c) => c.channelId === "google_ads")?.roas ?? null;
+
   const summary = dash
-    ? `**Marketing Intelligence** — Blended ROAS **${dash.blendedRoas30d?.toFixed(2) ?? "—"}** · Meta **${dash.metaRoas30d?.toFixed(2) ?? "—"}** · Google **${dash.googleRoas30d?.toFixed(2) ?? "—"}**. Best channel: **${attr?.acquisition.bestAcquisitionChannel ?? "connect attribution"}**.`
+    ? `**Marketing Intelligence** — Blended ROAS **${dash.blendedRoas30d?.toFixed(2) ?? "—"}** · Meta **${dash.metaRoas30d?.toFixed(2) ?? "—"}** · Google **${googleRoas30d?.toFixed(2) ?? "—"}**. Best channel: **${attr?.acquisition.bestAcquisitionChannel ?? "connect attribution"}**.`
     : matched[0]?.description ?? "Connect ad platforms for marketing intelligence.";
 
   return {
