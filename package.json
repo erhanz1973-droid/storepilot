@@ -13,7 +13,9 @@
     "validate": "vitest run src/lib/validation/__tests__",
     "test:quality": "vitest run src/lib/decision-quality-lab/__tests__ src/lib/simulation-lab/__tests__",
     "quality:gate": "vitest run src/lib/decision-quality-lab/__tests__/release-gate.test.ts",
-    "verify:google": "vitest run src/lib/google-ads/__tests__/live-api.test.ts"
+    "verify:google": "vitest run src/lib/google-ads/__tests__/live-api.test.ts",
+    "shopify:purge": "node scripts/purge-shopify-installation.mjs",
+    "shopify:verify": "node scripts/verify-shopify-connection.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

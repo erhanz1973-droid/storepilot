@@ -247,6 +247,82 @@ export async function markShopifyUninstalled(shopDomain: string): Promise<void> 
     .eq("shop_domain", shopDomain);
 }
 
+function clearMemoryShopifyCaches(storeId?: string): void {
+  if (storeId) {
+    memorySyncCache.delete(storeId);
+    for (const [id, row] of memoryInstallations) {
+      if (row.store_id === storeId) {
+        memoryInstallations.delete(id);
+      }
+    }
+    return;
+  }
+
+  memoryInstallations.clear();
+  memorySyncCache.clear();
+}
+
+/** Remove stale installation + sync cache so OAuth can store a fresh encrypted token. */
+export async function purgeShopifyInstallationData(options?: {
+  shopDomain?: string;
+  storeId?: string;
+}): Promise<{ purged: Array<{ shopDomain: string; storeId: string }> }> {
+  const supabase = getSupabaseAdmin();
+  const shopDomain = options?.shopDomain?.trim();
+  const storeId = options?.storeId?.trim();
+
+  if (!supabase) {
+    const targets = [...memoryInstallations.values()].filter((row) => {
+      if (shopDomain && row.shop_domain !== shopDomain) return false;
+      if (storeId && row.store_id !== storeId) return false;
+      return true;
+    });
+    for (const row of targets) {
+      clearMemoryShopifyCaches(row.store_id);
+    }
+    return {
+      purged: targets.map((row) => ({
+        shopDomain: row.shop_domain,
+        storeId: row.store_id,
+      })),
+    };
+  }
+
+  let query = supabase
+    .from("shopify_installations")
+    .select("id, store_id, shop_domain");
+
+  if (shopDomain) query = query.eq("shop_domain", shopDomain);
+  if (storeId) query = query.eq("store_id", storeId);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as Array<{ id: string; store_id: string; shop_domain: string }>;
+  for (const row of rows) {
+    const { error: cacheError } = await supabase
+      .from("shopify_sync_cache")
+      .delete()
+      .eq("store_id", row.store_id);
+    if (cacheError) throw new Error(cacheError.message);
+
+    const { error: installError } = await supabase
+      .from("shopify_installations")
+      .delete()
+      .eq("id", row.id);
+    if (installError) throw new Error(installError.message);
+
+    clearMemoryShopifyCaches(row.store_id);
+  }
+
+  return {
+    purged: rows.map((row) => ({
+      shopDomain: row.shop_domain,
+      storeId: row.store_id,
+    })),
+  };
+}
+
 export async function updateShopifySyncResult(
   storeId: string,
   stats: ShopifySyncStats,
