@@ -390,12 +390,19 @@ export async function buildDashboard(
     profitDashboard,
     productIntelligence,
   });
-  const profitEngine = buildProfitDecisionEngine({
-    snapshot,
-    profitDashboard: profitDashboard!,
-    merchantMode,
-    enableInventoryStrategies: decisionPackContext.pack.enableInventoryStrategies,
-  });
+  const profitEngine = profitDashboard
+    ? buildProfitDecisionEngine({
+        snapshot,
+        profitDashboard,
+        merchantMode,
+        enableInventoryStrategies: decisionPackContext.pack.enableInventoryStrategies,
+      })
+    : {
+        merchantMode,
+        objective: "Maximize expected net profit — not revenue alone.",
+        recommendations: [],
+        slowProductStrategies: [],
+      };
   const profitStrategiesByProductId = new Map(
     profitEngine.slowProductStrategies.map((s) => [s.productId, s]),
   );
