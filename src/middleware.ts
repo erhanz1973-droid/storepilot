@@ -42,12 +42,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/auth/callback") {
-    logEmbeddedRequest(request, "redirect /auth/callback → /api/shopify/callback");
-    const url = request.nextUrl.clone();
-    url.pathname = "/api/shopify/callback";
-    return NextResponse.redirect(url);
-  }
+  // /auth/* is handled by src/app/auth/[...slug]/route.ts (embedded Shopify OAuth).
 
   const shop = normalizeShop(request.nextUrl.searchParams.get("shop"));
   if (shop || pathname.startsWith("/auth")) {

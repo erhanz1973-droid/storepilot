@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { markShopifyUninstalled } from "@/lib/db/shopify";
+import { deleteAuthSessionsForShop } from "@/lib/shopify/supabase-session-storage";
 import { verifyWebhookHmac } from "@/lib/shopify/oauth";
 
 export async function POST(request: Request) {
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
 
   if (topic === "app/uninstalled" && shop) {
     await markShopifyUninstalled(shop);
+    await deleteAuthSessionsForShop(shop);
   }
 
   return NextResponse.json({ ok: true });

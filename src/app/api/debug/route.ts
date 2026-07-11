@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { NextResponse } from "next/server";
+import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 
 function readBuildId(): string | null {
   try {
@@ -44,6 +45,12 @@ export async function GET() {
       join(process.cwd(), ".next/server/app/api/shopify/callback/route.js")
     ),
     shopifyKeys,
+    embeddedAuthRoute: "/auth/[...slug]",
+    legacyOAuthRoutes: {
+      auth: "/api/shopify/auth",
+      callback: "/api/shopify/callback",
+    },
+    shopifyOAuthConfigured: isShopifyOAuthConfigured(),
     timestamp: new Date().toISOString(),
   });
 }

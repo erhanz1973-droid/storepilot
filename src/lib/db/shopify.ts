@@ -17,14 +17,32 @@ export type ShopifyInstallation = {
   uninstalled_at: string | null;
   last_sync_at: string | null;
   sync_stats: ShopifySyncStats;
+  refreshToken?: string | null;
+  refreshTokenExpires?: Date | null;
 };
 
-type MemoryInstallation = ShopifyInstallation & { access_token_encrypted: string };
+type MemoryInstallation = ShopifyInstallation & {
+  access_token_encrypted: string;
+  refresh_token_encrypted?: string | null;
+  refresh_token_expires_at?: string | null;
+};
 
 const memoryInstallations = new Map<string, MemoryInstallation>();
 const memorySyncCache = new Map<string, { snapshot: Partial<StoreSnapshot>; synced_at: string }>();
 
 function rowToInstallation(row: Record<string, unknown>): ShopifyInstallation {
+  const refreshEncrypted = row.refresh_token_encrypted as string | null | undefined;
+  let refreshToken: string | null = null;
+  if (refreshEncrypted) {
+    try {
+      refreshToken = decryptToken(refreshEncrypted);
+    } catch {
+      refreshToken = null;
+    }
+  }
+
+  const refreshExpiresRaw = row.refresh_token_expires_at as string | null | undefined;
+
   return {
     id: row.id as string,
     store_id: row.store_id as string,
@@ -46,6 +64,8 @@ function rowToInstallation(row: Record<string, unknown>): ShopifyInstallation {
       collectionCount: 0,
       discountCount: 0,
     },
+    refreshToken,
+    refreshTokenExpires: refreshExpiresRaw ? new Date(refreshExpiresRaw) : null,
   };
 }
 
@@ -162,8 +182,11 @@ export async function upsertShopifyInstallation(input: {
   scopes: string[];
   shopName?: string;
   shopifyPlan?: string;
+  refreshToken?: string;
+  refreshTokenExpires?: Date;
 }): Promise<ShopifyInstallation> {
   const encrypted = encryptToken(input.accessToken);
+  const refreshEncrypted = input.refreshToken ? encryptToken(input.refreshToken) : null;
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
 
@@ -177,6 +200,8 @@ export async function upsertShopifyInstallation(input: {
       store_id: input.storeId,
       shop_domain: input.shopDomain,
       access_token_encrypted: encrypted,
+      refresh_token_encrypted: refreshEncrypted,
+      refresh_token_expires_at: input.refreshTokenExpires?.toISOString() ?? null,
       shop_name: input.shopName ?? null,
       shopify_plan: input.shopifyPlan ?? null,
       scopes: input.scopes,
@@ -194,6 +219,8 @@ export async function upsertShopifyInstallation(input: {
         collectionCount: 0,
         discountCount: 0,
       },
+      refreshToken: input.refreshToken ?? null,
+      refreshTokenExpires: input.refreshTokenExpires ?? null,
     };
     memoryInstallations.set(id, record);
     return rowToInstallation(record as unknown as Record<string, unknown>);
@@ -206,6 +233,8 @@ export async function upsertShopifyInstallation(input: {
         store_id: input.storeId,
         shop_domain: input.shopDomain,
         access_token_encrypted: encrypted,
+        refresh_token_encrypted: refreshEncrypted,
+        refresh_token_expires_at: input.refreshTokenExpires?.toISOString() ?? null,
         scopes: input.scopes,
         shop_name: input.shopName ?? null,
         shopify_plan: input.shopifyPlan ?? null,
@@ -250,6 +279,8 @@ export async function markShopifyUninstalled(shopDomain: string): Promise<void> 
       connection_health: "disconnected",
       uninstalled_at: now,
       access_token_encrypted: "",
+      refresh_token_encrypted: "",
+      refresh_token_expires_at: null,
     } as Record<string, unknown>)
     .eq("shop_domain", shopDomain);
 }
