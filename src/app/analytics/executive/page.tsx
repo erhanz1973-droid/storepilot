@@ -1,12 +1,10 @@
 import nextDynamic from "next/dynamic";
 import { AnalyticsPageShell } from "@/components/analytics/AnalyticsPageShell";
 import {
-  buildDemoExecutivePageData,
   buildExecutivePageData,
 } from "@/lib/services/analytics";
 import { resolveAdvertisingEntitlements } from "@/lib/billing/resolve-entitlements-light";
-import { logServerRenderError } from "@/lib/services/server-render-error";
-import { allowDemoData } from "@/lib/env/runtime";
+import { buildEmbeddedSafeExecutiveFallback } from "@/lib/services/embedded-executive-fallback";
 import { resolveActiveStoreId } from "@/lib/store/context";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
@@ -27,11 +25,7 @@ export default async function ExecutiveAnalyticsPage() {
   const [activeStoreId, dataResult, entitlementsResult] = await Promise.all([
     resolveActiveStoreId(),
     buildExecutivePageData().catch(async (error) => {
-      logServerRenderError("buildExecutivePageData (page)", error);
-      if (allowDemoData()) {
-        return buildDemoExecutivePageData();
-      }
-      throw error;
+      return buildEmbeddedSafeExecutiveFallback(error);
     }),
     resolveAdvertisingEntitlements().catch(() => ({
       entitlements: undefined as import("@/lib/billing/types").CampaignEntitlements | undefined,

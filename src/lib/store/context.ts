@@ -3,6 +3,7 @@ import { getActiveShopifyInstallation, getInstallationForStore } from "@/lib/db/
 import { getSimulationStoreById } from "@/lib/simulation-stores/db";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { resolveStoreIdForEmbeddedShop } from "@/lib/store/embedded-context";
 
 export const ACTIVE_STORE_COOKIE = "storepilot_active_store_id";
 
@@ -34,6 +35,9 @@ export async function resolveActiveStoreId(): Promise<string> {
     const installation = await getInstallationForStore(fromCookie);
     if (installation) return fromCookie;
   }
+
+  const embeddedStoreId = await resolveStoreIdForEmbeddedShop();
+  if (embeddedStoreId) return embeddedStoreId;
 
   const active = await getActiveShopifyInstallation();
   if (active) return active.store_id;
