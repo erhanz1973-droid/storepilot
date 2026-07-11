@@ -22,7 +22,7 @@ export default async function AdvertisingPage() {
   const hasData = data.campaigns.length > 0;
   const readiness = buildIntegrationReadiness({
     snapshot: data.snapshot,
-    campaigns: data.campaigns,
+    campaigns: data.enrichedCampaigns,
   });
 
   return (

@@ -113,7 +113,11 @@ export async function buildAdvertisingPageData() {
   const entitlements = buildCampaignEntitlements(enriched.campaigns, unlockedId, planId);
   const limited = applyAdvertisingPlanLimits(enriched, entitlements);
 
-  return { ...limited, snapshot: bundle.snapshot };
+  return {
+    ...limited,
+    snapshot: bundle.snapshot,
+    enrichedCampaigns: core.marketing.campaigns,
+  };
 }
 
 export async function buildCampaignDetailPageData(campaignId: string) {

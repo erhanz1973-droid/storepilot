@@ -179,7 +179,7 @@ function buildTrafficSources(
         label: CHANNEL_LABELS[c.channelId] ?? c.channelLabel,
         sharePct: total > 0 ? Math.round((c.attributedOrders / total) * 1000) / 10 : 0,
         status: "estimated" as FunnelConfidence,
-        conversionPct: c.attributedRoas > 0 ? null : null,
+        conversionPct: null,
       }))
       .sort((a, b) => b.sharePct - a.sharePct)
       .slice(0, 6);
@@ -434,17 +434,21 @@ function buildOptimizationActions(
   }
 
   if (tier === "commerce_only" && attribution?.channels.length) {
-    const withRoas = attribution.channels.filter((c) => c.attributedSpend > 0 && c.attributedOrders > 0);
-    const lowRoas = withRoas.filter((c) => c.attributedRoas < 1.2).sort((a, b) => b.attributedSpend - a.attributedSpend);
+    const withRoas = attribution.channels.filter(
+      (c) => c.adSpend > 0 && c.attributedOrders > 0 && c.roas != null,
+    );
+    const lowRoas = withRoas
+      .filter((c) => (c.roas ?? 0) < 1.2)
+      .sort((a, b) => b.adSpend - a.adSpend);
     if (lowRoas[0]) {
       const ch = lowRoas[0];
       actions.push({
         id: `channel-roas-${ch.channelId}`,
         priority: "high",
         title: `Fix ${CHANNEL_LABELS[ch.channelId] ?? ch.channelLabel} efficiency`,
-        description: `ROAS ${ch.attributedRoas.toFixed(2)} — spend is not converting profitably.`,
+        description: `ROAS ${(ch.roas ?? 0).toFixed(2)} — spend is not converting profitably.`,
         recommendation: "Pause worst creatives, tighten audiences, or send traffic to higher-converting collections.",
-        expectedMonthlyImpact: Math.round(ch.attributedSpend * 0.2),
+        expectedMonthlyImpact: Math.round(ch.adSpend * 0.2),
         confidenceScore: 0.7,
         focusArea: "channel",
         dataTier: "estimated",

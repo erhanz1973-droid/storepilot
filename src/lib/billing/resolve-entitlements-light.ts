@@ -1,4 +1,6 @@
-import type { AdvertisingCampaignRow } from "@/lib/advertising/types";
+import type { AdvertisingCampaignRow, AdvertisingPlatformId } from "@/lib/advertising/types";
+import { buildMarketingCampaigns } from "@/lib/analytics/marketing";
+import type { MarketingChannel } from "@/lib/analytics/types";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import {
   buildCampaignEntitlements,
@@ -7,31 +9,59 @@ import {
 import { resolveUnlockedCampaignIdFromCookie } from "@/lib/billing/entitlements-server";
 import { getCachedStoreBundle } from "@/lib/services/store-bundle";
 
-/** Minimal campaign rows for plan entitlements — avoids full advertising workspace build. */
+const PLATFORM_LABELS: Record<AdvertisingPlatformId, string> = {
+  meta: "Meta Ads",
+  google: "Google Ads",
+  tiktok: "TikTok",
+  pinterest: "Pinterest",
+  microsoft: "Microsoft Ads",
+};
+
+const CHANNEL_TO_PLATFORM: Record<MarketingChannel, AdvertisingPlatformId> = {
+  meta: "meta",
+  google: "google",
+  tiktok: "tiktok",
+  pinterest: "pinterest",
+};
+
+/** Plan entitlements from normalized marketing campaigns — avoids full advertising workspace build. */
 function campaignRowsFromSnapshot(snapshot: StoreSnapshot): AdvertisingCampaignRow[] {
-  return snapshot.campaigns.map((c) => ({
-    id: c.id,
-    campaign: c.name,
-    platform: "meta",
-    platformLabel: "Meta Ads",
-    status: c.status ?? "ACTIVE",
-    healthScore: 50,
-    healthTier: "needs_review",
-    spend: c.spend7d ?? 0,
-    revenue: c.revenue7d ?? 0,
-    profit: (c.revenue7d ?? 0) - (c.spend7d ?? 0),
-    roas: c.roas7d ?? 0,
-    breakEvenRoas: null,
-    trend: "flat",
-    recommendation: "scale",
-    recommendationLabel: "Review",
-    expectedOpportunityMonthly: Math.max(0, (c.revenue7d ?? 0) - (c.spend7d ?? 0)),
-    riskLevel: "Medium",
-    channel: "meta",
-    analysisStatus: "deep" as const,
-    aiScore: 50,
-    nextAction: "Review campaign",
-  }));
+  return buildMarketingCampaigns(snapshot).map((campaign, index) => {
+    const platform = CHANNEL_TO_PLATFORM[campaign.channel];
+    const conversionRate =
+      campaign.clicks > 0
+        ? Math.round((campaign.purchases / campaign.clicks) * 10000) / 100
+        : 0;
+
+    return {
+      id: campaign.id,
+      campaign: campaign.campaign,
+      platform,
+      platformLabel: PLATFORM_LABELS[platform],
+      status: campaign.status,
+      healthScore: 50,
+      healthTier: "needs_review",
+      spend: campaign.spend,
+      revenue: campaign.revenue,
+      profit: campaign.profit,
+      roas: campaign.roas,
+      cpa: campaign.cpa,
+      ctr: campaign.ctr,
+      conversionRate,
+      breakEvenRoas: null,
+      trend: "flat",
+      recommendation: "scale",
+      recommendationLabel: "Review",
+      expectedOpportunityMonthly: Math.max(0, campaign.revenue - campaign.spend),
+      riskLevel: "Medium",
+      channel: campaign.channel,
+      analysisStatus: "deep",
+      aiScore: 50,
+      priorityRank: index + 1,
+      nextAction: "Review campaign",
+      briefRecommendation: "Review campaign performance before scaling spend.",
+    };
+  });
 }
 
 export async function resolveAdvertisingEntitlements() {

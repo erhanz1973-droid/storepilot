@@ -188,6 +188,35 @@ export function buildOperationalCosts(
   };
 }
 
+function isFullStoreSnapshot(
+  value: { revenue30d: number; orders30d: number } | StoreSnapshot,
+): value is StoreSnapshot {
+  return "connectorStates" in value && "campaigns" in value;
+}
+
+function minimalDemoSnapshot(storeMetrics: {
+  revenue30d: number;
+  orders30d: number;
+}): StoreSnapshot {
+  return {
+    source: "demo",
+    syncedAt: new Date().toISOString(),
+    products: [],
+    collections: [],
+    campaigns: [],
+    connectorStates: {},
+    storeMetrics: {
+      revenue30d: storeMetrics.revenue30d,
+      orders30d: storeMetrics.orders30d,
+      aov30d:
+        storeMetrics.orders30d > 0
+          ? storeMetrics.revenue30d / storeMetrics.orders30d
+          : 0,
+      conversionRate30d: 0,
+    },
+  };
+}
+
 export function buildDemoIntegrationSnapshot(
   storeMetricsOrSnapshot:
     | {
@@ -212,15 +241,9 @@ export function buildDemoIntegrationSnapshot(
   estimatedCount: number;
   liveDataPct: number;
 } {
-  const snapshot: StoreSnapshot =
-    "products" in storeMetricsOrSnapshot || "demoScenario" in storeMetricsOrSnapshot
-      ? (storeMetricsOrSnapshot as StoreSnapshot)
-      : {
-          source: "demo",
-          syncedAt: new Date().toISOString(),
-          storeMetrics: storeMetricsOrSnapshot,
-          products: [],
-        };
+  const snapshot: StoreSnapshot = isFullStoreSnapshot(storeMetricsOrSnapshot)
+    ? storeMetricsOrSnapshot
+    : minimalDemoSnapshot(storeMetricsOrSnapshot);
 
   if (isScenarioAwareDemoSnapshot(snapshot)) {
     const scenarioBundle = buildScenarioIntegrationSnapshot(snapshot);

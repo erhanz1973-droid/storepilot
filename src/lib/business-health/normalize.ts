@@ -155,12 +155,12 @@ export function normalizeBusinessHealthDashboard(input: LegacyDashboard): Busine
       limited: domains.filter((d) => d.status === "limited").length,
     },
     actionPlan: (input.actionPlan ?? []).map((item) => ({
-      difficulty: "Medium" as const,
-      timeRequired: "1–2 weeks",
-      confidence: "75%",
-      timeUntilResults: "2–4 weeks",
-      financialImpactType: item.financialImpactType ?? "profit_recovery",
       ...item,
+      difficulty: item.difficulty ?? ("Medium" as const),
+      timeRequired: item.timeRequired ?? "1–2 weeks",
+      confidence: item.confidence ?? "75%",
+      timeUntilResults: item.timeUntilResults ?? "2–4 weeks",
+      financialImpactType: item.financialImpactType ?? "profit_recovery",
       impactLabel:
         item.impactLabel ??
         (item.impactMonthly != null && item.impactMonthly > 0

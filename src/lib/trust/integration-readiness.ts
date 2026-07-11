@@ -48,7 +48,7 @@ function connectorFailed(
   id: DataSourceId,
 ): boolean {
   const status = states?.[id];
-  return status === "error" || status === "sync_failed";
+  return status === "error";
 }
 
 export function assessDataConfidence(input: {
@@ -56,11 +56,12 @@ export function assessDataConfidence(input: {
   campaigns?: EnrichedMarketingCampaign[];
 }): { level: DataConfidenceLevel; message: string | null } {
   const orders = input.snapshot.storeMetrics.orders30d ?? 0;
-  const campaigns = input.campaigns ?? input.snapshot.campaigns ?? [];
+  const campaigns = input.campaigns ?? [];
+  const campaignSpend = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
   const adSpend =
-    campaigns.reduce((s, c) => s + ("spend7d" in c ? (c as { spend7d?: number }).spend7d ?? 0 : 0), 0) ||
-    input.snapshot.adSpendSnapshot?.last7d?.spend ||
-    0;
+    campaignSpend > 0
+      ? campaignSpend
+      : input.snapshot.adSpendSnapshot?.totalRollups.last7d.spend ?? 0;
 
   if (orders < 5 && campaigns.length === 0) {
     return {

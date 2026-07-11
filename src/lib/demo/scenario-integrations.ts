@@ -85,12 +85,12 @@ export function buildScenarioGA4Snapshot(snapshot: StoreSnapshot): GA4Snapshot {
       sessions: Math.max(1, Math.round(row.sessions * sRatio)),
       revenue: Math.max(0, Math.round(row.revenue * rRatio)),
     })),
-    channelGroups: base.channelGroups.map((row) => ({
+    channelGroups: base.channelGroups?.map((row) => ({
       ...row,
       sessions: Math.max(1, Math.round(row.sessions * sRatio)),
       revenue: Math.max(0, Math.round(row.revenue * rRatio)),
     })),
-    dailySessions: base.dailySessions.map((row) => ({
+    dailySessions: base.dailySessions?.map((row) => ({
       ...row,
       sessions: Math.max(1, Math.round(row.sessions * sRatio)),
     })),

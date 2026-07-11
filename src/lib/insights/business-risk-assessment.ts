@@ -906,9 +906,11 @@ function scoreOperations(input: ScoringContext): BaseCategoryRiskScore {
   );
 }
 
+type RecommendationStepDraft = Pick<RiskRecommendationStep, "step" | "action" | "reason">;
+
 const RECOMMENDATION_PLAYBOOKS: Record<
   BusinessRiskCategory,
-  RiskRecommendationStep[]
+  RecommendationStepDraft[]
 > = {
   inventory: [
     {
@@ -1159,7 +1161,7 @@ function enrichRecommendationSteps(
 function resolveRecommendationSteps(
   input: BusinessRiskAssessmentInput,
   primaryCategory: BusinessRiskCategory,
-): RiskRecommendationStep[] {
+): RecommendationStepDraft[] {
   const playbook = RECOMMENDATION_PLAYBOOKS[primaryCategory];
 
   if (input.dashboard) {

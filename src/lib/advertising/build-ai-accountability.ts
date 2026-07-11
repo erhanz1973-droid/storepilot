@@ -232,9 +232,14 @@ export function buildTrustEngine(input: {
     ),
   );
 
+  const orderHistorySamples =
+    input.snapshot.commerceOrders?.length ??
+    input.snapshot.dailyMetrics?.length ??
+    input.snapshot.storeMetrics.orders30d;
+
   const historicalCoverageDays = Math.min(
     365,
-    Math.max(30, Math.round((input.snapshot.orders?.length ?? 60) / 2) * 3),
+    Math.max(30, Math.round(orderHistorySamples / 2) * 3),
   );
 
   const reliabilityPct = input.predictionAccuracyPct ?? input.workspace.overview.aiConfidencePct;
@@ -499,7 +504,8 @@ export function buildCrossModuleAlerts(input: {
 
   const ops = input.snapshot.operationalCosts;
   if (ops && ops.warehouseCost30d > 0) {
-    const orderCount = input.snapshot.orders?.length ?? 0;
+    const orderCount =
+      input.snapshot.commerceOrders?.length ?? input.snapshot.storeMetrics.orders30d;
     const loadPct = Math.min(100, Math.round((orderCount / 120) * 100));
     if (loadPct >= 85) {
       alerts.push({
@@ -513,7 +519,14 @@ export function buildCrossModuleAlerts(input: {
 
   const google = input.platforms.find((p) => p.id === "google");
   const meta = input.platforms.find((p) => p.id === "meta");
-  if (google && meta && google.profit > meta.profit && meta.profit < 0) {
+  if (
+    google &&
+    meta &&
+    google.profit != null &&
+    meta.profit != null &&
+    google.profit > meta.profit &&
+    meta.profit < 0
+  ) {
     alerts.push({
       module: "Executive",
       severity: "low",
@@ -615,7 +628,7 @@ export function buildExpertNarrative(
   const winner = workspace.topWinners[0];
   const parts: string[] = [];
 
-  if (google && meta) {
+  if (google && meta && google.profit != null && meta.profit != null) {
     if (google.profit > meta.profit) {
       parts.push("Google continues to outperform Meta on profitability.");
     } else if (meta.profit > google.profit) {

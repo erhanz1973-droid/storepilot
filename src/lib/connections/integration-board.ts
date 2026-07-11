@@ -92,7 +92,27 @@ function formatCurrency(n: number): string {
 function boardItemFromPresentation(
   def: PageIntegrationDef,
   pres: ConnectionPresentation,
-  extras: Omit<IntegrationBoardItem, keyof ConnectionPresentation | "id" | "label" | "category" | "planned" | "logoInitial" | "logoAccent" | "detail" | "health"> & {
+  extras: Omit<
+    IntegrationBoardItem,
+    | keyof ConnectionPresentation
+    | "id"
+    | "label"
+    | "category"
+    | "planned"
+    | "logoInitial"
+    | "logoAccent"
+    | "detail"
+    | "health"
+    | "status"
+    | "statusLabel"
+    | "primaryAction"
+    | "attentionMessage"
+    | "guidanceMessage"
+    | "errorReason"
+    | "cachedDataNote"
+    | "showCachedMetrics"
+    | "canSync"
+  > & {
     detail: IntegrationBoardItem["detail"];
   },
 ): IntegrationBoardItem {
@@ -104,6 +124,7 @@ function boardItemFromPresentation(
         : pres.statusLabel;
 
   return {
+    ...extras,
     id: def.id,
     label: def.label,
     category: def.category,
@@ -121,7 +142,6 @@ function boardItemFromPresentation(
     canSync: pres.canSync,
     health: pres.health,
     syncEndpoint: def.syncEndpoint,
-    ...extras,
   };
 }
 
@@ -345,7 +365,6 @@ export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> 
         });
 
     return boardItemFromPresentation(def, genericPres, {
-      syncEndpoint: health?.syncEndpoint,
       summaryLines: health?.metrics.slice(0, 2).map((m) => `${m.value} ${m.label}`) ?? [def.description],
       detail: {
         type: "generic",

@@ -158,51 +158,6 @@ export function formatCopilotMessage(structured: CopilotStructuredResponse): str
     lines.push(`• ${impact.reasonIfNot ?? "Insufficient synced data to estimate impact."}`);
   }
 
-  if (structured.riskAssessment) {
-    const ra = structured.riskAssessment;
-    lines.push("", "**Business Risk Assessment**");
-    for (const cat of ra.categories) {
-      lines.push(
-        `• **${cat.label}** — Risk ${cat.score} · Confidence ${cat.confidencePct}% · ${cat.urgency} · ${cat.timeHorizon}`,
-      );
-      lines.push(`  ${cat.summary}`);
-      if (cat.contributors.length > 0 && cat.score >= 40) {
-        lines.push("  _Contributors:_");
-        for (const c of cat.contributors) {
-          lines.push(`  • ${c.label} (+${c.points})`);
-        }
-      }
-    }
-    if (ra.rankingExplanation) {
-      lines.push("", "**Why this risk ranked first**");
-      lines.push(ra.rankingExplanation);
-    }
-    lines.push("", `**Biggest Risk:** ${ra.primaryRisk.title}`);
-    lines.push(ra.primaryRisk.reason);
-    if (ra.secondaryRisk) {
-      lines.push(`**Secondary Risk:** ${ra.secondaryRisk.title} — ${ra.secondaryRisk.reason}`);
-    }
-    if (ra.estimatedExposure.items.length > 0) {
-      lines.push("", "**Estimated Exposure**");
-      for (const item of ra.estimatedExposure.items) {
-        lines.push(`• ${item.label}: ~$${item.amountMonthly.toLocaleString()}/month`);
-      }
-    }
-    if (ra.primaryRisk.supportingFactors.length > 0) {
-      lines.push("", "**Supporting Factors**");
-      for (const f of ra.primaryRisk.supportingFactors) {
-        lines.push(`• ${f}`);
-      }
-    }
-    if (ra.recommendationSteps.length > 0) {
-      lines.push("", "**Recommended Actions**");
-      for (const step of ra.recommendationSteps) {
-        lines.push(`• **Step ${step.step}:** ${step.action}`);
-        lines.push(`  _Reason:_ ${step.reason}`);
-      }
-    }
-  }
-
   return lines.join("\n");
 }
 

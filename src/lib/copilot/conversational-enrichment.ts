@@ -384,7 +384,11 @@ function buildWhyNotAlternatives(
     reason: "Not recommended because optimization should be attempted first.",
   });
 
-  if (structured.intent === "scale" || structured.intent === "today") {
+  if (
+    structured.intent === "today" ||
+    structured.intent === "product_ads_budget" ||
+    structured.intent === "marketing_intelligence"
+  ) {
     alternatives.push({
       label: "Waiting for more data",
       reason: "Not recommended because measurable waste is already occurring.",

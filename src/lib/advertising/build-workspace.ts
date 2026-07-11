@@ -838,6 +838,7 @@ export function buildAdvertisingWorkspace(input: {
       ...base,
       ...aiLayer,
       accountability: {} as AdvertisingWorkspaceView["accountability"],
+      accountSummary: buildAccountWideSummary(campaignRows),
     },
     snapshot: input.snapshot,
     profitDashboard: input.profitDashboard ?? null,

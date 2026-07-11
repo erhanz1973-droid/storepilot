@@ -18,7 +18,10 @@ function scaleAttributionEvents(scenario: DemoScenarioDefinition): AttributionEv
   const keep = Math.max(8, Math.min(base.length, Math.round(base.length * orderScale)));
   return base.slice(0, keep).map((event) => ({
     ...event,
-    orderValue: Math.round(event.orderValue * valueScale * 100) / 100,
+    orderValue:
+      event.orderValue != null
+        ? Math.round(event.orderValue * valueScale * 100) / 100
+        : event.orderValue,
   }));
 }
 

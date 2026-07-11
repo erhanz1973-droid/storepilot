@@ -1,6 +1,5 @@
 import type { IntegrationBoardItem, IntegrationBoardPayload } from "@/lib/connections/integration-board.types";
 import { presentationShowsAsConnected } from "@/lib/connections/connection-state";
-import type { ShopifyIntegrationDetail } from "@/lib/connections/integration-board.types";
 
 export type OnboardingStepStatus = "complete" | "current" | "pending";
 
@@ -25,9 +24,9 @@ function isConnected(item: IntegrationBoardItem | undefined): boolean {
 }
 
 function shopifyLiveConnected(item: IntegrationBoardItem | undefined): boolean {
-  if (!isConnected(item) || item.detail.type !== "shopify") return false;
-  const detail = item.detail as ShopifyIntegrationDetail;
-  return detail.connected && !detail.isDemo;
+  if (item == null || !presentationShowsAsConnected(item.status)) return false;
+  if (item.detail.type !== "shopify") return false;
+  return item.detail.connected && !item.detail.isDemo;
 }
 
 function hasAdPerformanceData(board: IntegrationBoardPayload): boolean {
