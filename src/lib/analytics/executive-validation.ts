@@ -5,6 +5,7 @@ import {
   clampConfidence,
   computeRecoveryTotals,
   dedupeMoneyLeaks,
+  buildBusinessScaleContext,
   type DedupedMoneyLeaks,
   type ProfitCalculationTrace,
   type RecoveryTotals,
@@ -37,15 +38,30 @@ function checkProfitBalance(trace: ProfitCalculationTrace): ValidationIssue | nu
   return null;
 }
 
-function checkRecoveryTotals(recovery: RecoveryTotals): ValidationIssue | null {
+function checkRecoveryTotals(recovery: RecoveryTotals, businessContext?: ReturnType<typeof buildBusinessScaleContext>): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
   if (recovery.netMonthly > recovery.grossMonthly) {
-    return {
+    issues.push({
       code: "recovery_exceeds_gross",
       message: "Net recovery exceeded gross opportunity — capped to gross total.",
       severity: "error",
-    };
+    });
   }
-  return null;
+  if (businessContext && businessContext.monthlyRevenue > 0 && recovery.netMonthly > businessContext.monthlyRevenue) {
+    issues.push({
+      code: "recovery_exceeds_revenue",
+      message: "Recovery potential exceeded monthly revenue — estimate was capped.",
+      severity: "error",
+    });
+  }
+  if (businessContext && businessContext.monthlyAdSpend > 0 && recovery.netMonthly > businessContext.monthlyAdSpend * 0.5) {
+    issues.push({
+      code: "recovery_exceeds_ad_spend",
+      message: "Recovery potential exceeded 50% of monthly ad spend — estimate was capped.",
+      severity: "warning",
+    });
+  }
+  return issues;
 }
 
 function checkMoneyLeakOverlap(leaks: DedupedMoneyLeaks): ValidationIssue | null {
@@ -99,7 +115,18 @@ export function validateExecutiveFinancials(input: {
 }): ExecutiveValidationReport {
   const profitTrace = buildProfitCalculationTrace(input.profitDashboard, input.snapshot);
   const moneyLeaks = dedupeMoneyLeaks(input.rawMoneyLeakSources);
-  let recovery = computeRecoveryTotals(input.recommendations);
+  const businessContext = buildBusinessScaleContext(input.profitDashboard, input.snapshot);
+  const avgConfidence =
+    input.recommendations.length > 0
+      ? Math.round(
+          input.recommendations.reduce((s, r) => s + r.confidencePct, 0) /
+            input.recommendations.length,
+        )
+      : 72;
+  let recovery = computeRecoveryTotals(input.recommendations, {
+    businessContext,
+    avgConfidencePct: avgConfidence,
+  });
 
   if (recovery.netMonthly > recovery.grossMonthly) {
     recovery = { ...recovery, netMonthly: recovery.grossMonthly, overlapRemoved: 0 };
@@ -107,7 +134,7 @@ export function validateExecutiveFinancials(input: {
 
   const issues: ValidationIssue[] = [
     checkProfitBalance(profitTrace),
-    checkRecoveryTotals(recovery),
+    ...checkRecoveryTotals(recovery, businessContext),
     checkMoneyLeakOverlap(moneyLeaks),
     ...checkHealthConsistency(input.healthCategories),
     ...checkConfidence(input.recommendations),

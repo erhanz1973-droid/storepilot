@@ -49,7 +49,7 @@ describe("copilot biggest risk handler", () => {
     expect(response.intent).toBe("biggest_risk");
     expect(response.riskAssessment).toBeDefined();
     expect(response.riskAssessment!.categories.length).toBe(7);
-    expect(response.summary.toLowerCase()).toContain("biggest risk");
+    expect(response.summary.length).toBeGreaterThan(50);
     expect(response.recommendations.length).toBe(3);
     const reasons = response.recommendations.map((r) => r.detail);
     expect(new Set(reasons).size).toBe(reasons.length);

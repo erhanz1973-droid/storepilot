@@ -8,6 +8,7 @@ export const EXEC_METRIC_ICONS = {
   confidence: "🧠",
   success: "📈",
   time: "⏱",
+  difficulty: "⚙️",
   riskLow: "🟢",
   riskMedium: "🟡",
   riskHigh: "🔴",

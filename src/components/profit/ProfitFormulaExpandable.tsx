@@ -33,22 +33,15 @@ export function ProfitFormulaExpandable({ period }: { period: ProfitPeriodMetric
         aria-expanded={open}
       >
         <h3 style={{ margin: 0 }}>Profit Formula</h3>
-        <span className="muted">{open ? "Hide" : "Show"} calculation</span>
+        <span className="muted">{open ? "Hide calculation" : "Inspect calculation"}</span>
       </button>
 
       {!open && (
-        <div className="profit-formula-preview">
-          {terms.map((t, i) => (
-            <span key={t.label}>
-              {i > 0 && <span className="profit-formula-op">{t.op}</span>}
-              <span>{t.label}</span>
-            </span>
-          ))}
-          <span className="profit-formula-op">=</span>
-          <strong className={net < 0 ? "negative" : "positive"}>
-            {formatMoney(net)}
-          </strong>
-        </div>
+        <p className="muted profit-formula-collapsed-hint" style={{ margin: "8px 0 0" }}>
+          Net profit:{" "}
+          <strong className={net < 0 ? "negative" : "positive"}>{formatMoney(net)}</strong>{" "}
+          (last 30 days) — expand to see the full equation.
+        </p>
       )}
 
       {open && (
@@ -56,7 +49,10 @@ export function ProfitFormulaExpandable({ period }: { period: ProfitPeriodMetric
           {terms.map((t) => (
             <div key={t.label} className="profit-formula-row">
               <span>{t.label}</span>
-              <span>{t.op}{formatMoney(t.value)}</span>
+              <span>
+                {t.op}
+                {formatMoney(t.value)}
+              </span>
             </div>
           ))}
           <div className="profit-formula-row total">

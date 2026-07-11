@@ -1,7 +1,6 @@
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import { buildAdSpendSnapshot } from "@/lib/ads/spend";
 import { mergeDailyMetrics } from "@/lib/profit/roas";
-import { mergeIntegrationIntoSnapshot } from "@/lib/integrations/engine";
 import { getCachedShopifySnapshot } from "@/lib/db/shopify";
 import { getMetaSyncCache } from "@/lib/db/meta-sync-cache";
 import { getGoogleSyncCache } from "@/lib/db/google-sync-cache";
@@ -79,7 +78,8 @@ function mergePartials(
     connectorStates,
   };
 
-  base = mergeIntegrationIntoSnapshot(base);
+  // Simulation snapshots are generated with aligned revenue, ads, and profit rollups.
+  // Do not layer Peak Outfitters demo integrations on top — that inflates ad spend vs revenue.
   return base;
 }
 

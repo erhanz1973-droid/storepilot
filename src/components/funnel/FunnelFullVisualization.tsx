@@ -10,14 +10,28 @@ function formatMoney(n: number | null): string {
   });
 }
 
-export function FunnelFullVisualization({ steps }: { steps: FunnelStepView[] }) {
+export function FunnelFullVisualization({
+  steps,
+  title = "Conversion Funnel",
+  subtitle,
+}: {
+  steps: FunnelStepView[];
+  title?: string;
+  subtitle?: string;
+}) {
   if (steps.length === 0) return null;
 
   const max = Math.max(...steps.map((s) => s.users), 1);
 
   return (
     <div className="card funnel-full-viz">
-      <h3 style={{ margin: "0 0 16px" }}>Conversion Funnel</h3>
+      <h3 style={{ margin: "0 0 4px" }}>{title}</h3>
+      {subtitle && (
+        <p className="muted" style={{ margin: "0 0 16px", fontSize: "0.875rem" }}>
+          {subtitle}
+        </p>
+      )}
+      {!subtitle && <div style={{ marginBottom: 16 }} />}
       <div className="analytics-funnel-steps">
         {steps.map((step, i) => (
           <div key={step.id} className="funnel-full-step">

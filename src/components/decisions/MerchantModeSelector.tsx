@@ -25,6 +25,7 @@ export function MerchantModeSelector({ initialMode }: { initialMode: MerchantMod
   const [saving, setSaving] = useState(false);
 
   async function handleChange(next: MerchantMode) {
+    const previous = mode;
     setMode(next);
     setSaving(true);
     try {
@@ -34,6 +35,8 @@ export function MerchantModeSelector({ initialMode }: { initialMode: MerchantMod
         body: JSON.stringify({ mode: next }),
       });
       router.refresh();
+    } catch {
+      setMode(previous);
     } finally {
       setSaving(false);
     }

@@ -1,64 +1,43 @@
 "use client";
 
-import { FunnelAvailableMetrics } from "@/components/funnel/FunnelAvailableMetrics";
-import { FunnelConfidenceCard } from "@/components/funnel/FunnelConfidenceCard";
-import { FunnelConnectionWizard } from "@/components/funnel/FunnelConnectionWizard";
+import { FunnelBottleneckCard } from "@/components/funnel/FunnelBottleneckCard";
+import { FunnelConversionSnapshot } from "@/components/funnel/FunnelConversionSnapshot";
+import { FunnelDataQualityBar } from "@/components/funnel/FunnelDataQualityBar";
 import { FunnelFullVisualization } from "@/components/funnel/FunnelFullVisualization";
 import { FunnelInsightsPanel } from "@/components/funnel/FunnelInsightsPanel";
-import { FunnelLimitationInsight } from "@/components/funnel/FunnelLimitationInsight";
-import { FunnelPreviewSection } from "@/components/funnel/FunnelPreviewSection";
-import { FunnelStatusCard } from "@/components/funnel/FunnelStatusCard";
-import { FunnelWhySection } from "@/components/funnel/FunnelWhySection";
+import { FunnelOptimizationPanel } from "@/components/funnel/FunnelOptimizationPanel";
 import type { FunnelPageView } from "@/lib/funnel/types";
 
 export function FunnelPageClient({ view }: { view: FunnelPageView }) {
-  if (view.mode === "full") {
-    return (
-      <div className="funnel-page">
-        <FunnelStatusCard
-          status={view.ga4Status}
-          label={view.ga4StatusLabel}
-          notice={view.ga4StatusNotice}
-        />
-        <FunnelConfidenceCard
-          confidence={view.confidence}
-          score={view.confidenceScore}
-          notice={view.confidenceNotice}
-        />
-        <FunnelFullVisualization steps={view.funnelSteps} />
-        <FunnelInsightsPanel insights={view.aiInsights} />
-        <FunnelAvailableMetrics
-          metrics={view.availableMetrics}
-          trafficSources={view.trafficSources}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="funnel-page">
-      <FunnelStatusCard
-        status={view.ga4Status}
-        label={view.ga4StatusLabel}
-        notice={view.ga4StatusNotice}
-      />
-      <FunnelWhySection />
-      <FunnelAvailableMetrics
+    <div className="funnel-page funnel-workspace">
+      {view.bottleneck && <FunnelBottleneckCard bottleneck={view.bottleneck} />}
+
+      <FunnelConversionSnapshot
         metrics={view.availableMetrics}
         trafficSources={view.trafficSources}
+        dataTierLabel={view.dataTierLabel}
       />
-      <FunnelPreviewSection stepLabels={view.previewStepLabels} />
-      <FunnelLimitationInsight
-        message={view.limitationMessage}
-        unlockCapabilities={view.unlockCapabilities}
-      />
-      <FunnelConnectionWizard
-        steps={view.wizardSteps}
-        setupTimeMinutes={view.setupTimeMinutes}
-      />
-      <FunnelConfidenceCard
+
+      {view.funnelSteps.length > 0 && (
+        <FunnelFullVisualization
+          steps={view.funnelSteps}
+          title={view.dataTier === "step_level" ? "Conversion Funnel" : "Session Conversion"}
+          subtitle={
+            view.dataTier === "session_level"
+              ? "Verified session and order counts — connect GA4 ecommerce events in Connections for step-level drop-offs."
+              : undefined
+          }
+        />
+      )}
+
+      <FunnelOptimizationPanel actions={view.optimizationActions} />
+      <FunnelInsightsPanel insights={view.aiInsights} />
+
+      <FunnelDataQualityBar
+        dataTier={view.dataTier}
         confidence={view.confidence}
-        score={view.confidenceScore}
+        confidenceScore={view.confidenceScore}
         notice={view.confidenceNotice}
       />
     </div>

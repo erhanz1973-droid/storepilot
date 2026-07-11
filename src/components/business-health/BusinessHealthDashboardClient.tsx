@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { BusinessHealthDashboard, BusinessHealthStatus } from "@/lib/business-health/types";
-import { normalizeBusinessHealthDashboard } from "@/lib/business-health/normalize";
+import { FINANCIAL_IMPACT_LABELS, normalizeBusinessHealthDashboard } from "@/lib/business-health/normalize";
+import { healthDomainHref } from "@/lib/analytics/executive-modules";
+import { ExecutiveStoryNav } from "@/components/executive/ExecutiveStoryNav";
+import { BusinessRiskAssessmentPanel } from "@/components/ask-ai/BusinessRiskAssessmentPanel";
 import Link from "next/link";
 
 const STATUS_LABEL: Record<BusinessHealthStatus, string> = {
@@ -80,26 +84,20 @@ export function BusinessHealthDashboardClient({
   const dashboard = normalizeBusinessHealthDashboard(raw);
   const { overall } = dashboard;
   const overallColor = scoreColor(overall.score);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+
+  const weightedScore = Math.round(
+    dashboard.breakdown.reduce((sum, row) => sum + row.score * row.weightPct, 0) /
+      Math.max(dashboard.breakdown.reduce((s, r) => s + r.weightPct, 0), 1),
+  );
 
   return (
     <div className="bh-dashboard">
-      <section className="card bh-exec-summary">
-        <p className="bh-eyebrow">{dashboard.executiveSummary.headline}</p>
-        <p className="bh-exec-narrative">{dashboard.executiveSummary.narrative}</p>
-        <div className="bh-exec-priority">
-          <div>
-            <span className="muted">Highest Priority</span>
-            <strong>{dashboard.executiveSummary.highestPriority}</strong>
-          </div>
-          {dashboard.executiveSummary.estimatedMonthlyImprovement && (
-            <div>
-              <span className="muted">Estimated Monthly Improvement</span>
-              <strong className="bh-impact-positive">
-                {dashboard.executiveSummary.estimatedMonthlyImprovement}
-              </strong>
-            </div>
-          )}
-        </div>
+      <section className="bh-morning-briefing">
+        <h3 className="bh-morning-briefing-title">
+          What could hurt my business the most right now?
+        </h3>
+        <BusinessRiskAssessmentPanel assessment={dashboard.riskAssessment} />
       </section>
 
       <section className="card bh-hero bh-hero-rich">
@@ -159,23 +157,64 @@ export function BusinessHealthDashboardClient({
         )}
       </div>
 
-      <section className="card">
-        <h3>Score Breakdown</h3>
-        <ul className="bh-breakdown-list">
-          {dashboard.breakdown.map((row) => (
-            <li key={row.id}>
-              <span>{row.label}</span>
-              <div className="bh-breakdown-bar-wrap">
-                <div
-                  className="bh-breakdown-bar"
-                  style={{ width: `${row.score}%`, background: scoreColor(row.score) }}
-                />
-              </div>
-              <strong style={{ color: scoreColor(row.score) }}>{row.score} / 100</strong>
-            </li>
-          ))}
-        </ul>
+      <section className="card bh-breakdown-card">
+        <button
+          type="button"
+          className="bh-breakdown-toggle"
+          onClick={() => setBreakdownOpen((open) => !open)}
+          aria-expanded={breakdownOpen}
+        >
+          <h3>Store Health Calculation</h3>
+          <span className="muted">{breakdownOpen ? "Hide" : "Show"} breakdown</span>
+        </button>
+        {breakdownOpen && (
+          <div className="bh-breakdown-expanded">
+            <ul className="bh-breakdown-list">
+              {dashboard.breakdown.map((row) => (
+                <li key={row.id}>
+                  <div className="bh-breakdown-row-head">
+                    <span>{row.label}</span>
+                    <span className="muted">{row.weightPct}%</span>
+                  </div>
+                  <div className="bh-breakdown-bar-wrap">
+                    <div
+                      className="bh-breakdown-bar"
+                      style={{ width: `${row.score}%`, background: scoreColor(row.score) }}
+                    />
+                  </div>
+                  <strong style={{ color: scoreColor(row.score) }}>{row.score} / 100</strong>
+                </li>
+              ))}
+            </ul>
+            <div className="bh-breakdown-overall">
+              <span>Overall Health</span>
+              <strong style={{ color: overallColor }}>
+                {weightedScore} / 100
+              </strong>
+              <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.85rem" }}>
+                Weighted from area scores above — explains why Store Health is {overall.score}.
+              </p>
+            </div>
+          </div>
+        )}
       </section>
+
+      {dashboard.strengths.length > 0 && (
+        <section className="card bh-strengths">
+          <h3>Business Strengths</h3>
+          <ul className="bh-strength-list">
+            {dashboard.strengths.map((s) => (
+              <li key={s.id}>
+                <span className="bh-strength-check">✓</span>
+                <div>
+                  <strong>{s.label}</strong>
+                  <p className="muted" style={{ margin: "4px 0 0" }}>{s.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h3>Health by Area</h3>
@@ -186,22 +225,47 @@ export function BusinessHealthDashboardClient({
                 <h4>{d.label}</h4>
                 <span className={statusClass(d.status)}>{STATUS_LABEL[d.status]}</span>
               </header>
+              <Link href={healthDomainHref(d.id)} className="bh-domain-module-link">
+                Open {d.label} module →
+              </Link>
               <p className={`bh-domain-trend bh-trend-${d.trend.direction}`}>
                 {d.trend.windowLabel}: {trendArrow(d.trend.direction)} {d.trend.label}
                 {d.trend.deltaPoints != null && ` (${d.trend.deltaPoints >= 0 ? "+" : ""}${d.trend.deltaPoints})`}
               </p>
+
               <div className="bh-domain-section">
-                <span className="bh-domain-label">Why?</span>
-                <p>{d.why}</p>
+                <span className="bh-domain-label">Current Situation</span>
+                <p>{d.currentSituation}</p>
+              </div>
+              <div className="bh-domain-section">
+                <span className="bh-domain-label">Why It Matters</span>
+                <p>{d.whyItMatters}</p>
               </div>
               <div className="bh-domain-section">
                 <span className="bh-domain-label">Recommended Action</span>
-                <p>{d.recommendedAction}</p>
+                <p><strong>{d.recommendedAction}</strong></p>
+              </div>
+              <div className="bh-domain-section">
+                <span className="bh-domain-label">Expected Outcome</span>
+                <p>{d.expectedOutcome}</p>
               </div>
               {d.estimatedImpact && (
                 <div className="bh-domain-section">
-                  <span className="bh-domain-label">Estimated Business Impact</span>
+                  <span className="bh-domain-label">
+                    {FINANCIAL_IMPACT_LABELS[d.financialImpactType]}
+                  </span>
                   <p className="bh-impact-positive">{d.estimatedImpact}</p>
+                </div>
+              )}
+              {d.inactionConsequence && (
+                <div className="bh-domain-section bh-inaction">
+                  <span className="bh-domain-label">If no action is taken</span>
+                  <p>
+                    {d.inactionConsequence.label}
+                    {d.inactionConsequence.amountMonthly != null && d.inactionConsequence.amountMonthly > 0
+                      ? `: $${d.inactionConsequence.amountMonthly.toLocaleString()}/month`
+                      : " may continue to erode performance."}
+                  </p>
                 </div>
               )}
             </article>
@@ -213,47 +277,72 @@ export function BusinessHealthDashboardClient({
         <section className="card">
           <h3>Compared with {dashboard.benchmark.similarStoreCount} Similar Stores</h3>
           <p className="muted" style={{ marginTop: 0 }}>{dashboard.benchmark.cohortLabel}</p>
-          <table className="bh-benchmark-table">
-            <thead>
-              <tr>
-                <th>Metric</th>
-                <th>Percentile</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboard.benchmark.rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.label}</td>
-                  <td>
-                    <span
-                      className={
-                        row.percentile >= 60
-                          ? "bh-pct-good"
-                          : row.percentile <= 25
-                            ? "bh-pct-low"
-                            : "bh-pct-mid"
-                      }
-                    >
-                      {row.percentile}th percentile
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="bh-benchmark-grid">
+            {dashboard.benchmark.rows.map((row) => (
+              <article
+                key={row.id}
+                className={`bh-benchmark-item bh-benchmark-${row.interpretationKind}`}
+              >
+                <div className="bh-benchmark-head">
+                  <strong>{row.label}</strong>
+                  <span
+                    className={
+                      row.percentile >= 60
+                        ? "bh-pct-good"
+                        : row.percentile <= 25
+                          ? "bh-pct-low"
+                          : "bh-pct-mid"
+                    }
+                  >
+                    {row.percentile}th percentile
+                  </span>
+                </div>
+                <p className="bh-benchmark-meaning">
+                  <span className="bh-benchmark-tag">
+                    {row.interpretationKind === "strength" ? "Strength" : row.interpretationKind === "weakness" ? "Meaning" : "Context"}
+                  </span>
+                  {row.interpretation}
+                </p>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
       <section className="card bh-action-plan">
-        <h3>Today&apos;s Priorities</h3>
-        <ol className="bh-priority-list">
+        <h3>Supporting Priorities</h3>
+        <p className="muted" style={{ marginTop: 0, marginBottom: 12, fontSize: "0.875rem" }}>
+          Additional actions across business areas — start with the biggest risk above.
+        </p>
+        <ol className="bh-priority-list bh-priority-rich">
           {dashboard.actionPlan.map((item) => (
             <li key={item.rank}>
               <div className="bh-priority-head">
                 <span className="bh-priority-rank">{item.rank}</span>
                 <strong>{item.title}</strong>
               </div>
-              <span className="muted">Estimated Impact: {item.impactLabel}</span>
+              <dl className="bh-priority-meta">
+                <div>
+                  <dt>{FINANCIAL_IMPACT_LABELS[item.financialImpactType]}</dt>
+                  <dd>{item.impactLabel}</dd>
+                </div>
+                <div>
+                  <dt>Difficulty</dt>
+                  <dd>{item.difficulty}</dd>
+                </div>
+                <div>
+                  <dt>Time Required</dt>
+                  <dd>{item.timeRequired}</dd>
+                </div>
+                <div>
+                  <dt>Confidence</dt>
+                  <dd>{item.confidence}</dd>
+                </div>
+                <div>
+                  <dt>Est. Time Until Results</dt>
+                  <dd>{item.timeUntilResults}</dd>
+                </div>
+              </dl>
             </li>
           ))}
         </ol>
@@ -263,6 +352,8 @@ export function BusinessHealthDashboardClient({
         Data sync and AI readiness live on{" "}
         <Link href="/integration-health">Integration Health</Link>.
       </p>
+
+      <ExecutiveStoryNav current="health" />
     </div>
   );
 }

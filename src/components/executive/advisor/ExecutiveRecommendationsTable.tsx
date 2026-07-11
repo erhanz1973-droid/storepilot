@@ -7,8 +7,10 @@ import { RecommendationActionButtons } from "@/components/executive/Recommendati
 import { ExecutiveImpactTimeline } from "@/components/executive/advisor/ExecutiveImpactTimeline";
 import { ExecutiveAskAiPanel } from "@/components/executive/advisor/ExecutiveAskAiPanel";
 import { ExecutiveRecommendationHistory } from "@/components/executive/advisor/ExecutiveRecommendationHistory";
+import { EvidenceStrengthBadge } from "@/components/executive/advisor/EvidenceStrengthBadge";
+import { RecommendationWhyPanel } from "@/components/executive/advisor/RecommendationWhyPanel";
 
-type SortKey = "impact" | "confidence" | "time" | "risk";
+type SortKey = "impact" | "evidence" | "time" | "risk";
 
 function fmt(n: number) {
   return `+$${n.toLocaleString()}`;
@@ -20,6 +22,8 @@ const RISK_ORDER: Record<RecommendationRow["risk"]["label"], number> = {
   "Medium Risk": 2,
   "High Risk": 3,
 };
+
+const EVIDENCE_ORDER = { Strong: 0, Moderate: 1, Limited: 2 } as const;
 
 export function ExecutiveRecommendationsTable({
   rows,
@@ -35,7 +39,11 @@ export function ExecutiveRecommendationsTable({
     const copy = [...rows];
     copy.sort((a, b) => {
       if (sortBy === "impact") return b.expectedMonthlyProfit - a.expectedMonthlyProfit;
-      if (sortBy === "confidence") return b.confidencePct - a.confidencePct;
+      if (sortBy === "evidence") {
+        return (
+          EVIDENCE_ORDER[a.evidence.strength] - EVIDENCE_ORDER[b.evidence.strength]
+        );
+      }
       if (sortBy === "risk") return RISK_ORDER[a.risk.label] - RISK_ORDER[b.risk.label];
       return a.timeRequired.localeCompare(b.timeRequired);
     });
@@ -53,7 +61,7 @@ export function ExecutiveRecommendationsTable({
           {(
             [
               ["impact", "Impact"],
-              ["confidence", "Confidence"],
+              ["evidence", "Evidence"],
               ["time", "Time"],
               ["risk", "Risk"],
             ] as const
@@ -74,11 +82,12 @@ export function ExecutiveRecommendationsTable({
           <thead>
             <tr>
               <th>Opportunity</th>
-              <th>Expected Monthly Profit</th>
-              <th>Confidence</th>
-              <th>Est. Success</th>
+              <th>Financial Impact</th>
+              <th>AI Evidence</th>
+              <th>Difficulty</th>
               <th>Time Required</th>
               <th>Risk</th>
+              <th>Results In</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -93,10 +102,16 @@ export function ExecutiveRecommendationsTable({
                     <button type="button" className="exec-advisor-table-opportunity">
                       {row.opportunity}
                     </button>
+                    <span className="muted exec-advisor-table-business-impact">
+                      {row.cardMeta.businessImpact.slice(0, 72)}
+                      {row.cardMeta.businessImpact.length > 72 ? "…" : ""}
+                    </span>
                   </td>
                   <td className="exec-advisor-table-profit">{fmt(row.expectedMonthlyProfit)}</td>
-                  <td>{row.confidencePct}%</td>
-                  <td>{row.estimatedSuccessPct}%</td>
+                  <td>
+                    <EvidenceStrengthBadge evidence={row.evidence} />
+                  </td>
+                  <td>{row.cardMeta.difficulty}</td>
                   <td>{row.timeRequired}</td>
                   <td>
                     <span
@@ -105,6 +120,7 @@ export function ExecutiveRecommendationsTable({
                       {row.risk.label}
                     </span>
                   </td>
+                  <td>{row.cardMeta.expectedTimeToResults}</td>
                   <td>
                     <span className={`exec-advisor-status exec-advisor-status-${row.status.toLowerCase()}`}>
                       {row.status}
@@ -113,7 +129,7 @@ export function ExecutiveRecommendationsTable({
                 </tr>
                 {expandedId === row.id && (
                   <tr className="exec-advisor-table-reasons-row">
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="exec-advisor-row-detail">
                         <p className="exec-advisor-risk-explain">{row.risk.explanation}</p>
 
@@ -132,20 +148,7 @@ export function ExecutiveRecommendationsTable({
                           </div>
                         </div>
 
-                        <div className="exec-advisor-confidence-block compact">
-                          <p className="exec-advisor-confidence-label">
-                            Confidence {row.confidencePct}% — Based on:
-                          </p>
-                          <ul className="exec-advisor-confidence-reasons">
-                            {row.confidenceReasons.map((r) => (
-                              <li key={r}>{r}</li>
-                            ))}
-                          </ul>
-                          <p className="exec-advisor-success-line">
-                            Estimated Success: <strong>{row.estimatedSuccessPct}%</strong>
-                            <span className="muted"> — expected business outcome</span>
-                          </p>
-                        </div>
+                        <RecommendationWhyPanel explanation={row.cardMeta.explanation} compact />
 
                         <div className="exec-advisor-inaction compact">
                           <p className="exec-advisor-inaction-label">Cost of inaction</p>

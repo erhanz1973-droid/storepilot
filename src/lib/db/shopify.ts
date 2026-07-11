@@ -99,7 +99,14 @@ export async function getInstallationByStoreId(
     .eq("status", "active")
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    console.log("[sync-trace] getInstallationByStoreId miss", {
+      storeId,
+      table: "shopify_installations",
+      found: false,
+    });
+    return null;
+  }
   const row = data as Record<string, unknown>;
   return {
     ...rowToInstallation(row),

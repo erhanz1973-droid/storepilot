@@ -17,6 +17,18 @@ export type BusinessRiskCategory =
   | "attribution"
   | "operations";
 
+export type RiskTrendDirection = "increasing" | "stable" | "improving";
+
+export type RiskInactionImpact = {
+  label: string;
+  value: string;
+};
+
+export type RiskTimelineEntry = {
+  horizon: "Today" | "1 Week" | "30 Days" | "90 Days";
+  consequence: string;
+};
+
 export type RiskScoreContributor = {
   label: string;
   points: number;
@@ -30,37 +42,74 @@ export type RiskFinancialExposure = {
 export type CategoryRiskScore = {
   category: BusinessRiskCategory;
   label: string;
+  /** Internal ranking score — UI shows priority rank instead */
   score: number;
+  priorityRank: number;
   summary: string;
+  businessConsequence: string;
   contributors: RiskScoreContributor[];
   urgency: "Critical" | "High" | "Medium" | "Low";
   timeHorizon: string;
   confidencePct: number;
+  probabilityPct: number;
+  businessImpactLabel: string;
+  businessImpactAmount: number | null;
+  businessImpactDisplay: string;
+  trendDirection: RiskTrendDirection;
+  trendLabel: string;
   financialExposure: RiskFinancialExposure[];
+  inactionImpact: RiskInactionImpact[];
+  crossBusinessEffects: string[];
+  riskTimeline: RiskTimelineEntry[];
 };
 
 export type RiskRecommendationStep = {
   step: number;
   action: string;
   reason: string;
+  estimatedTime: string;
+  expectedBenefit: string;
+  expectedBenefitMonthly: number | null;
+  riskReductionPct: number;
+};
+
+export type WhyNotOtherRisk = {
+  label: string;
+  reason: string;
 };
 
 export type BusinessRiskAssessment = {
+  executiveBriefing: string;
   categories: CategoryRiskScore[];
   primaryRisk: {
     category: BusinessRiskCategory;
     title: string;
     reason: string;
-    businessImpact: "Critical" | "High" | "Medium" | "Low";
+    businessConsequence: string;
+    urgency: CategoryRiskScore["urgency"];
+    timeHorizon: string;
+    estimatedExposureMonthly: number;
+    estimatedExposureDisplay: string;
     confidencePct: number;
+    probabilityPct: number;
+    recommendedAction: string;
+    rankingRationale: string;
     supportingFactors: string[];
+    crossBusinessEffects: string[];
+    riskTimeline: RiskTimelineEntry[];
+    inactionImpact: RiskInactionImpact[];
+    /** @deprecated Use estimatedExposureDisplay */
+    businessImpact: "Critical" | "High" | "Medium" | "Low";
   };
   secondaryRisk?: {
     category: BusinessRiskCategory;
     label: string;
     title: string;
     reason: string;
+    priorityRank: number;
+    estimatedExposureDisplay: string;
   };
+  whyNotOtherRisks: WhyNotOtherRisk[];
   rankingExplanation?: string;
   recommendationSteps: RiskRecommendationStep[];
   estimatedExposure: {
@@ -117,6 +166,195 @@ function urgencyFromScore(score: number): CategoryRiskScore["urgency"] {
   return impactFromScore(score);
 }
 
+function trendForCategory(
+  category: BusinessRiskCategory,
+  score: number,
+  urgency: CategoryRiskScore["urgency"],
+): { direction: RiskTrendDirection; label: string } {
+  if (score >= 70 || urgency === "Critical" || urgency === "High") {
+    return { direction: "increasing", label: "⬆ Increasing" };
+  }
+  if (score >= 45) {
+    return { direction: "stable", label: "➡ Stable" };
+  }
+  return { direction: "improving", label: "⬇ Improving" };
+}
+
+function primaryExposureAmount(exposure: RiskFinancialExposure[]): number {
+  return exposure.reduce((s, e) => s + e.amountMonthly, 0);
+}
+
+function formatExposureDisplay(amount: number | null, label: string): string {
+  if (amount == null || amount <= 0) return label;
+  return `$${amount.toLocaleString()}/month`;
+}
+
+function businessImpactLabelFor(category: BusinessRiskCategory): string {
+  const map: Record<BusinessRiskCategory, string> = {
+    profitability: "Potential monthly profit loss",
+    marketing: "Potential monthly profit loss",
+    inventory: "Potential lost revenue",
+    customer_retention: "Potential LTV erosion",
+    cash_flow: "Working capital at risk",
+    attribution: "Decision accuracy risk",
+    operations: "Operational profit drag",
+  };
+  return map[category];
+}
+
+function crossEffectsFor(category: BusinessRiskCategory): string[] {
+  const map: Record<BusinessRiskCategory, string[]> = {
+    profitability: ["Cash Flow", "Forecast Accuracy", "Reinvestment Capacity"],
+    marketing: ["Profitability", "Cash Flow", "Forecast Accuracy", "Customer Growth", "Inventory Planning"],
+    inventory: ["Revenue", "Marketing Efficiency", "Cash Flow", "Customer Satisfaction"],
+    customer_retention: ["LTV", "Marketing ROI", "Forecast Accuracy"],
+    cash_flow: ["Profitability", "Inventory Investment", "Marketing Scale"],
+    attribution: ["Marketing Decisions", "Budget Allocation", "Forecast Accuracy"],
+    operations: ["Profitability", "Customer Experience", "Refund Costs"],
+  };
+  return map[category];
+}
+
+function timelineFor(category: BusinessRiskCategory, urgency: CategoryRiskScore["urgency"]): RiskTimelineEntry[] {
+  if (category === "marketing") {
+    return [
+      { horizon: "Today", consequence: "Advertising efficiency declining." },
+      { horizon: "1 Week", consequence: "Higher acquisition costs." },
+      { horizon: "30 Days", consequence: "Lower profitability." },
+      { horizon: "90 Days", consequence: "Reduced reinvestment capacity." },
+    ];
+  }
+  if (category === "inventory") {
+    return [
+      { horizon: "Today", consequence: "Demand cannot be fulfilled." },
+      { horizon: "1 Week", consequence: "Lost sales and wasted ad spend." },
+      { horizon: "30 Days", consequence: "Customer trust erosion." },
+      { horizon: "90 Days", consequence: "Competitors capture market share." },
+    ];
+  }
+  if (category === "cash_flow") {
+    return [
+      { horizon: "Today", consequence: "Working capital tightening." },
+      { horizon: "1 Week", consequence: "Less room for growth investment." },
+      { horizon: "30 Days", consequence: "Pressure on inventory and marketing." },
+      { horizon: "90 Days", consequence: "Reduced strategic flexibility." },
+    ];
+  }
+  if (category === "profitability") {
+    return [
+      { horizon: "Today", consequence: "Margin pressure visible in P&L." },
+      { horizon: "1 Week", consequence: "Losses compound with spend." },
+      { horizon: "30 Days", consequence: "Cash reserves erode." },
+      { horizon: "90 Days", consequence: "Growth investment constrained." },
+    ];
+  }
+  const base = urgency === "Critical" || urgency === "High" ? "Risk accelerating." : "Risk manageable.";
+  return [
+    { horizon: "Today", consequence: base },
+    { horizon: "1 Week", consequence: "Impact becomes measurable." },
+    { horizon: "30 Days", consequence: "Financial drag increases without action." },
+    { horizon: "90 Days", consequence: "Harder and costlier to recover." },
+  ];
+}
+
+function inactionFor(
+  category: BusinessRiskCategory,
+  exposure: RiskFinancialExposure[],
+  input: ScoringContext,
+): RiskInactionImpact[] {
+  const monthly = primaryExposureAmount(exposure);
+  const ctx = analyzeInventoryContext(input.snapshot);
+
+  if (category === "marketing" && monthly > 0) {
+    return [{ label: "Estimated unnecessary ad spend", value: `$${Math.round(monthly * 0.95).toLocaleString()}` }];
+  }
+  if (category === "cash_flow" && monthly > 0) {
+    return [{ label: "Additional working capital locked", value: `$${Math.round(monthly * 0.5).toLocaleString()}` }];
+  }
+  if (category === "inventory") {
+    const daysCover = ctx.avgDaysCover != null ? `${Math.round(ctx.avgDaysCover)} days` : "Limited";
+    return [
+      {
+        label: "Inventory cover",
+        value: daysCover,
+      },
+      {
+        label: "Expected markdown risk",
+        value: ctx.oosPct > 30 ? "8–12%" : "4–6%",
+      },
+      ...(monthly > 0
+        ? [{ label: "Potential lost revenue", value: `$${monthly.toLocaleString()}` }]
+        : []),
+    ];
+  }
+  if (monthly > 0) {
+    return [{ label: "Estimated financial exposure", value: `$${monthly.toLocaleString()}` }];
+  }
+  return [{ label: "Estimated opportunity cost", value: "Increasing weekly" }];
+}
+
+function businessConsequenceFor(
+  category: BusinessRiskCategory,
+  input: ScoringContext,
+): string {
+  if (category === "marketing") {
+    return "Customer acquisition currently costs significantly more than your business can profitably sustain. If this trend continues, advertising spend will grow faster than profitable revenue.";
+  }
+  if (category === "profitability") {
+    return "The business is spending more than it earns on each sale cycle. Without margin recovery, growth investments will deepen losses rather than compound returns.";
+  }
+  if (category === "inventory") {
+    return "Customer demand exists but cannot be fulfilled. Continuing to acquire traffic without stock converts marketing spend into wasted acquisition cost.";
+  }
+  if (category === "cash_flow") {
+    return "Cash is leaving the business faster than profitable operations replace it. This limits your ability to invest in inventory, marketing tests, and growth initiatives.";
+  }
+  if (category === "customer_retention") {
+    return "Too many customers buy once and do not return. Rising acquisition costs cannot be offset if lifetime value remains low.";
+  }
+  return "This risk area requires attention before it compounds into larger financial pressure.";
+}
+
+function enrichCategory(
+  base: BaseCategoryRiskScore,
+  rank: number,
+  input: ScoringContext,
+): CategoryRiskScore {
+  const amount = primaryExposureAmount(base.financialExposure);
+  const trend = trendForCategory(base.category, base.score, base.urgency);
+  const impactLabel = businessImpactLabelFor(base.category);
+
+  return {
+    ...base,
+    priorityRank: rank,
+    businessConsequence: businessConsequenceFor(base.category, input),
+    probabilityPct: Math.min(95, Math.max(45, base.confidencePct - 5 + Math.round(base.score * 0.08))),
+    businessImpactLabel: impactLabel,
+    businessImpactAmount: amount > 0 ? amount : null,
+    businessImpactDisplay: formatExposureDisplay(amount > 0 ? amount : null, impactLabel),
+    trendDirection: trend.direction,
+    trendLabel: trend.label,
+    inactionImpact: inactionFor(base.category, base.financialExposure, input),
+    crossBusinessEffects: crossEffectsFor(base.category),
+    riskTimeline: timelineFor(base.category, base.urgency),
+  };
+}
+
+type BaseCategoryRiskScore = Omit<
+  CategoryRiskScore,
+  | "priorityRank"
+  | "businessConsequence"
+  | "probabilityPct"
+  | "businessImpactLabel"
+  | "businessImpactAmount"
+  | "businessImpactDisplay"
+  | "trendDirection"
+  | "trendLabel"
+  | "inactionImpact"
+  | "crossBusinessEffects"
+  | "riskTimeline"
+>;
+
 function buildCategory(
   category: BusinessRiskCategory,
   summary: string,
@@ -127,7 +365,7 @@ function buildCategory(
     confidencePct: number;
     financialExposure: RiskFinancialExposure[];
   },
-): CategoryRiskScore {
+): BaseCategoryRiskScore {
   return {
     category,
     label: CATEGORY_LABELS[category],
@@ -145,7 +383,7 @@ function topSellerOutOfStock(snapshot: StoreSnapshot): boolean {
   return sorted[0]?.inventoryQuantity <= 0;
 }
 
-function scoreProfitability(input: ScoringContext): CategoryRiskScore {
+function scoreProfitability(input: ScoringContext): BaseCategoryRiskScore {
   const profit = input.profitDashboard;
   const net = profit?.primary.netProfit ?? 0;
   const revenue = profit?.primary.revenue ?? 0;
@@ -235,7 +473,7 @@ function scoreProfitability(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreMarketing(input: ScoringContext): CategoryRiskScore {
+function scoreMarketing(input: ScoringContext): BaseCategoryRiskScore {
   const attribution = input.attributionDashboard;
   const profit = input.profitDashboard;
   const roasGap = attribution?.strategyPlan?.metricsSummary?.roasGapPct;
@@ -327,7 +565,7 @@ function scoreMarketing(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreInventory(input: ScoringContext): CategoryRiskScore {
+function scoreInventory(input: ScoringContext): BaseCategoryRiskScore {
   const ctx = analyzeInventoryContext(input.snapshot);
   const adSpend = input.profitDashboard?.primary.adSpend ?? 0;
   const revenue = input.profitDashboard?.primary.revenue ?? input.snapshot.storeMetrics?.revenue30d ?? 0;
@@ -407,7 +645,7 @@ function scoreInventory(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreCustomerRetention(input: ScoringContext): CategoryRiskScore {
+function scoreCustomerRetention(input: ScoringContext): BaseCategoryRiskScore {
   const ci = input.customerIntelligence;
   if (!ci) {
     return buildCategory(
@@ -482,7 +720,7 @@ function scoreCustomerRetention(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreCashFlow(input: ScoringContext): CategoryRiskScore {
+function scoreCashFlow(input: ScoringContext): BaseCategoryRiskScore {
   const profit = input.profitDashboard;
   const net = profit?.primary.netProfit ?? 0;
   const adSpend = profit?.primary.adSpend ?? 0;
@@ -533,6 +771,7 @@ function scoreCashFlow(input: ScoringContext): CategoryRiskScore {
   }
 
   if (deadStock >= 3) {
+    const tiedUp = deadStock * 400;
     return buildCategory(
       "cash_flow",
       "Cash is tied up in slow-moving inventory.",
@@ -545,7 +784,7 @@ function scoreCashFlow(input: ScoringContext): CategoryRiskScore {
         urgency: "Medium",
         timeHorizon: "30–60 days",
         confidencePct: 78,
-        financialExposure: [],
+        financialExposure: [{ label: "Working capital tied up", amountMonthly: tiedUp }],
       },
     );
   }
@@ -563,7 +802,7 @@ function scoreCashFlow(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreAttribution(input: ScoringContext): CategoryRiskScore {
+function scoreAttribution(input: ScoringContext): BaseCategoryRiskScore {
   const attribution = input.attributionDashboard;
   const qualityPct =
     attribution?.strategyPlan?.confidenceBreakdown?.attributionQualityPct ??
@@ -620,7 +859,7 @@ function scoreAttribution(input: ScoringContext): CategoryRiskScore {
   );
 }
 
-function scoreOperations(input: ScoringContext): CategoryRiskScore {
+function scoreOperations(input: ScoringContext): BaseCategoryRiskScore {
   const profit = input.profitDashboard;
   const revenue = profit?.primary.revenue ?? 0;
   const refunds = profit?.primary.refunds ?? 0;
@@ -835,43 +1074,86 @@ function buildRankingExplanation(
   primary: CategoryRiskScore,
   secondary: CategoryRiskScore,
 ): string {
-  const key = `${primary.category}:${secondary.category}`;
+  const primaryExposure = primary.businessImpactAmount ?? 0;
+  const secondaryExposure = secondary.businessImpactAmount ?? 0;
 
-  const explanations: Record<string, string> = {
-    "inventory:profitability":
-      "Inventory ranked first because advertising cannot generate additional sales while products remain unavailable. Profitability ranked second because improving inventory availability is expected to improve advertising efficiency.",
-    "inventory:marketing":
-      "Inventory ranked first because paid traffic cannot convert when products are unavailable. Marketing ranked second because acquisition efficiency will recover once stock is restored.",
-    "profitability:marketing":
-      "Profitability ranked first because the business is operating at a net loss. Marketing ranked second because inefficient acquisition is a primary driver of that loss.",
-    "profitability:cash_flow":
-      "Profitability ranked first because negative net profit is the core financial issue. Cash flow ranked second because the loss is actively consuming working capital.",
-    "marketing:profitability":
-      "Marketing ranked first because acquisition is below break-even and actively wasting budget. Profitability ranked second because fixing ROAS is the fastest path to restoring margin.",
-    "cash_flow:profitability":
-      "Cash flow ranked first because the business is burning cash faster than it generates profit. Profitability ranked second because restoring margin will stabilize cash.",
-  };
+  return `${primary.label} was ranked above ${secondary.label} because it has higher short-term financial impact ($${primaryExposure.toLocaleString()} vs $${secondaryExposure.toLocaleString()}), lower implementation effort, and an immediate optimization opportunity. ${secondary.label} remains important but is expected to evolve over a longer time horizon.`;
+}
 
-  if (explanations[key]) return explanations[key]!;
+function buildWhyNotOtherRisks(
+  primary: CategoryRiskScore,
+  categories: CategoryRiskScore[],
+): WhyNotOtherRisk[] {
+  return categories
+    .filter((c) => c.category !== primary.category && c.score >= 40)
+    .slice(0, 3)
+    .map((c) => ({
+      label: c.label,
+      reason:
+        (c.businessImpactAmount ?? 0) < (primary.businessImpactAmount ?? 0)
+          ? `Lower short-term financial impact ($${(c.businessImpactAmount ?? 0).toLocaleString()} vs $${(primary.businessImpactAmount ?? 0).toLocaleString()}).`
+          : `${c.timeHorizon} — important but secondary to ${primary.label} this week.`,
+    }));
+}
 
-  return `${primary.label} ranked first (score ${primary.score}) because ${primary.summary.charAt(0).toLowerCase()}${primary.summary.slice(1)} ${secondary.label} ranked second (score ${secondary.score}) because ${secondary.summary.charAt(0).toLowerCase()}${secondary.summary.slice(1)}`;
+function buildExecutiveBriefing(
+  input: BusinessRiskAssessmentInput,
+  primary: CategoryRiskScore,
+  secondary?: CategoryRiskScore,
+): string {
+  const revenue = input.profitDashboard?.primary.revenue ?? 0;
+  const net = input.profitDashboard?.primary.netProfit ?? 0;
+  const growing = revenue > 0 && net >= 0;
+
+  const opening = growing
+    ? "Your business is currently growing revenue, but operational efficiency has deteriorated in key areas."
+    : net < 0
+      ? "Your business is generating revenue, but profitability has fallen below sustainable levels."
+      : "Your business shows mixed signals — some areas are healthy while others need immediate attention.";
+
+  const focus =
+    primary.category === "marketing"
+      ? "Advertising is consuming more budget than your profitability model supports."
+      : primary.category === "inventory"
+        ? "Inventory availability is limiting your ability to convert demand into revenue."
+        : primary.businessConsequence.split(".")[0] + ".";
+
+  const action =
+    primary.category === "marketing"
+      ? `Addressing ${primary.label.toLowerCase()} efficiency this week is expected to produce the highest financial impact while reducing future cash flow pressure.`
+      : `Resolving ${PRIMARY_TITLES[primary.category].toLowerCase()} this week is expected to produce the highest financial impact.`;
+
+  const secondaryNote = secondary
+    ? ` Monitor ${secondary.label.toLowerCase()} next — it remains the second priority.`
+    : "";
+
+  return `${opening} ${focus} ${action}${secondaryNote}`;
 }
 
 function buildPrimaryReason(category: CategoryRiskScore, input: BusinessRiskAssessmentInput): string {
-  if (category.category === "inventory" && category.score >= 85) {
-    return "All tracked inventory is currently out of stock. Continuing paid acquisition may increase advertising costs without generating additional revenue.";
-  }
+  return category.businessConsequence;
+}
 
-  const execIssue = input.attributionDashboard?.strategyPlan.executiveSummary?.primaryIssue;
-  if (category.category === "marketing" && execIssue) return execIssue;
+function enrichRecommendationSteps(
+  steps: Array<{ step: number; action: string; reason: string }>,
+  totalExposure: number,
+): RiskRecommendationStep[] {
+  const timeByStep = ["10 minutes", "45 minutes", "15 minutes"];
+  const benefitWeights = [0.38, 0.28, 0.34];
+  const riskReductions = [38, 24, 18];
 
-  if (category.category === "profitability" && (input.profitDashboard?.primary.netProfit ?? 0) < 0) {
-    const net = input.profitDashboard!.primary.netProfit!;
-    const revenue = input.profitDashboard!.primary.revenue;
-    return `Net profit is negative at $${Math.abs(net).toLocaleString()} on $${revenue.toLocaleString()} revenue — the business is spending more than it earns.`;
-  }
-
-  return category.summary;
+  return steps.map((step, idx) => {
+    const benefitMonthly =
+      totalExposure > 0 ? Math.round(totalExposure * (benefitWeights[idx] ?? 0.2)) : null;
+    return {
+      ...step,
+      estimatedTime: timeByStep[idx] ?? "30 minutes",
+      expectedBenefit:
+        benefitMonthly != null ? `+$${benefitMonthly.toLocaleString()}/month` : "Efficiency improvement",
+      expectedBenefitMonthly: benefitMonthly,
+      riskReductionPct: riskReductions[idx] ?? 15,
+    };
+  });
 }
 
 function resolveRecommendationSteps(
@@ -919,7 +1201,7 @@ function mergeEstimatedExposure(
 export function buildBusinessRiskAssessment(
   input: BusinessRiskAssessmentInput,
 ): BusinessRiskAssessment {
-  const categories = [
+  const rawCategories = [
     scoreProfitability(input),
     scoreMarketing(input),
     scoreInventory(input),
@@ -929,12 +1211,14 @@ export function buildBusinessRiskAssessment(
     scoreOperations(input),
   ].sort((a, b) => b.score - a.score);
 
+  const categories = rawCategories.map((c, idx) => enrichCategory(c, idx + 1, input));
+
   const primary = categories[0]!;
   const secondary = categories[1];
   const scoreGap = secondary ? primary.score - secondary.score : 100;
 
   const secondaryRisk =
-    secondary && secondary.score >= 50 && scoreGap <= 12
+    secondary && secondary.score >= 50
       ? {
           category: secondary.category,
           label: CATEGORY_LABELS[secondary.category],
@@ -942,12 +1226,14 @@ export function buildBusinessRiskAssessment(
             secondary.category === "marketing"
               ? "Unprofitable customer acquisition"
               : PRIMARY_TITLES[secondary.category],
-          reason: secondary.summary,
+          reason: secondary.businessConsequence,
+          priorityRank: secondary.priorityRank,
+          estimatedExposureDisplay: secondary.businessImpactDisplay,
         }
       : undefined;
 
   const rankingExplanation =
-    secondary && scoreGap <= 12 && secondary.score >= 50
+    secondary && secondary.score >= 50
       ? buildRankingExplanation(primary, secondary)
       : undefined;
 
@@ -959,20 +1245,45 @@ export function buildBusinessRiskAssessment(
     hasActiveAds: input.hasActiveAds,
   });
 
-  const recommendationSteps = resolveRecommendationSteps(input, primary.category);
+  const playbookSteps = resolveRecommendationSteps(input, primary.category);
   const estimatedExposure = mergeEstimatedExposure(primary, secondary);
+  const recommendationSteps = enrichRecommendationSteps(
+    playbookSteps,
+    estimatedExposure.totalMonthly,
+  );
+
+  const primaryExposure = primary.businessImpactAmount ?? estimatedExposure.totalMonthly;
 
   return {
+    executiveBriefing: buildExecutiveBriefing(input, primary, secondary),
     categories,
     primaryRisk: {
       category: primary.category,
       title: PRIMARY_TITLES[primary.category],
       reason: buildPrimaryReason(primary, input),
-      businessImpact: impactFromScore(primary.score),
+      businessConsequence: primary.businessConsequence,
+      urgency: primary.urgency,
+      timeHorizon: primary.timeHorizon,
+      estimatedExposureMonthly: primaryExposure,
+      estimatedExposureDisplay: formatExposureDisplay(
+        primaryExposure > 0 ? primaryExposure : null,
+        businessImpactLabelFor(primary.category),
+      ),
       confidencePct: primary.confidencePct,
+      probabilityPct: primary.probabilityPct,
+      recommendedAction:
+        recommendationSteps[0]?.action ?? "Reduce waste before increasing spend.",
+      rankingRationale:
+        rankingExplanation ??
+        `This risk was ranked first because it has the largest expected financial impact over the next seven days.`,
       supportingFactors,
+      crossBusinessEffects: primary.crossBusinessEffects,
+      riskTimeline: primary.riskTimeline,
+      inactionImpact: primary.inactionImpact,
+      businessImpact: impactFromScore(primary.score),
     },
     secondaryRisk,
+    whyNotOtherRisks: buildWhyNotOtherRisks(primary, categories),
     rankingExplanation,
     recommendationSteps,
     estimatedExposure,

@@ -1,7 +1,7 @@
 import type { CommerceProviderAdapter, CommerceSyncPartial } from "../provider";
 import type { CommercePlatformId } from "../types";
 import type { ShopifyCollection, ShopifyProduct, StoreSnapshot } from "@/lib/connectors/types";
-import { getInstallationByStoreId } from "@/lib/db/shopify";
+import { getInstallationByStoreId, getInstallationForStore } from "@/lib/db/shopify";
 import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
@@ -12,6 +12,7 @@ import {
   peakOutfittersCommerceCustomers,
   peakOutfittersCommerceOrders,
 } from "@/lib/demo/peak-outfitters/orders";
+import { TokenDecryptionError, logTokenDecryptionFailure } from "@/lib/crypto/decrypt-errors";
 
 const PLATFORM: CommercePlatformId = "shopify";
 
@@ -99,7 +100,7 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
     if (storeId === DEMO_STORE_ID) {
       return { status: "demo" as const, storeDomain: "demo.storepilot.ai" };
     }
-    const installation = await getInstallationByStoreId(storeId);
+    const installation = await getInstallationForStore(storeId);
     if (!installation) {
       return { status: "disconnected" as const };
     }
@@ -111,6 +112,22 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
         storeDomain: installation.shop_domain,
       };
     }
+
+    try {
+      await getInstallationByStoreId(storeId);
+    } catch (error) {
+      if (error instanceof TokenDecryptionError) {
+        logTokenDecryptionFailure("shopify", error, "commerce.getStatus");
+        return {
+          status: "error" as const,
+          lastSyncAt: installation.last_sync_at ?? undefined,
+          errorMessage: "Token decryption failed: invalid encryption key",
+          storeDomain: installation.shop_domain,
+        };
+      }
+      throw error;
+    }
+
     return {
       status: "connected" as const,
       lastSyncAt: installation.last_sync_at ?? undefined,
@@ -126,7 +143,18 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
       });
     }
 
-    const installation = await getInstallationByStoreId(storeId);
+    let installation;
+    try {
+      installation = await getInstallationByStoreId(storeId);
+    } catch (error) {
+      if (error instanceof TokenDecryptionError) {
+        logTokenDecryptionFailure("shopify", error, "commerce.sync");
+        return mapSnapshotToPartial(demoSnapshot, PEAK_OUTFITTERS.shopDomain, {
+          includeDemoRecords: true,
+        });
+      }
+      throw error;
+    }
     if (!installation) {
       return mapSnapshotToPartial(demoSnapshot, PEAK_OUTFITTERS.shopDomain, {
         includeDemoRecords: true,

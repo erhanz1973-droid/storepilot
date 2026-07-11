@@ -4,12 +4,33 @@ function fmt(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
+function stepIcon(status: RecoveryProgress["steps"][0]["status"]): string {
+  if (status === "complete") return "✓";
+  if (status === "current") return "→";
+  return "○";
+}
+
 export function ExecutiveRecoveryProgressCard({ progress }: { progress: RecoveryProgress }) {
   if (progress.goalMonthly <= 0) return null;
 
   return (
     <section className="exec-advisor-recovery-progress card">
       <h2 className="exec-advisor-section-title">Recovery Progress</h2>
+
+      <ol className="exec-recovery-onboarding-steps">
+        {progress.steps.map((step) => (
+          <li
+            key={step.id}
+            className={`exec-recovery-onboarding-step exec-recovery-step-${step.status}`}
+          >
+            <span className="exec-recovery-step-icon" aria-hidden>
+              {stepIcon(step.status)}
+            </span>
+            <span>{step.label}</span>
+          </li>
+        ))}
+      </ol>
+
       <div className="exec-recovery-progress-grid">
         <div>
           <span className="muted">Recovery Goal</span>
@@ -40,10 +61,7 @@ export function ExecutiveRecoveryProgressCard({ progress }: { progress: Recovery
           <strong className="exec-recovery-progress-pct">{progress.progressPct}%</strong>
         </div>
       ) : (
-        <p className="muted exec-recovery-progress-status">
-          <span className="exec-advisor-digest-sub">Status</span>
-          {progress.statusMessage}
-        </p>
+        <p className="muted exec-recovery-progress-status">{progress.statusMessage}</p>
       )}
     </section>
   );

@@ -37,6 +37,8 @@ export type ResolveMerchantDnaInput = {
   snapshot: StoreSnapshot;
   profitDashboard?: ProfitDashboard | null;
   productIntelligence?: ProductIntelligenceDashboard | null;
+  /** Skip DB upsert on read-only dashboard loads. */
+  skipPersist?: boolean;
 };
 
 function inferStoreMaturity(snapshot: StoreSnapshot): StoreMaturity {
@@ -159,13 +161,15 @@ export async function resolveMerchantDNA(
     profitDashboard: input.profitDashboard,
   });
 
-  await upsertMerchantDnaProfile(input.storeId, {
-    dna,
-    learned,
-    manualOverrides: manual,
-    benchmarkCohort,
-    version: dna.version,
-  });
+  if (!input.skipPersist) {
+    await upsertMerchantDnaProfile(input.storeId, {
+      dna,
+      learned,
+      manualOverrides: manual,
+      benchmarkCohort,
+      version: dna.version,
+    });
+  }
 
   return { dna, benchmark };
 }

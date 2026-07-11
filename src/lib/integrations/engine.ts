@@ -11,7 +11,7 @@ export function buildIntegrationSnapshot(
   snapshot: StoreSnapshot,
 ): IntegrationSnapshot | undefined {
   if (shouldUseDemoIntegrations(snapshot)) {
-    const demo = buildDemoIntegrationSnapshot(snapshot.storeMetrics, {
+    const demo = buildDemoIntegrationSnapshot(snapshot, {
       includeGoogleAds: !snapshot.googleAdsSnapshot,
     });
     return demo;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { BusinessForecast } from "@/lib/analytics/executive-experience";
-import type { RecoveryBreakdown } from "@/lib/analytics/executive-advisor";
+import type { ProfitDisplay, RecoveryBreakdown } from "@/lib/analytics/executive-advisor";
 import type { ProfitCalculationTrace } from "@/lib/analytics/executive-finance";
 import { ExecutiveRecoveryBreakdown } from "@/components/executive/advisor/ExecutiveRecoveryBreakdown";
 import { ExecutiveCalculationDrawer } from "@/components/executive/advisor/ExecutiveCalculationDrawer";
@@ -15,12 +15,15 @@ export function ExecutiveHeroSection({
   forecast,
   recoveryBreakdown,
   profitCalculation,
+  profitDisplay,
 }: {
   forecast: BusinessForecast;
   recoveryBreakdown: RecoveryBreakdown;
   profitCalculation: ProfitCalculationTrace;
+  profitDisplay: ProfitDisplay;
 }) {
-  const profitNegative = forecast.projectedMonthlyProfit < 0;
+  const profitUnavailable = profitDisplay.status === "unavailable";
+  const profitNegative = !profitUnavailable && forecast.projectedMonthlyProfit < 0;
 
   return (
     <section className="exec-advisor-hero card">
@@ -30,14 +33,29 @@ export function ExecutiveHeroSection({
           <MetricLabel icon={EXEC_METRIC_ICONS.profit} className="exec-advisor-hero-label">
             Estimated Profit
           </MetricLabel>
-          <span className={`exec-forecast-profit exec-hero-value-primary ${profitNegative ? "negative" : "positive"}`}>
-            {fmt(forecast.projectedMonthlyProfit)}
-          </span>
-          <ExecutiveCalculationDrawer
-            trace={profitCalculation}
-            displayValue={forecast.projectedMonthlyProfit}
-            compact
-          />
+          {profitUnavailable ? (
+            <>
+              <span className="exec-forecast-profit exec-hero-value-primary exec-kpi-warning">
+                Unavailable
+              </span>
+              <p className="muted exec-advisor-profit-unavailable-msg">
+                {profitDisplay.unavailableMessage}
+              </p>
+            </>
+          ) : (
+            <>
+              <span
+                className={`exec-forecast-profit exec-hero-value-primary ${profitNegative ? "negative" : "positive"}`}
+              >
+                {fmt(forecast.projectedMonthlyProfit)}
+              </span>
+              <ExecutiveCalculationDrawer
+                trace={profitCalculation}
+                displayValue={forecast.projectedMonthlyProfit}
+                compact
+              />
+            </>
+          )}
         </div>
         <div className="exec-advisor-hero-metric tier-secondary">
           <MetricLabel icon={EXEC_METRIC_ICONS.recovery} className="exec-advisor-hero-label">
@@ -46,12 +64,6 @@ export function ExecutiveHeroSection({
           <div className="exec-hero-value-secondary">
             <ExecutiveRecoveryBreakdown breakdown={recoveryBreakdown} />
           </div>
-        </div>
-        <div className="exec-advisor-hero-metric tier-tertiary">
-          <MetricLabel icon={EXEC_METRIC_ICONS.confidence} className="exec-advisor-hero-label">
-            Confidence
-          </MetricLabel>
-          <span className="exec-advisor-hero-confidence">{forecast.confidencePct}%</span>
         </div>
       </div>
       <div className="exec-advisor-hero-actions">

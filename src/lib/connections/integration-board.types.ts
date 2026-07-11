@@ -3,10 +3,11 @@ import type { ConnectionCategory } from "./catalog";
 
 export type IntegrationConnectionStatus =
   | "connected"
+  | "connected_warning"
+  | "sync_failed"
   | "authorization_required"
   | "not_connected"
-  | "coming_soon"
-  | "error";
+  | "coming_soon";
 
 export type IntegrationBoardItem = {
   id: string;
@@ -21,6 +22,12 @@ export type IntegrationBoardItem = {
   planned: boolean;
   syncEndpoint?: string;
   attentionMessage?: string | null;
+  guidanceMessage?: string | null;
+  errorReason?: string | null;
+  cachedDataNote?: string | null;
+  showCachedMetrics?: boolean;
+  canSync?: boolean;
+  health: import("./connection-state").ConnectionHealthBreakdown;
   detail: IntegrationDetail;
 };
 
@@ -73,10 +80,15 @@ export type Ga4IntegrationDetail = {
   propertyId: string | null;
   measurementId: string | null;
   lastSyncAt: string | null;
+  lastSuccessfulSyncAt: string | null;
   sessions30d: number | null;
   engagementRatePct: number | null;
   ecommerceConversionRatePct: number | null;
   installationId: string | null;
+  funnelEventsVerified: boolean;
+  funnelOnboardingSteps: import("@/lib/ga4/onboarding").Ga4FunnelOnboardingStep[];
+  cachedDataNote?: string | null;
+  showCachedMetrics?: boolean;
 };
 
 export type GenericIntegrationDetail = {

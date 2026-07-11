@@ -98,5 +98,6 @@ export type AnalyticsPageContext =
   | "inventory"
   | "profit"
   | "attribution"
+  | "advertising"
   | "insights"
   | "live";

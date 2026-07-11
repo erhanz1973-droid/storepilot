@@ -12,7 +12,7 @@ import { jsonEqual } from "@/lib/performance/shallow-equal";
 import { REFRESH_MS } from "@/lib/performance/refresh-schedules";
 import type { LiveMissionControlView } from "@/lib/live/mission-control-types";
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 
 const VisionCard = memo(function VisionCard({ text }: { text: string }) {
   return (
@@ -51,6 +51,13 @@ const LiveBottomGrid = memo(function LiveBottomGrid({
   );
 });
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
 export function LiveMissionControlClient({
   initialView,
 }: {
@@ -58,7 +65,6 @@ export function LiveMissionControlClient({
 }) {
   const router = useRouter();
   const [view, setView] = useState(initialView);
-  const abortRef = useRef<AbortController | null>(null);
 
   const mergeKpiUpdate = useCallback(
     (patch: Pick<LiveMissionControlView, "syncedAt" | "health" | "kpis" | "alerts">) => {
@@ -81,26 +87,35 @@ export function LiveMissionControlClient({
     setView((prev) => (jsonEqual(prev, next) ? prev : next));
   }, []);
 
-  const fetchKpis = useCallback(async (signal: AbortSignal) => {
-    const res = await fetch("/api/live/metrics?scope=kpis", { cache: "no-store", signal });
-    if (!res.ok) return;
-    const data = (await res.json()) as Pick<
-      LiveMissionControlView,
-      "syncedAt" | "health" | "kpis" | "alerts"
-    >;
-    mergeKpiUpdate(data);
+  const fetchKpis = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/live/metrics?scope=kpis", { cache: "no-store", signal });
+      if (!res.ok) return;
+      const data = (await res.json()) as Pick<
+        LiveMissionControlView,
+        "syncedAt" | "health" | "kpis" | "alerts"
+      >;
+      mergeKpiUpdate(data);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.warn("[LiveMissionControl] KPI refresh failed:", error);
+    }
   }, [mergeKpiUpdate]);
 
-  const fetchFull = useCallback(async (signal: AbortSignal) => {
-    const res = await fetch("/api/live/metrics?scope=full", { cache: "no-store", signal });
-    if (!res.ok) return;
-    const data = (await res.json()) as LiveMissionControlView;
-    mergeFullUpdate(data);
+  const fetchFull = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/live/metrics?scope=full", { cache: "no-store", signal });
+      if (!res.ok) return;
+      const data = (await res.json()) as LiveMissionControlView;
+      mergeFullUpdate(data);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      console.warn("[LiveMissionControl] Full refresh failed:", error);
+    }
   }, [mergeFullUpdate]);
 
   useEffect(() => {
     const ac = new AbortController();
-    abortRef.current = ac;
 
     void fetchKpis(ac.signal);
     void fetchFull(ac.signal);
@@ -114,18 +129,15 @@ export function LiveMissionControlClient({
     }, REFRESH_MS.liveFull);
 
     return () => {
-      ac.abort();
       window.clearInterval(kpiId);
       window.clearInterval(fullId);
+      ac.abort();
     };
   }, [fetchFull, fetchKpis]);
 
   const refreshNow = useCallback(() => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    void fetchKpis(ac.signal);
-    void fetchFull(ac.signal);
+    void fetchKpis();
+    void fetchFull();
     router.refresh();
   }, [fetchFull, fetchKpis, router]);
 

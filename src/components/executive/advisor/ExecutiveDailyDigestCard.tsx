@@ -21,13 +21,21 @@ export function ExecutiveDailyDigestCard({ digest }: { digest: DailyExecutiveDig
 
       <p className="exec-advisor-digest-greeting">{digest.greeting}</p>
 
+      {digest.narrative.length > 0 && (
+        <div className="exec-advisor-digest-narrative">
+          {digest.narrative.map((paragraph) => (
+            <p key={paragraph.slice(0, 48)} className="exec-advisor-digest-story">
+              {paragraph}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="exec-advisor-digest-scan">
         {digest.storeHealthScore != null && digest.storeHealthLabel && (
           <div className="exec-advisor-digest-block">
             <span className="muted">Store Health</span>
-            <strong>
-              {digest.storeHealthScore} / 100
-            </strong>
+            <strong>{digest.storeHealthScore} / 100</strong>
             <span className="exec-advisor-digest-sub">{digest.storeHealthLabel}</span>
           </div>
         )}
@@ -49,9 +57,7 @@ export function ExecutiveDailyDigestCard({ digest }: { digest: DailyExecutiveDig
         {digest.openDecisionsCount > 0 && (
           <div className="exec-advisor-digest-block">
             <span className="muted">Open Decision</span>
-            <strong>
-              {digest.openDecisionsCount} Ready for Approval
-            </strong>
+            <strong>{digest.openDecisionsCount} Ready for Approval</strong>
           </div>
         )}
       </div>

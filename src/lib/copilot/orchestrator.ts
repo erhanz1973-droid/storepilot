@@ -1,5 +1,6 @@
 import type { AiChatMessage, AiActionCard, AskAiResponse } from "@/lib/ai/types";
 import { loadCopilotData } from "./data";
+import { enrichConversationalResponse } from "./conversational-enrichment";
 import { attachInsightMetadata } from "./insight-engine";
 import { handleCopilotIntent } from "./handlers";
 import { detectCopilotIntent, resolveFollowUpIntent } from "./intents";
@@ -27,8 +28,37 @@ export async function runCopilotQuery(
   );
 
   const bundle = await loadCopilotData();
-  const structured = attachInsightMetadata(
-    handleCopilotIntent(intent, bundle),
+
+  const { resolveAdvertisingEntitlements } = await import("@/lib/services/advertising");
+  const { checkCopilotCampaignAccess, buildCopilotPlanBlockedResponse } = await import(
+    "@/lib/billing/copilot-gate"
+  );
+  const { entitlements, campaigns } = await resolveAdvertisingEntitlements();
+  const campaignGate = checkCopilotCampaignAccess(expandedQuestion, campaigns, entitlements);
+  if (campaignGate.blocked) {
+    const structured = enrichConversationalResponse(
+      buildCopilotPlanBlockedResponse(campaignGate),
+      bundle,
+      question,
+    );
+    const content = formatCopilotMessage(structured);
+    recordCopilotTurn(sessionId, {
+      userQuestion: question,
+      assistantSummary: structured.summary,
+      intent: "plan_campaign_locked",
+    });
+    const message: AiChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content,
+      structured,
+      createdAt: new Date().toISOString(),
+    };
+    return { message, sessionId, structured };
+  }
+
+  const structured = enrichConversationalResponse(
+    attachInsightMetadata(handleCopilotIntent(intent, bundle), bundle, question),
     bundle,
     question,
   );
@@ -54,15 +84,15 @@ export async function runCopilotQuery(
     intent,
   });
 
-  const actionCards: AiActionCard[] = structured.recommendations.map((rec) => ({
-    title: rec.action,
-    reason: rec.detail,
-    expectedImpact: structured.businessImpact.label || "See impact above",
-    confidence: structured.confidencePct / 100,
-    actionLabel: rec.futureAction
-      ? `${rec.futureAction.replace(/_/g, " ")}${rec.available ? "" : " (coming soon)"}`
-      : "Review",
-  }));
+  const actionCards: AiActionCard[] = (structured.conversational?.prioritizedRecommendations ?? []).map(
+    (rec) => ({
+      title: rec.recommendedAction,
+      reason: rec.problem,
+      expectedImpact: rec.expectedFinancialImpact,
+      confidence: rec.confidencePct / 100,
+      actionLabel: `Priority ${rec.rank}`,
+    }),
+  );
 
   const message: AiChatMessage = {
     id: crypto.randomUUID(),

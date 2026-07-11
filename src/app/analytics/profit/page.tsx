@@ -10,7 +10,7 @@ export default async function AnalyticsProfitPage() {
   return (
     <AnalyticsPageShell
       title="Profit"
-      description="Real profitability — revenue minus COGS, fees, refunds, and ad spend."
+      description="Your daily financial briefing — net profit, where margin is lost, and the single most important action today."
       context="profit"
       syncedAt={data?.dashboard.syncedAt}
     >

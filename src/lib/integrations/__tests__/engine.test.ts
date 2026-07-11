@@ -31,6 +31,22 @@ describe("mergeIntegrationIntoSnapshot — Google Ads", () => {
     expect(merged.connectorStates?.google_ads).toBe("disconnected");
   });
 
+  it("does not inject demo Google Ads for live connected store snapshots", () => {
+    vi.mocked(isGoogleAdsAvailable).mockReturnValue(false);
+    const merged = mergeIntegrationIntoSnapshot({
+      ...DEMO_STORE_SNAPSHOT,
+      source: "connected",
+      connectorStates: {
+        ...DEMO_STORE_SNAPSHOT.connectorStates,
+        shopify: "connected",
+        google_ads: "disconnected",
+      },
+      googleAdsSnapshot: undefined,
+    });
+    expect(merged.googleAdsSnapshot).toBeUndefined();
+    expect(merged.connectorStates?.google_ads).toBe("disconnected");
+  });
+
   it("prefers live OAuth snapshot over demo integration data", () => {
     vi.mocked(isGoogleAdsAvailable).mockReturnValue(true);
     const liveSnapshot = {

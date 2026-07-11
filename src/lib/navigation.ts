@@ -23,6 +23,13 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    id: "advertising",
+    label: "Advertising",
+    items: [
+      { href: "/advertising", label: "Advertising", matchPrefix: true },
+    ],
+  },
+  {
     id: "analytics",
     label: "Analytics",
     items: [

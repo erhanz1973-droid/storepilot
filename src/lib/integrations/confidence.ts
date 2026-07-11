@@ -1,8 +1,6 @@
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { IntegrationSnapshot } from "./types";
 import { PHASE6_INTEGRATIONS } from "./types";
-import { useIntegrationsDemo } from "./credentials";
-import { isGoogleAdsAvailable } from "@/lib/google-ads/oauth";
 
 export type IntegrationConfidence = {
   scorePct: number;
@@ -94,10 +92,5 @@ export function computeIntegrationConfidence(
 }
 
 export function shouldUseDemoIntegrations(snapshot: StoreSnapshot): boolean {
-  if (snapshot.source === "demo" || snapshot.connectorStates?.shopify === "demo") {
-    return true;
-  }
-  if (snapshot.googleAdsSnapshot) return false;
-  if (isGoogleAdsAvailable()) return false;
-  return useIntegrationsDemo();
+  return snapshot.source === "demo" || snapshot.connectorStates?.shopify === "demo";
 }

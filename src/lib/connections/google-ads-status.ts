@@ -1,6 +1,7 @@
 import type { GoogleAdsInstallation } from "@/lib/db/google-ads";
 import type { DataSourceStatus } from "@/lib/types";
 import type { IntegrationConnectionStatus } from "./integration-board.types";
+import { resolveGoogleAdsConnectionPresentationV2 } from "./connection-state";
 
 export type GoogleAdsConnectionPresentation = {
   status: IntegrationConnectionStatus;
@@ -12,7 +13,7 @@ export type GoogleAdsConnectionPresentation = {
 };
 
 /**
- * OAuth success ≠ sync success. Only surface "Needs attention" when there is a
+ * OAuth success ≠ sync success. Only surface sync failure when there is a
  * concrete error message. Empty campaigns / $0 spend is not a failure.
  */
 export function resolveGoogleAdsConnectionPresentation(input: {
@@ -24,82 +25,21 @@ export function resolveGoogleAdsConnectionPresentation(input: {
   >[];
   connectorSource?: DataSourceStatus;
 }): GoogleAdsConnectionPresentation {
-  const { connected, oauthConfigured, installations, connectorSource } = input;
-
-  if (!connected) {
-    if (oauthConfigured) {
-      return {
-        status: "authorization_required",
-        statusLabel: "Authorization required",
-        syncFailed: false,
-        syncPending: false,
-        errorMessage: null,
-        primaryAction: "connect",
-      };
-    }
-    return {
-      status: "not_connected",
-      statusLabel: "Not connected",
-      syncFailed: false,
-      syncPending: false,
-      errorMessage: null,
-      primaryAction: "connect",
-    };
-  }
-
-  const installError = installations.find(
-    (i) => i.connection_health === "error" && i.error_message?.trim(),
-  );
-  const connectorError =
-    connectorSource?.status === "error" && connectorSource.errorMessage?.trim()
-      ? connectorSource.errorMessage.trim()
-      : null;
-  const errorMessage = installError?.error_message?.trim() ?? connectorError ?? null;
-
-  if (errorMessage) {
-    return {
-      status: "error",
-      statusLabel: "Needs attention",
-      syncFailed: true,
-      syncPending: false,
-      errorMessage,
-      primaryAction: "reconnect",
-    };
-  }
-
-  const hasSynced =
-    installations.some((i) => i.last_sync_at) || Boolean(connectorSource?.lastSyncAt);
-  const syncDegraded = installations.some((i) => i.connection_health === "degraded");
-
-  if (!hasSynced) {
-    return {
-      status: "connected",
-      statusLabel: syncDegraded ? "Connected — sync pending" : "Connected — sync pending",
-      syncFailed: false,
-      syncPending: true,
-      errorMessage: null,
-      primaryAction: "manage",
-    };
-  }
-
-  if (syncDegraded) {
-    return {
-      status: "connected",
-      statusLabel: "Connected — sync issue",
-      syncFailed: false,
-      syncPending: false,
-      errorMessage: installations.find((i) => i.connection_health === "degraded")?.error_message?.trim() ?? null,
-      primaryAction: "manage",
-    };
-  }
-
+  const pres = resolveGoogleAdsConnectionPresentationV2(input);
   return {
-    status: "connected",
-    statusLabel: "Connected",
-    syncFailed: false,
-    syncPending: false,
-    errorMessage: null,
-    primaryAction: "manage",
+    status: pres.state,
+    statusLabel:
+      pres.state === "connected_warning" && pres.attentionMessage?.includes("first")
+        ? "Connected — sync pending"
+        : pres.state === "connected_warning"
+          ? "Connected — sync issue"
+          : pres.statusLabel,
+    syncFailed: pres.state === "sync_failed",
+    syncPending:
+      pres.state === "connected_warning" &&
+      (pres.attentionMessage?.includes("first") ?? false),
+    errorMessage: pres.errorReason,
+    primaryAction: pres.primaryAction,
   };
 }
 

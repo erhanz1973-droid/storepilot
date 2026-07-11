@@ -49,6 +49,9 @@ export function AttributionExecutiveSummaryCard({
           </span>
           <p style={{ margin: "4px 0 0" }} className="positive">
             <strong>+{formatMoney(summary.estimatedMonthlyImpact)}</strong>
+            <span className="attribution-verification-badge status-simulated" style={{ marginLeft: 8 }}>
+              Simulated
+            </span>
           </p>
         </div>
         <div>

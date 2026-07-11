@@ -76,5 +76,15 @@ export async function getVerifiedStoreData(storeId: string): Promise<VerifiedSto
   return { snapshot: verifiedSnapshot, gate };
 }
 
+/** Verified snapshot from an explicit StoreSnapshot (live Supabase pipeline). */
+export async function getVerifiedStoreDataForSnapshot(
+  storeId: string,
+  snapshot: StoreSnapshot,
+): Promise<VerifiedStoreData> {
+  const gate = await buildValidationGateReport(storeId, snapshot.connectorStates ?? {});
+  const verifiedSnapshot = stripBlockedProviderData(snapshot, gate);
+  return { snapshot: verifiedSnapshot, gate };
+}
+
 /** Request-scoped verified snapshot — reuses cached connector aggregation. */
 export const getCachedVerifiedStoreData = cache(getVerifiedStoreData);

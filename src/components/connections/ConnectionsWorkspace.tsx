@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectShopifyForm } from "@/components/ConnectShopifyForm";
 import { ConnectGoogleAdsButton } from "@/components/ConnectGoogleAdsButton";
 import { ConnectGa4Button } from "@/components/ConnectGa4Button";
+import { Ga4FunnelOnboardingPanel } from "@/components/connections/Ga4FunnelOnboardingPanel";
 import { ConnectMetaAdsButton } from "@/components/ConnectMetaAdsButton";
 import { MetaValidationPanel } from "@/components/connections/MetaValidationPanel";
 import { SyncFeedbackBanner } from "@/components/connections/SyncFeedbackBanner";
@@ -17,15 +18,27 @@ import {
   CONNECTIONS_CATEGORY_LABELS,
   CONNECTIONS_CATEGORY_ORDER,
 } from "@/lib/connections/integration-board.types";
+import type { ConnectionHealthBreakdown } from "@/lib/connections/connection-state";
 import type { ConnectionCategory } from "@/lib/connections/catalog";
+import { presentationShowsAsConnected } from "@/lib/connections/connection-state";
 import { runIntegrationSync, type SyncFeedback } from "@/lib/connections/sync-feedback";
 
 const STATUS_DOT: Record<IntegrationConnectionStatus, string> = {
   connected: "var(--low)",
+  connected_warning: "#d4a017",
+  sync_failed: "var(--critical)",
   authorization_required: "#d4a017",
-  not_connected: "var(--critical)",
+  not_connected: "var(--muted)",
   coming_soon: "var(--muted)",
-  error: "var(--critical)",
+};
+
+const STATUS_EMOJI: Record<IntegrationConnectionStatus, string> = {
+  connected: "🟢",
+  connected_warning: "🟡",
+  sync_failed: "🔴",
+  authorization_required: "⚪",
+  not_connected: "⚪",
+  coming_soon: "⚪",
 };
 
 function formatDate(value: string | null) {
@@ -37,6 +50,76 @@ function formatDate(value: string | null) {
   const hours = Math.round(mins / 60);
   if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   return new Date(value).toLocaleString();
+}
+
+function healthIcon(status: "pass" | "fail" | "warn" | "na") {
+  if (status === "pass") return "✅";
+  if (status === "fail") return "❌";
+  if (status === "warn") return "⚠";
+  return "—";
+}
+
+function ConnectionHealthPanel({ health }: { health: ConnectionHealthBreakdown }) {
+  const rows = [
+    health.authentication,
+    health.permissions,
+    health.accountOrProperty,
+    health.dataSync,
+  ];
+  return (
+    <div className="conn-health-panel">
+      <div className="conn-health-head">
+        <span className="muted">Connection Health</span>
+        <strong className={`conn-health-overall conn-health-${health.overallHealth}`}>
+          {health.overallLabel === "Healthy" ? "✓ " : health.overallHealth === "needs_attention" ? "⚠ " : ""}
+          {health.overallLabel}
+        </strong>
+      </div>
+      <div className="conn-health-grid">
+        {rows.map((row) => (
+          <div key={row.label} className="conn-health-row">
+            <span>{row.label}</span>
+            <span>
+              {healthIcon(row.status)} {row.detail ?? (row.status === "pass" ? "OK" : row.status === "fail" ? "Failed" : row.status === "warn" ? "Warning" : "—")}
+            </span>
+          </div>
+        ))}
+        <div className="conn-health-row">
+          <span>Last Successful Sync</span>
+          <strong>{formatDate(health.lastSuccessfulSync)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionStatusBanner({ item }: { item: IntegrationBoardItem }) {
+  if (item.status === "connected" && !item.attentionMessage) return null;
+
+  const tone =
+    item.status === "sync_failed"
+      ? "error"
+      : item.status === "connected_warning"
+        ? "warning"
+        : item.status === "authorization_required" || item.status === "not_connected"
+          ? "neutral"
+          : null;
+
+  if (!tone) return null;
+
+  return (
+    <div className={`conn-status-banner conn-status-banner-${tone}`}>
+      <strong>
+        {STATUS_EMOJI[item.status]} {item.statusLabel}
+        {item.status === "connected_warning" && item.attentionMessage ? ` — ${item.attentionMessage}` : ""}
+      </strong>
+      {(item.guidanceMessage || item.errorReason) && (
+        <p className="muted" style={{ margin: "8px 0 0", fontSize: "0.85rem", lineHeight: 1.45 }}>
+          {item.errorReason ?? item.guidanceMessage}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function formatCurrency(n: number) {
@@ -87,7 +170,7 @@ function IntegrationCard({
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
             <strong>{item.label}</strong>
             <span style={{ fontSize: "0.75rem", color: STATUS_DOT[item.status], whiteSpace: "nowrap" }}>
-              ● {item.statusLabel}
+              {STATUS_EMOJI[item.status]} {item.statusLabel}
             </span>
           </div>
           {item.summaryLines.map((line) => (
@@ -95,7 +178,7 @@ function IntegrationCard({
               {line}
             </p>
           ))}
-          {item.attentionMessage && (
+          {item.attentionMessage && item.status !== "connected_warning" && (
             <p style={{ margin: "6px 0 0", fontSize: "0.8rem", color: "var(--critical)" }}>
               {item.attentionMessage.slice(0, 120)}
             </p>
@@ -117,20 +200,26 @@ function DetailActions({
   syncing,
   showReconnect,
   onReconnect,
+  showViewError,
+  onViewError,
   showDisconnect,
   onDisconnect,
+  canSync = true,
 }: {
   syncEndpoint?: string;
   onSync?: () => void;
   syncing?: boolean;
   showReconnect?: boolean;
   onReconnect?: () => void;
+  showViewError?: boolean;
+  onViewError?: () => void;
   showDisconnect?: boolean;
   onDisconnect?: () => void;
+  canSync?: boolean;
 }) {
   return (
     <div className="actions-row" style={{ marginTop: 16 }}>
-      {syncEndpoint && onSync && (
+      {syncEndpoint && onSync && canSync && (
         <button type="button" className="btn btn-secondary" onClick={onSync} disabled={syncing}>
           {syncing ? "Syncing…" : "Sync now"}
         </button>
@@ -138,6 +227,11 @@ function DetailActions({
       {showReconnect && onReconnect && (
         <button type="button" className="btn btn-secondary" onClick={onReconnect}>
           Reconnect
+        </button>
+      )}
+      {showViewError && onViewError && (
+        <button type="button" className="btn btn-ghost" onClick={onViewError}>
+          View details
         </button>
       )}
       {showDisconnect && onDisconnect && (
@@ -161,11 +255,21 @@ function IntegrationDetailPanel({
   const [syncFeedback, setSyncFeedback] = useState<SyncFeedback | null>(null);
 
   async function handleSync() {
-    if (!item.syncEndpoint) return;
+    console.log("[sync-trace] ConnectionsWorkspace handleSync click", {
+      integrationId: item.id,
+      syncEndpoint: item.syncEndpoint,
+      syncing,
+    });
+    if (!item.syncEndpoint) {
+      console.log("[sync-trace] ConnectionsWorkspace handleSync blocked — no syncEndpoint");
+      return;
+    }
     setSyncing(true);
     setSyncFeedback(null);
     try {
+      console.log("[sync-trace] ConnectionsWorkspace runIntegrationSync →", item.syncEndpoint);
       const feedback = await runIntegrationSync(item.syncEndpoint, item.id);
+      console.log("[sync-trace] ConnectionsWorkspace runIntegrationSync result", feedback);
       setSyncFeedback(feedback);
       if (feedback.kind === "success") {
         router.refresh();
@@ -210,6 +314,8 @@ function IntegrationDetailPanel({
     return (
       <div className="card">
         <h3>Shopify</h3>
+        <ConnectionStatusBanner item={item} />
+        <ConnectionHealthPanel health={item.health} />
         {d.missingWriteScopes.length > 0 && !d.isDemo && (
           <div className="shopify-scope-alert" style={{ marginTop: 12 }}>
             <p style={{ margin: "0 0 8px", fontSize: "0.9rem", lineHeight: 1.45 }}>
@@ -244,7 +350,7 @@ function IntegrationDetailPanel({
             <strong>{formatCurrency(d.revenue30d)}</strong>
           </div>
           <div className="breakdown-row">
-            <span>Last sync</span>
+            <span>Last successful sync</span>
             <strong>{formatDate(d.lastSyncAt)}</strong>
           </div>
         </div>
@@ -260,6 +366,7 @@ function IntegrationDetailPanel({
           syncEndpoint={item.syncEndpoint}
           onSync={handleSync}
           syncing={syncing}
+          canSync={item.canSync}
           showReconnect={d.connected && !d.isDemo}
           onReconnect={() => {
             if (d.storeDomain) {
@@ -285,7 +392,7 @@ function IntegrationDetailPanel({
 
   if (item.detail.type === "meta_ads") {
     const d = item.detail;
-    if (!d.connected) {
+    if (!presentationShowsAsConnected(item.status)) {
       return (
         <div className="card">
           <h3>Meta Ads</h3>
@@ -303,6 +410,8 @@ function IntegrationDetailPanel({
     return (
       <div className="card">
         <h3>Meta Ads</h3>
+        <ConnectionStatusBanner item={item} />
+        <ConnectionHealthPanel health={item.health} />
         <div className="stack" style={{ marginTop: 16 }}>
           <div className="breakdown-row">
             <span>Business</span>
@@ -313,7 +422,7 @@ function IntegrationDetailPanel({
             <strong>{d.accounts[0]?.adAccountName ?? d.accounts[0]?.adAccountId ?? "—"}</strong>
           </div>
           <div className="breakdown-row">
-            <span>Last sync</span>
+            <span>Last successful sync</span>
             <strong>{formatDate(d.lastSyncAt)}</strong>
           </div>
           <div className="breakdown-row">
@@ -337,6 +446,7 @@ function IntegrationDetailPanel({
           syncEndpoint={item.syncEndpoint}
           onSync={handleSync}
           syncing={syncing}
+          canSync={item.canSync}
           showReconnect
           onReconnect={() => {
             window.location.href = "/api/meta/auth";
@@ -369,7 +479,7 @@ function IntegrationDetailPanel({
 
   if (item.detail.type === "google_ads") {
     const d = item.detail;
-    if (!d.connected) {
+    if (!presentationShowsAsConnected(item.status)) {
       return (
         <div className="card">
           <h3>Google Ads</h3>
@@ -387,23 +497,17 @@ function IntegrationDetailPanel({
     return (
       <div className="card">
         <h3>Google Ads</h3>
-        {d.syncPending && !d.attentionMessage && (
+        <ConnectionStatusBanner item={item} />
+        <ConnectionHealthPanel health={item.health} />
+        {d.syncPending && !d.attentionMessage && item.status === "connected_warning" && (
           <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: "0.9rem" }}>
             Account connected. Run <strong>Sync Now</strong> below to pull campaign data. Zero
             campaigns or spend is normal for new accounts.
           </p>
         )}
-        {d.attentionMessage && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "10px 12px",
-              borderRadius: 8,
-              background: "rgba(220, 38, 38, 0.08)",
-              fontSize: "0.9rem",
-            }}
-          >
-            <strong>Sync issue</strong>
+        {d.attentionMessage && item.status === "sync_failed" && (
+          <div className="conn-status-banner conn-status-banner-error" style={{ marginTop: 12 }}>
+            <strong>Sync Failed</strong>
             <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.85rem" }}>
               {d.attentionMessage}
             </p>
@@ -415,7 +519,7 @@ function IntegrationDetailPanel({
             <strong>{d.accountCount}</strong>
           </div>
           <div className="breakdown-row">
-            <span>Last sync</span>
+            <span>Last successful sync</span>
             <strong>{formatDate(d.lastSyncAt)}</strong>
           </div>
           <div className="breakdown-row">
@@ -439,6 +543,7 @@ function IntegrationDetailPanel({
           syncEndpoint={item.syncEndpoint}
           onSync={handleSync}
           syncing={syncing}
+          canSync={item.canSync}
           showReconnect
           onReconnect={() => {
             window.location.href = "/api/google/auth";
@@ -466,13 +571,38 @@ function IntegrationDetailPanel({
 
   if (item.detail.type === "ga4") {
     const d = item.detail;
-    if (!d.connected) {
+    if (!presentationShowsAsConnected(item.status) && item.status !== "authorization_required") {
       return (
         <div className="card">
           <h3>Google Analytics 4</h3>
+          <ConnectionStatusBanner item={item} />
           <p className="muted" style={{ marginTop: 4, marginBottom: 16 }}>
-            Connect GA4 to unlock sessions, funnel analytics, landing page insights, and
-            AI-powered behavioral recommendations.
+            {item.guidanceMessage ??
+              "Connect GA4 for sessions, landing pages, funnel event tracking, and behavioral analytics."}
+          </p>
+          <Ga4FunnelOnboardingPanel steps={d.funnelOnboardingSteps} />
+          <ul className="conn-benefits-list muted" style={{ fontSize: "0.9rem", margin: "16px 0" }}>
+            <li>Sessions</li>
+            <li>Conversion Rate</li>
+            <li>User Behavior</li>
+            <li>Customer Journey</li>
+          </ul>
+          {d.ga4OAuthConfigured ? <ConnectGa4Button /> : (
+            <p className="muted">GA4 OAuth is not configured for this environment.</p>
+          )}
+        </div>
+      );
+    }
+
+    if (item.status === "authorization_required") {
+      return (
+        <div className="card">
+          <h3>Google Analytics 4</h3>
+          <ConnectionStatusBanner item={item} />
+          <ConnectionHealthPanel health={item.health} />
+          <Ga4FunnelOnboardingPanel steps={d.funnelOnboardingSteps} compact />
+          <p className="muted" style={{ marginTop: 12 }}>
+            {item.guidanceMessage}
           </p>
           {d.ga4OAuthConfigured ? <ConnectGa4Button /> : (
             <p className="muted">GA4 OAuth is not configured for this environment.</p>
@@ -484,6 +614,13 @@ function IntegrationDetailPanel({
     return (
       <div className="card">
         <h3>Google Analytics 4</h3>
+        <ConnectionStatusBanner item={item} />
+        <ConnectionHealthPanel health={item.health} />
+        {!d.funnelEventsVerified && (
+          <div style={{ marginTop: 16 }}>
+            <Ga4FunnelOnboardingPanel steps={d.funnelOnboardingSteps} compact />
+          </div>
+        )}
         <div className="stack" style={{ marginTop: 16 }}>
           <div className="breakdown-row">
             <span>Property</span>
@@ -496,13 +633,26 @@ function IntegrationDetailPanel({
             </div>
           )}
           <div className="breakdown-row">
-            <span>Last sync</span>
-            <strong>{formatDate(d.lastSyncAt)}</strong>
+            <span>Status</span>
+            <strong>{item.health.overallLabel}</strong>
           </div>
           <div className="breakdown-row">
-            <span>Sessions (30d)</span>
-            <strong>{d.sessions30d != null ? d.sessions30d.toLocaleString() : "—"}</strong>
+            <span>Last successful sync</span>
+            <strong>{formatDate(d.lastSuccessfulSyncAt ?? d.lastSyncAt)}</strong>
           </div>
+          {d.sessions30d != null && (
+            <div className="breakdown-row">
+              <span>Sessions (30 days)</span>
+              <div>
+                <strong>{d.sessions30d.toLocaleString()}</strong>
+                {d.cachedDataNote && (
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.8rem" }}>
+                    ({d.cachedDataNote})
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           <div className="breakdown-row">
             <span>Engagement rate</span>
             <strong>
@@ -530,6 +680,7 @@ function IntegrationDetailPanel({
           syncEndpoint={item.syncEndpoint}
           onSync={handleSync}
           syncing={syncing}
+          canSync={item.canSync}
           showReconnect
           onReconnect={() => {
             window.location.href = "/api/ga4/auth";

@@ -8,21 +8,28 @@ const PRIORITY_CLASS: Record<AutopilotAction["priority"], string> = {
   Low: "priority-low",
 };
 
-export function ActionCenterList({ actions }: { actions: AutopilotAction[] }) {
+export function ActionCenterList({
+  actions,
+  id,
+}: {
+  actions: AutopilotAction[];
+  id?: string;
+}) {
   if (actions.length === 0) {
     return (
-      <div className="card">
-        <h3>AI Action Center</h3>
+      <div className="card" id={id}>
+        <h3>Pending Approvals</h3>
         <p className="muted" style={{ margin: 0 }}>No actions queued — store looks stable.</p>
       </div>
     );
   }
 
   return (
-    <div className="card">
-      <h3>AI Action Center</h3>
+    <div className="card" id={id}>
+      <h3>Pending Approvals</h3>
       <p className="muted" style={{ marginTop: 4, marginBottom: 16, fontSize: "0.875rem" }}>
-        Prioritized by expected net profit impact
+        {actions.length} action{actions.length === 1 ? "" : "s"} prioritized by expected net profit
+        impact — approve in the Approval Center before anything changes.
       </p>
       <div className="action-queue">
         {actions.map((a, i) => (
@@ -49,11 +56,18 @@ export function ActionCenterList({ actions }: { actions: AutopilotAction[] }) {
             <p className="muted" style={{ margin: "8px 0 0", fontSize: "0.8125rem" }}>
               {a.businessImpact}
             </p>
+            <p style={{ margin: "12px 0 0" }}>
+              <Link href="/approvals" className="btn btn-secondary btn-sm">
+                {a.actionLabel || "Review in Approval Center"}
+              </Link>
+            </p>
           </article>
         ))}
       </div>
       <p style={{ marginTop: 12, marginBottom: 0, fontSize: "0.875rem" }}>
-        <Link href="/approvals">Approval Center</Link> to accept or snooze actions
+        <Link href="/approvals" className="btn btn-primary btn-sm">
+          Open Approval Center
+        </Link>
       </p>
     </div>
   );

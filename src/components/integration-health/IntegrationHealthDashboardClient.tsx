@@ -1,6 +1,9 @@
 "use client";
 
-import type { IntegrationHealthDashboard } from "@/lib/integration-health/types";
+import type {
+  IntegrationHealthDashboard,
+  IntegrationHealthDimension,
+} from "@/lib/integration-health/types";
 import { relativeValidationTime } from "@/lib/integration-health/trust-summary";
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -22,15 +25,61 @@ function SeverityBadge({ severity }: { severity: string }) {
   return <span className={`ih-severity ih-severity-${severity}`}>{severity}</span>;
 }
 
-function connectionLabel(p: IntegrationHealthDashboard["providers"][0]): string {
-  if (!p.tokenValid && p.connectionStatus !== "disconnected" && p.connectionStatus !== "waiting") {
-    return "Token expired";
-  }
-  if (p.connectionStatus === "error") return "Sync failed";
-  if (p.connectionStatus === "connected") return "Connected";
-  if (p.connectionStatus === "demo") return "Demo";
-  if (p.connectionStatus === "waiting") return "Sync running";
-  return "Disconnected";
+function DimensionBadge({ dimension }: { dimension: IntegrationHealthDimension }) {
+  return (
+    <span className={`ih-dimension-badge ih-dimension-${dimension.status}`}>
+      {dimension.label}
+    </span>
+  );
+}
+
+function DimensionRow({
+  title,
+  question,
+  dimension,
+}: {
+  title: string;
+  question: string;
+  dimension: IntegrationHealthDimension;
+}) {
+  return (
+    <div className={`ih-dimension-row ih-dimension-row-${dimension.status}`}>
+      <div className="ih-dimension-row-head">
+        <div>
+          <span className="ih-dimension-title">{title}</span>
+          <span className="muted ih-dimension-question">{question}</span>
+        </div>
+        <DimensionBadge dimension={dimension} />
+      </div>
+      <p className="ih-dimension-detail">{dimension.detail}</p>
+      {dimension.scorePct != null && title !== "Authentication" && (
+        <PctBar pct={dimension.scorePct} />
+      )}
+    </div>
+  );
+}
+
+function SummaryDimensionCard({
+  title,
+  question,
+  label,
+  status,
+  value,
+}: {
+  title: string;
+  question: string;
+  label: string;
+  status: IntegrationHealthDimension["status"];
+  value: string;
+}) {
+  return (
+    <div className={`ih-summary-dimension ih-dimension-${status}`}>
+      <span className="ih-dimension-title">{title}</span>
+      <span className="muted ih-dimension-question">{question}</span>
+      <strong className="ih-summary-dimension-value">{value}</strong>
+      <span className={`ih-dimension-badge ih-dimension-${status}`}>{label}</span>
+    </div>
+  );
 }
 
 export function IntegrationHealthDashboardClient({
@@ -62,7 +111,7 @@ export function IntegrationHealthDashboardClient({
     <div className="ih-dashboard">
       <section className="card ih-trust-banner">
         <div>
-          <p className="ih-eyebrow">Can the AI trust the available data?</p>
+          <p className="ih-eyebrow">Can the AI generate reliable recommendations?</p>
           <h3>AI Trust Score</h3>
           <p>{aiTrust.narrative}</p>
           {aiTrust.confidenceReductions.length > 0 && (
@@ -84,42 +133,46 @@ export function IntegrationHealthDashboardClient({
         </div>
       </section>
 
-      <section className="card ih-summary-grid">
-        <div className="ih-summary-stat">
-          <span className="muted">System Status</span>
-          <strong className={`ih-sys-${systemSummary.systemStatus}`}>
-            {systemSummary.systemStatus}
+      <section className="card ih-summary-dimensions">
+        <SummaryDimensionCard
+          title="Authentication"
+          question="Can StorePilot access the platform?"
+          label={systemSummary.authentication.label}
+          status={systemSummary.authentication.status}
+          value={`${systemSummary.authentication.authorizedCount} / ${systemSummary.authentication.totalProviders}`}
+        />
+        <SummaryDimensionCard
+          title="Data"
+          question="Do we have usable information?"
+          label={systemSummary.data.label}
+          status={systemSummary.data.status}
+          value={`${systemSummary.data.qualityPct}% quality`}
+        />
+        <SummaryDimensionCard
+          title="AI Readiness"
+          question="Can the AI generate reliable recommendations?"
+          label={systemSummary.aiReadiness.label}
+          status={systemSummary.aiReadiness.status}
+          value={`${systemSummary.aiReadiness.readinessPct}% · ${systemSummary.aiReadiness.featuresAvailable}/${systemSummary.aiReadiness.totalFeatures} features`}
+        />
+        <div className="ih-summary-dimension ih-dimension-neutral">
+          <span className="ih-dimension-title">Last validation</span>
+          <span className="muted ih-dimension-question">Most recent health check</span>
+          <strong className="ih-summary-dimension-value">
+            {relativeValidationTime(systemSummary.lastValidationAt)}
           </strong>
-        </div>
-        <div className="ih-summary-stat">
-          <span className="muted">Overall AI Readiness</span>
-          <strong>{dashboard.overallAiReadinessPct}%</strong>
-        </div>
-        <div className="ih-summary-stat">
-          <span className="muted">Data Quality</span>
-          <strong>{systemSummary.dataQualityPct}%</strong>
-        </div>
-        <div className="ih-summary-stat">
-          <span className="muted">Connected Providers</span>
-          <strong>
-            {systemSummary.connectedProviders} / {systemSummary.totalProviders}
-          </strong>
-        </div>
-        <div className="ih-summary-stat">
-          <span className="muted">AI Features Available</span>
-          <strong>
-            {systemSummary.aiFeaturesAvailable} / {systemSummary.totalAiFeatures}
-          </strong>
-        </div>
-        <div className="ih-summary-stat">
-          <span className="muted">Last Validation</span>
-          <strong>{relativeValidationTime(systemSummary.lastValidationAt)}</strong>
         </div>
       </section>
 
       <section className="card">
         <div className="ih-section-head">
-          <h3>Connection Status</h3>
+          <div>
+            <h3>Integration Status</h3>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.875rem" }}>
+              Each provider shows authentication, data, and AI readiness separately — never mixed
+              in one label.
+            </p>
+          </div>
           <button type="button" className="btn btn-primary" disabled={running} onClick={() => void runTests()}>
             {running ? "Running tests…" : "Run Validation Suite"}
           </button>
@@ -128,40 +181,38 @@ export function IntegrationHealthDashboardClient({
           {dashboard.providers.map((p) => (
             <article key={p.id} className="ih-provider-card">
               <header>
-                <h4>
-                  <StatusIcon ok={p.connectionStatus === "connected" || p.connectionStatus === "demo"} />
-                  {p.label}
-                </h4>
-                <span className="muted ih-connection-label">{connectionLabel(p)}</span>
+                <h4>{p.label}</h4>
               </header>
-              <dl className="ih-meta-grid">
-                <div>
-                  <dt>Token</dt>
-                  <dd>{p.tokenValid ? "Valid" : "Expired / invalid"}</dd>
-                </div>
-                <div>
-                  <dt>Last sync</dt>
-                  <dd>{p.lastSuccessfulSync ? new Date(p.lastSuccessfulSync).toLocaleString() : "—"}</dd>
-                </div>
-                <div>
-                  <dt>Freshness</dt>
-                  <dd>{p.dataFreshness}</dd>
-                </div>
-                <div>
-                  <dt>AI ready</dt>
-                  <dd>{p.aiReadyPct}%</dd>
-                </div>
-              </dl>
+              <div className="ih-provider-dimensions">
+                <DimensionRow
+                  title="Authentication"
+                  question="Can StorePilot access the platform?"
+                  dimension={p.authentication}
+                />
+                <DimensionRow
+                  title="Data"
+                  question="Do we have usable information?"
+                  dimension={p.dataAvailability}
+                />
+                <DimensionRow
+                  title="AI Readiness"
+                  question="Can the AI generate reliable recommendations?"
+                  dimension={p.aiReadiness}
+                />
+              </div>
               {p.lastApiError && <p className="ih-error">{p.lastApiError}</p>}
-              <ul className="ih-entity-list">
-                {p.entityChecks.map((e) => (
-                  <li key={e.label}>
-                    <span>{e.label}</span>
-                    <span>{e.value}</span>
-                    <span className={`ih-entity-${e.status}`}>{e.status}</span>
-                  </li>
-                ))}
-              </ul>
+              <details className="ih-entity-details">
+                <summary className="muted">Synced datasets</summary>
+                <ul className="ih-entity-list">
+                  {p.entityChecks.map((e) => (
+                    <li key={e.label}>
+                      <span>{e.label}</span>
+                      <span>{e.value}</span>
+                      <span className={`ih-entity-${e.status}`}>{e.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </article>
           ))}
         </div>
@@ -169,6 +220,9 @@ export function IntegrationHealthDashboardClient({
 
       <section className="card">
         <h3>AI Readiness by Module</h3>
+        <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.875rem" }}>
+          Module-level view of whether AI features have enough data to run reliably.
+        </p>
         <ul className="ih-module-list">
           {dashboard.moduleReadiness.map((m) => (
             <li key={m.id}>
@@ -182,7 +236,10 @@ export function IntegrationHealthDashboardClient({
 
       <div className="ih-two-col">
         <section className="card">
-          <h3>Data Quality</h3>
+          <h3>Data Quality Issues</h3>
+          <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.875rem" }}>
+            Gaps in usable information — separate from authentication status.
+          </p>
           <ul className="ih-issue-list">
             {dashboard.dataQualityIssues.map((i) => (
               <li key={i.id}>
@@ -194,7 +251,10 @@ export function IntegrationHealthDashboardClient({
         </section>
 
         <section className="card">
-          <h3>Data Freshness</h3>
+          <h3>Sync Monitoring</h3>
+          <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.875rem" }}>
+            When data last flowed — authentication can be valid while sync is stale.
+          </p>
           <table className="ih-matrix-table">
             <thead>
               <tr>
@@ -282,8 +342,8 @@ export function IntegrationHealthDashboardClient({
       )}
 
       <p className="muted ih-footer-note">
-        Business performance lives on <Link href="/health">Health</Link>. This page covers data
-        infrastructure, sync status, and AI readiness only.
+        Business performance lives on <Link href="/health">Health</Link>. This page covers
+        authentication access, data availability, and AI readiness only.
       </p>
     </div>
   );

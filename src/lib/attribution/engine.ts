@@ -2,7 +2,8 @@ import type { MetaCampaign, StoreSnapshot } from "@/lib/connectors/types";
 import type { ProfitDashboard } from "@/lib/profit/types";
 import { allowSyntheticAttribution } from "@/lib/env/runtime";
 import { computeAttributionConfidence } from "./confidence";
-import { buildCustomerJourneys, journeyPathLabel } from "./journeys";
+import { buildCustomerJourneys, enrichJourneyMetrics, journeyPathLabel } from "./journeys";
+import { computeRoas, roundRoas } from "./format-roas";
 import type {
   AcquisitionMetrics,
   AttributionChannelId,
@@ -189,8 +190,8 @@ function buildChannelRows(
         attributedProfit: Math.round(a.profit * 100) / 100,
         attributedOrders: Math.round(a.orders * 10) / 10,
         adSpend: spend,
-        roas: spend > 0 ? Math.round((a.revenue / spend) * 100) / 100 : null,
-        profitRoas: spend > 0 ? Math.round((a.profit / spend) * 100) / 100 : null,
+        roas: spend > 0 ? roundRoas(computeRoas(a.revenue, spend) ?? 0) : null,
+        profitRoas: spend > 0 ? roundRoas(computeRoas(a.profit, spend) ?? 0) : null,
         shareOfRevenuePct:
           totalRev > 0 ? Math.round((a.revenue / totalRev) * 1000) / 10 : 0,
         shareOfProfitPct:
@@ -239,6 +240,14 @@ function buildCampaignRows(
       const netProfit = Math.round((attributedRevenue * netMargin - spend) * 100) / 100;
       const impressions = campaignImpressions30d(c);
       const clicks = campaignClicks30d(c);
+      const roasRevenue = platformRev > 0 ? platformRev : attributedRevenue;
+      const roasValue = computeRoas(roasRevenue, spend);
+      const ctr =
+        impressions > 0
+          ? Math.round((clicks / impressions) * 10000) / 100
+          : c.ctr7d > 0
+            ? Math.round(c.ctr7d * 100) / 100
+            : null;
       return {
         campaignId: c.id,
         campaignName: c.name,
@@ -249,14 +258,17 @@ function buildCampaignRows(
         adSpend: spend,
         grossProfit,
         netProfit,
-        roas: spend > 0 ? Math.round((attributedRevenue / spend) * 100) / 100 : null,
-        profitRoas: spend > 0 ? Math.round((netProfit / spend) * 100) / 100 : null,
+        roas: roasValue != null ? roundRoas(roasValue) : null,
+        profitRoas: spend > 0 ? roundRoas(computeRoas(netProfit, spend) ?? 0) : null,
         breakEvenRoas: null,
         roasGapPct: null,
         cpa: orders > 0 ? Math.round((spend / orders) * 100) / 100 : null,
         cac: attr.newOrders > 0 ? Math.round((spend / attr.newOrders) * 100) / 100 : null,
         conversionRate:
           clicks > 0 ? Math.round((orders / clicks) * 10000) / 100 : null,
+        ctr,
+        frequency: c.frequency7d > 0 ? Math.round(c.frequency7d * 100) / 100 : null,
+        status: c.effectiveStatus ?? c.status ?? null,
         aov: orders > 0 ? Math.round((attributedRevenue / orders) * 100) / 100 : 0,
         impressions,
         clicks,
@@ -314,7 +326,7 @@ function buildCreativeRows(
     const cpc = clicks > 0 ? Math.round((spend / clicks) * 100) / 100 : 0;
     const cpm = impressions > 0 ? Math.round((spend / impressions) * 1000 * 100) / 100 : 0;
     const conversionRate = clicks > 0 ? Math.round((data.orders / clicks) * 10000) / 100 : 0;
-    const roas = spend > 0 ? Math.round((revenue / spend) * 100) / 100 : null;
+    const roas = spend > 0 ? roundRoas(computeRoas(revenue, spend) ?? 0) : null;
 
     let status: CreativeAttributionRow["status"] = "neutral";
     let recommendation: CreativeAttributionRow["recommendation"];
@@ -455,7 +467,7 @@ export function buildAttributionDashboard(
     return null;
   }
 
-  const journeys = buildCustomerJourneys(events);
+  const journeys = enrichJourneyMetrics(buildCustomerJourneys(events));
   const allSlices: CreditSlice[] = [];
   for (const j of journeys) {
     allSlices.push(...distributeJourneyCredit(j, model));

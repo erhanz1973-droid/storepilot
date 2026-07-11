@@ -23,12 +23,36 @@ export function buildCustomerJourneys(events: AttributionEvent[]): CustomerJourn
       isNewCustomer: purchase.isNewCustomer ?? true,
       touchpoints,
       journeyLengthDays: Math.max(0, Math.round((lastMs - firstMs) / 86400000 * 10) / 10),
+      touchpointCount: touchpoints.length,
+      timeToConversionHours: Math.max(0, Math.round(((lastMs - firstMs) / 3600000) * 10) / 10),
+      revenueContributionPct: 0,
+      customerType: purchase.isNewCustomer ?? true ? "New" : "Returning",
     });
   }
 
   return journeys.sort(
     (a, b) => new Date(b.orderTimestamp).getTime() - new Date(a.orderTimestamp).getTime(),
   );
+}
+
+export function enrichJourneyMetrics(
+  journeys: CustomerJourney[],
+): CustomerJourney[] {
+  const totalRevenue = journeys.reduce((s, j) => s + j.orderValue, 0) || 1;
+
+  return journeys.map((j) => {
+    const firstMs = new Date(j.touchpoints[0]?.timestamp ?? j.orderTimestamp).getTime();
+    const lastMs = new Date(j.orderTimestamp).getTime();
+    const hours = Math.max(0, Math.round(((lastMs - firstMs) / 3600000) * 10) / 10);
+
+    return {
+      ...j,
+      touchpointCount: j.touchpoints.length,
+      timeToConversionHours: hours,
+      revenueContributionPct: Math.round((j.orderValue / totalRevenue) * 1000) / 10,
+      customerType: j.isNewCustomer ? "New" : "Returning",
+    };
+  });
 }
 
 export function journeyPathLabel(journey: CustomerJourney): string {

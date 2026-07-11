@@ -60,6 +60,10 @@ export type CustomerJourney = {
   isNewCustomer: boolean;
   touchpoints: Touchpoint[];
   journeyLengthDays: number;
+  touchpointCount: number;
+  timeToConversionHours: number;
+  revenueContributionPct: number;
+  customerType: "New" | "Returning";
 };
 
 export type AttributionConfidence = {
@@ -111,6 +115,9 @@ export type CampaignAttributionRow = {
   cpa: number | null;
   cac: number | null;
   conversionRate: number | null;
+  ctr: number | null;
+  frequency: number | null;
+  status: string | null;
   aov: number;
   impressions: number;
   clicks: number;

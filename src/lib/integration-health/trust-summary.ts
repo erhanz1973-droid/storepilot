@@ -3,6 +3,7 @@ import type {
   AiTrustSummary,
   CapabilityMatrixRow,
   DataQualityIssue,
+  HealthDimensionStatus,
   MissingDataBlock,
   ProviderHealthDetail,
   SystemSummary,
@@ -10,10 +11,20 @@ import type {
 
 export type { AiTrustSummary, SystemSummary };
 
-function connectedCount(providers: ProviderHealthDetail[]): number {
-  return providers.filter(
-    (p) => p.connectionStatus === "connected" || p.connectionStatus === "demo",
-  ).length;
+function authorizedCount(providers: ProviderHealthDetail[]): number {
+  return providers.filter((p) => p.authentication.status === "good").length;
+}
+
+function dataStatusFromPct(pct: number): HealthDimensionStatus {
+  if (pct >= 80) return "good";
+  if (pct >= 55) return "warning";
+  return "bad";
+}
+
+function aiStatusFromPct(pct: number): HealthDimensionStatus {
+  if (pct >= 75) return "good";
+  if (pct >= 45) return "warning";
+  return "bad";
 }
 
 function buildConfidenceReductions(input: {
@@ -24,37 +35,39 @@ function buildConfidenceReductions(input: {
   const reductions: string[] = [];
 
   for (const p of input.providers) {
-    if (p.connectionStatus === "disconnected" || p.connectionStatus === "waiting") {
-      reductions.push(`${p.label} is disconnected`);
+    if (p.authentication.status === "bad") {
+      reductions.push(`Authentication: ${p.label} — ${p.authentication.detail}`);
       continue;
     }
-    if (!p.tokenValid) {
-      reductions.push(`${p.label} token expired or invalid`);
+    if (p.dataAvailability.status === "bad") {
+      reductions.push(`Data: ${p.label} — ${p.dataAvailability.detail}`);
+    } else if (p.dataAvailability.status === "warning") {
+      reductions.push(`Data: ${p.label} — ${p.dataAvailability.label}`);
     }
-    const missing = p.entityChecks.filter((e) => e.status === "missing");
-    if (missing.length > 0 && p.id === "shopify") {
-      reductions.push(`Shopify ${missing.map((m) => m.label).join(", ")} are missing`);
-    }
-    if (p.id === "ga4" && missing.some((m) => m.label === "Ecommerce Events")) {
-      reductions.push("GA4 Ecommerce Events are missing");
+    if (p.aiReadiness.status === "bad") {
+      reductions.push(`AI readiness: ${p.label} — ${p.aiReadiness.detail}`);
+    } else if (p.aiReadiness.status === "warning") {
+      reductions.push(`AI readiness: ${p.label} — ${p.aiReadiness.label}`);
     }
   }
 
   for (const block of input.missingBlocks) {
-    if (!reductions.some((r) => r.toLowerCase().includes(block.module.toLowerCase()))) {
-      reductions.push(block.headline.replace(/\.$/, ""));
+    const line = `Data: ${block.headline.replace(/\.$/, "")}`;
+    if (!reductions.some((r) => r.includes(block.module))) {
+      reductions.push(line);
     }
   }
 
   for (const issue of input.qualityIssues) {
     if (issue.severity === "critical" || issue.severity === "warning") {
-      if (!reductions.includes(issue.message)) {
-        reductions.push(issue.message);
+      const line = `Data: ${issue.message}`;
+      if (!reductions.includes(line)) {
+        reductions.push(line);
       }
     }
   }
 
-  return reductions.slice(0, 6);
+  return reductions.slice(0, 8);
 }
 
 export function buildAiTrustSummary(input: {
@@ -66,10 +79,8 @@ export function buildAiTrustSummary(input: {
   qualityIssues: DataQualityIssue[];
   capabilityMatrix: CapabilityMatrixRow[];
 }): AiTrustSummary {
-  const connectedRatio =
-    input.providers.length > 0
-      ? connectedCount(input.providers) / input.providers.length
-      : 0;
+  const authRatio =
+    input.providers.length > 0 ? authorizedCount(input.providers) / input.providers.length : 0;
   const gateBoost = input.gate.canGenerateRecommendations ? 12 : 0;
   const criticalPenalty = input.qualityIssues.some((i) => i.severity === "critical") ? 15 : 0;
 
@@ -80,7 +91,7 @@ export function buildAiTrustSummary(input: {
         0,
         input.dataQualityPct * 0.35 +
           input.overallAiReadinessPct * 0.45 +
-          connectedRatio * 100 * 0.2 +
+          authRatio * 100 * 0.2 +
           gateBoost -
           criticalPenalty,
       ),
@@ -95,10 +106,10 @@ export function buildAiTrustSummary(input: {
 
   const narrative =
     confidenceReductions.length === 0
-      ? "The AI has enough validated business data to generate reliable recommendations."
+      ? "Authentication, data, and validation checks support reliable AI recommendations."
       : aiTrustScorePct >= 70
-        ? "The AI can generate recommendations, but confidence is reduced until data gaps are resolved."
-        : "Insufficient validated data — connect integrations and resolve sync gaps before relying on AI decisions.";
+        ? "AI can recommend actions, but confidence is reduced until authentication, data, or validation gaps are resolved."
+        : "Resolve authorization and data gaps before relying on AI decisions — readiness is not yet sufficient.";
 
   return { aiTrustScorePct, narrative, confidenceReductions };
 }
@@ -106,31 +117,66 @@ export function buildAiTrustSummary(input: {
 export function buildSystemSummary(input: {
   providers: ProviderHealthDetail[];
   dataQualityPct: number;
+  overallAiReadinessPct: number;
   capabilityMatrix: CapabilityMatrixRow[];
   gate: ValidationGateReport;
   generatedAt: string;
   testSuiteRanAt: string | null;
 }): SystemSummary {
-  const connected = connectedCount(input.providers);
   const total = input.providers.length;
+  const authorized = authorizedCount(input.providers);
   const aiFeaturesAvailable = input.capabilityMatrix.filter((r) => r.status === "ready").length;
   const totalAiFeatures = input.capabilityMatrix.length;
 
-  let systemStatus: SystemSummary["systemStatus"] = "operational";
-  if (connected < total * 0.4 || input.dataQualityPct < 60) {
-    systemStatus = "attention";
-  } else if (connected < total * 0.7 || input.dataQualityPct < 80) {
-    systemStatus = "degraded";
-  }
+  const authStatus: HealthDimensionStatus =
+    authorized === total ? "good" : authorized === 0 ? "bad" : "warning";
+  const dataStatus = dataStatusFromPct(input.dataQualityPct);
+  const aiStatus = aiStatusFromPct(input.overallAiReadinessPct);
 
   return {
-    systemStatus,
+    authentication: {
+      authorizedCount: authorized,
+      totalProviders: total,
+      label:
+        authorized === total
+          ? "All platforms authorized"
+          : `${authorized} of ${total} authorized`,
+      status: authStatus,
+    },
+    data: {
+      qualityPct: input.dataQualityPct,
+      label:
+        input.dataQualityPct >= 80
+          ? "Usable data across sources"
+          : input.dataQualityPct >= 55
+            ? "Partial data quality"
+            : "Data gaps present",
+      status: dataStatus,
+    },
+    aiReadiness: {
+      readinessPct: input.overallAiReadinessPct,
+      featuresAvailable: aiFeaturesAvailable,
+      totalFeatures: totalAiFeatures,
+      label:
+        input.overallAiReadinessPct >= 75
+          ? "AI recommendations reliable"
+          : input.overallAiReadinessPct >= 45
+            ? "AI with limited confidence"
+            : "AI not ready",
+      status: aiStatus,
+    },
+    lastValidationAt: input.testSuiteRanAt ?? input.gate.evaluatedAt ?? input.generatedAt,
+    systemStatus:
+      authStatus === "bad" || dataStatus === "bad"
+        ? "attention"
+        : authStatus === "warning" || dataStatus === "warning" || aiStatus === "warning"
+          ? "degraded"
+          : "operational",
     dataQualityPct: input.dataQualityPct,
-    connectedProviders: connected,
+    connectedProviders: authorized,
     totalProviders: total,
     aiFeaturesAvailable,
     totalAiFeatures,
-    lastValidationAt: input.testSuiteRanAt ?? input.gate.evaluatedAt ?? input.generatedAt,
   };
 }
 

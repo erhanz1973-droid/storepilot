@@ -178,4 +178,50 @@ describe("attribution decision engine", () => {
     const growthPause = growthPlan.strategyAlternatives.find((a) => a.strategy === "pause")!;
     expect(growthPause.score).toBeLessThan(profitPause.score);
   });
+
+  it("never formats campaign ROAS as 0.00 when revenue exists", () => {
+    const lowRoasCampaign = dashboard.campaigns.find(
+      (c) => c.attributedRevenue > 0 && c.adSpend > 0 && (c.roas ?? 0) > 0 && (c.roas ?? 0) < 0.1,
+    );
+    if (lowRoasCampaign) {
+      expect(lowRoasCampaign.roas).toBeGreaterThan(0);
+      expect(lowRoasCampaign.roas).toBeLessThan(0.1);
+    }
+    for (const c of dashboard.campaigns) {
+      if (c.attributedRevenue > 0 && c.adSpend > 0) {
+        expect(c.roas ?? 0).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("sorts actions by descending priority score", () => {
+    const actions = dashboard.strategyPlan.actions;
+    for (let i = 1; i < actions.length; i++) {
+      const prev = actions[i - 1]!;
+      const curr = actions[i]!;
+      if (!prev.isLastResort && !curr.isLastResort) {
+        expect(prev.priorityScore ?? 0).toBeGreaterThanOrEqual(curr.priorityScore ?? 0);
+      }
+    }
+  });
+
+  it("includes simulation assumptions and why-not probability on rejected strategies", () => {
+    const plan = dashboard.strategyPlan;
+    expect(plan.simulation.assumptions.length).toBeGreaterThanOrEqual(5);
+    const rejected = plan.strategyAlternatives.filter((a) => !a.selected);
+    for (const alt of rejected) {
+      expect(alt.successProbabilityPct).toBeGreaterThan(0);
+      expect(alt.potentialDownside?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("aligns opportunity profit impact with recommendation estimated improvement", () => {
+    const plan = dashboard.strategyPlan;
+    for (const opp of dashboard.attributionOpportunities) {
+      const action = plan.actions.find((a) => a.id === opp.id);
+      if (action) {
+        expect(opp.estimatedMonthlyNetProfitImpact).toBe(action.estimatedMonthlyImprovement);
+      }
+    }
+  });
 });

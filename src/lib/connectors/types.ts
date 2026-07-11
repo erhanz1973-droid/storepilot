@@ -180,6 +180,8 @@ export type StoreSnapshot = {
   /** Shopify customersCount when available from store sync */
   shopifyCustomersCount?: number;
   connectorStates: Partial<Record<DataSourceId, ConnectorStatus>>;
+  /** Active demo business scenario when source is demo */
+  demoScenario?: import("@/lib/demo/scenarios/types").DemoScenarioId;
 };
 
 export interface StoreDataConnector {

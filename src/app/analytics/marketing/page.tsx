@@ -2,6 +2,7 @@ import nextDynamic from "next/dynamic";
 import { AnalyticsPageShell } from "@/components/analytics/AnalyticsPageShell";
 import { buildMarketingPageData } from "@/lib/services/analytics";
 import Link from "next/link";
+import { AdvertisingIntegrationBanner } from "@/components/advertising/AdvertisingIntegrationBanner";
 
 const MarketingManagerClient = nextDynamic(
   () =>
@@ -26,6 +27,7 @@ export default async function MarketingAnalyticsPage() {
       context="marketing"
       syncedAt={data.syncedAt}
     >
+      <AdvertisingIntegrationBanner readiness={data.integrationReadiness} />
       {!hasData ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>

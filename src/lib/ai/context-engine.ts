@@ -18,6 +18,7 @@ import { getVerifiedStoreData } from "@/lib/recommendations/validation";
 import { evaluateOpportunities } from "@/lib/opportunities/engine";
 import { applyLearningToOutputs, computeAiPerformance } from "@/lib/learning/outcomes";
 import { generateWeeklyAiReport } from "@/lib/learning/weekly-report";
+import { allowDemoData } from "@/lib/env/runtime";
 import { listOutcomeHistory, seedDemoLearningIfNeeded } from "@/lib/db/learning";
 import { listProductCosts } from "@/lib/db/product-costs";
 import { computeProfitDashboard } from "@/lib/profit/engine";
@@ -112,7 +113,9 @@ export async function buildBusinessContext(): Promise<BusinessContext> {
     },
     recommendations,
   );
-  await seedDemoLearningIfNeeded(storeId);
+  if (allowDemoData()) {
+    await seedDemoLearningIfNeeded(storeId);
+  }
   const outcomeHistory = await listOutcomeHistory(storeId);
   const aiPerformance = computeAiPerformance([], outcomeHistory);
   const weeklyReport = await generateWeeklyAiReport(storeId);

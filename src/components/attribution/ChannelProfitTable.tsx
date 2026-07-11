@@ -1,4 +1,5 @@
 import type { ChannelAttributionRow } from "@/lib/attribution/models";
+import { formatRoas } from "@/lib/attribution/format-roas";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -30,7 +31,7 @@ export function ChannelProfitTable({ rows }: { rows: ChannelAttributionRow[] }) 
                   {formatMoney(row.attributedProfit)}
                 </td>
                 <td>{row.adSpend > 0 ? formatMoney(row.adSpend) : "—"}</td>
-                <td>{row.profitRoas != null ? row.profitRoas.toFixed(2) : "—"}</td>
+                <td>{formatRoas(row.profitRoas)}</td>
                 <td>{row.assistedRevenue > 0 ? formatMoney(row.assistedRevenue) : "—"}</td>
                 <td>{row.assistRatePct > 0 ? `${row.assistRatePct}%` : "—"}</td>
               </tr>

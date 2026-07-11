@@ -17,48 +17,44 @@ export function ProfitAiSummaryCard({ summary }: { summary: ProfitAiSummary }) {
         : "profit-ai-unavailable";
 
   return (
-    <div className={`card profit-ai-summary ${statusClass}`}>
-      <div className="profit-ai-summary-header">
-        <span className="profit-ai-label">AI Profit Summary</span>
-        {summary.status !== "unavailable" && (
-          <span className="profit-ai-confidence">{summary.confidencePct}% confidence</span>
-        )}
-      </div>
-      <h2 className="profit-ai-headline">{summary.headline}</h2>
-      <p className="profit-ai-reason">{summary.primaryReason}</p>
+    <div className={`card profit-ai-summary profit-cfo-executive ${statusClass}`}>
+      <span className="profit-ai-label">Executive Profit Summary</span>
 
-      {summary.topRecovery && (
-        <div className="profit-ai-recovery">
-          <div>
-            <span className="muted" style={{ fontSize: "0.8rem" }}>
-              Top recovery opportunity
-            </span>
-            <strong className="profit-ai-recovery-title">{summary.topRecovery.title}</strong>
-            <p className="profit-ai-recovery-description muted" style={{ margin: "6px 0 0" }}>
-              {summary.topRecovery.description}
-            </p>
-            <p className="profit-ai-recovery-reason muted" style={{ margin: "6px 0 0", fontSize: "0.85rem" }}>
-              {summary.topRecovery.reason}
-            </p>
-          </div>
-          <div className="profit-ai-recovery-metrics">
-            <div>
-              <span className="muted" style={{ fontSize: "0.75rem" }}>
-                Estimated monthly improvement
-              </span>
-              <strong className="profit-recovery-value positive">
-                +{formatMoney(summary.topRecovery.estimatedMonthlyRecovery)}
-              </strong>
-            </div>
-            <div>
-              <span className="muted" style={{ fontSize: "0.75rem" }}>
-                Confidence
-              </span>
-              <strong>{summary.topRecovery.confidencePct}%</strong>
-            </div>
-          </div>
+      <div className="profit-cfo-exec-grid">
+        <div>
+          <span className="muted">Current Profit Status</span>
+          <strong className="profit-cfo-status">{summary.profitStatus}</strong>
         </div>
-      )}
+        <div>
+          <span className="muted">Estimated Net Profit</span>
+          <strong className={summary.estimatedNetProfit < 0 ? "negative" : "positive"}>
+            {formatMoney(summary.estimatedNetProfit)}
+          </strong>
+          <span className="muted profit-cfo-period">Last 30 days</span>
+        </div>
+        <div className="profit-cfo-exec-span">
+          <span className="muted">Primary Reason</span>
+          <p className="profit-ai-reason">{summary.primaryReason}</p>
+        </div>
+        {summary.biggestRecoveryTitle && (
+          <div>
+            <span className="muted">Biggest Recovery Opportunity</span>
+            <strong>{summary.biggestRecoveryTitle}</strong>
+          </div>
+        )}
+        {summary.estimatedMonthlyRecovery > 0 && (
+          <div>
+            <span className="muted">Estimated Monthly Recovery</span>
+            <strong className="positive">+{formatMoney(summary.estimatedMonthlyRecovery)}</strong>
+          </div>
+        )}
+        <div>
+          <span className="muted">Confidence</span>
+          <strong>
+            {summary.confidenceLabel} ({summary.confidencePct}%)
+          </strong>
+        </div>
+      </div>
     </div>
   );
 }

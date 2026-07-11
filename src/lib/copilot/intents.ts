@@ -24,6 +24,7 @@ export const INTENT_DATA_SOURCES: Record<CopilotIntent, CopilotDataSource[]> = {
   customer_top: ["customers", "shopify"],
   customer_intelligence: ["customers", "shopify", "attribution"],
   marketing_intelligence: ["google_ads", "meta_ads", "profit", "attribution", "insights"],
+  plan_campaign_locked: ["meta_ads", "google_ads"],
   general: ["insights", "priority_queue", "trends", "profit"],
 };
 
@@ -144,6 +145,14 @@ export function resolveFollowUpIntent(
 
   if ((q.includes("opportunit") || q.includes("what should")) && lastIntent === "biggest_risk") {
     return { intent: "biggest_opportunities", expandedQuestion: "Show my biggest opportunities" };
+  }
+
+  if (q.includes("wait") || q.includes("do nothing") || q.includes("if i delay")) {
+    return { intent: lastIntent, expandedQuestion: question };
+  }
+
+  if (q.includes("why") && (q.includes("first") || q.includes("top") || q.includes("priority"))) {
+    return { intent: lastIntent, expandedQuestion: question };
   }
 
   return { intent: detectCopilotIntent(question, pageContext), expandedQuestion: question };

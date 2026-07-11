@@ -9,9 +9,11 @@ import { useState } from "react";
 export function ProductProfitTableWithAttribution({
   rows,
   attribution,
+  title,
 }: {
   rows: EnrichedProductProfitRow[];
   attribution: ProductAttributionDashboard | null;
+  title?: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? attribution?.byProductId[selectedId] ?? null : null;
@@ -20,6 +22,7 @@ export function ProductProfitTableWithAttribution({
     <>
       <ProductProfitTableSortable
         rows={rows}
+        title={title}
         onSelectProduct={attribution ? (id) => setSelectedId(id) : undefined}
       />
       <ProductAttributionDetailDrawer

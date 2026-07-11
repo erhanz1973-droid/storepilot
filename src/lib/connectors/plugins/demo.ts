@@ -1,5 +1,6 @@
 import type { ConnectorPlugin, ConnectorHealthResult } from "../base";
-import { DEMO_STORE_SNAPSHOT, getDemoStoreSnapshot } from "../demo-data";
+import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
+import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
 
 export function createDemoPlugin(
   id: ConnectorPlugin["id"],
@@ -12,6 +13,11 @@ export function createDemoPlugin(
     return { status: "demo", lastSyncAt };
   }
 
+  async function loadDemoSnapshot() {
+    const scenarioId = await getActiveDemoScenarioId();
+    return buildDemoSnapshot(scenarioId);
+  }
+
   return {
     id,
     label,
@@ -21,7 +27,7 @@ export function createDemoPlugin(
     },
     async sync() {
       lastSyncAt = new Date().toISOString();
-      const full = getDemoStoreSnapshot();
+      const full = await loadDemoSnapshot();
       if (id === "shopify") {
         return {
           products: full.products,

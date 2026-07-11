@@ -86,6 +86,12 @@ export type RecommendationHistory = {
   steps: RecommendationLifecycleStep[];
 };
 
+export type RecoveryProgressStep = {
+  id: string;
+  label: string;
+  status: "complete" | "current" | "upcoming";
+};
+
 export type RecoveryProgress = {
   goalMonthly: number;
   recoveredMonthly: number;
@@ -94,6 +100,7 @@ export type RecoveryProgress = {
   hasMeasurements: boolean;
   recoveredLabel: string;
   statusMessage: string;
+  steps: RecoveryProgressStep[];
 };
 
 export type BeforeAfterImpact = {
@@ -126,6 +133,8 @@ export type DailyExecutiveDigest = {
   todayPriority: string | null;
   recoveryEstimateMonthly: number;
   openDecisionsCount: number;
+  /** CEO-advisor narrative paragraphs */
+  narrative: string[];
 };
 
 export type ExecutiveAdoptionScore = {
@@ -464,11 +473,33 @@ export function buildRecoveryProgress(input: {
     .reduce((s, d) => s + parseImpactMonthly(d.estimatedImpactLabel) * 0.3, 0);
   const recoveredMonthly = Math.round(Math.max(fromOutcomes, fromResolved));
   const hasMeasurements = recoveredMonthly > 0;
+  const hasApproved = input.decisions.some(
+    (d) => d.status === "accepted" || d.status === "resolved",
+  );
   const remainingMonthly = Math.max(0, goalMonthly - recoveredMonthly);
   const progressPct =
     hasMeasurements && goalMonthly > 0
       ? Math.min(100, Math.round((recoveredMonthly / goalMonthly) * 100))
       : 0;
+
+  const steps: RecoveryProgressStep[] = [
+    { id: "analysis", label: "AI completed analysis", status: "complete" },
+    {
+      id: "approval",
+      label: "Waiting for first approval",
+      status: hasApproved ? "complete" : "current",
+    },
+    {
+      id: "measuring",
+      label: "Measuring business impact",
+      status: hasApproved ? (hasMeasurements ? "complete" : "current") : "upcoming",
+    },
+    {
+      id: "tracking",
+      label: "Recovery tracking begins",
+      status: hasMeasurements ? "current" : "upcoming",
+    },
+  ];
 
   return {
     goalMonthly,
@@ -478,10 +509,11 @@ export function buildRecoveryProgress(input: {
     hasMeasurements,
     recoveredLabel: hasMeasurements
       ? `$${recoveredMonthly.toLocaleString()}/month`
-      : "Waiting for first approved recommendation",
+      : `$${goalMonthly.toLocaleString()}/month potential`,
     statusMessage: hasMeasurements
       ? `${progressPct}% of your recovery goal achieved so far.`
-      : "Measurement begins after your first approved action.",
+      : "Approve your first recommendation to start measuring recovered profit.",
+    steps,
   };
 }
 
@@ -614,6 +646,10 @@ export function buildDailyExecutiveDigest(input: {
   recoveryEstimateMonthly: number;
   todayPriority?: string | null;
   openDecisionsCount: number;
+  profitUnavailable?: boolean;
+  moneyLeaks?: { items: { label: string; amountMonthly: number }[]; totalLostMonthly: number };
+  priorityAction?: { title: string; impactMonthly: number } | null;
+  recommendationRows?: RecommendationRow[];
 }): DailyExecutiveDigest | null {
   if (!input.morningBrief) return null;
 
@@ -630,6 +666,62 @@ export function buildDailyExecutiveDigest(input: {
     input.morningBrief.recommendationOfTheDay?.title ??
     null;
 
+  const topThreat = input.moneyLeaks?.items[0];
+  const bestOpp = input.recommendationRows?.[0];
+  const recoveryBest = input.recoveryEstimateMonthly > 0
+    ? Math.round(input.recoveryEstimateMonthly * 1.35)
+    : bestOpp?.expectedMonthlyProfit ?? 0;
+
+  const narrative: string[] = [];
+
+  const adActivityNote =
+    input.morningBrief.yesterdayPerformance.some(
+      (p) =>
+        p.toLowerCase().includes("ad") ||
+        p.toLowerCase().includes("spend") ||
+        p.toLowerCase().includes("campaign"),
+    ) || input.morningBrief.revenueTrend.toLowerCase().includes("up")
+      ? "Yesterday your advertising activity increased significantly"
+      : "Yesterday's store activity showed meaningful shifts in revenue and acquisition";
+
+  if (input.profitUnavailable) {
+    narrative.push(
+      `${adActivityNote} while profitability could not yet be verified because cost data is unavailable.`,
+    );
+  } else {
+    narrative.push(`${adActivityNote} with measurable impact on your revenue trajectory.`);
+  }
+
+  if (topThreat && topThreat.amountMonthly > 0) {
+    const threatLabel = topThreat.label.toLowerCase().includes("inventory")
+      ? "slow-moving inventory"
+      : topThreat.label.toLowerCase();
+    narrative.push(`The largest business risk continues to be ${threatLabel}.`);
+  } else {
+    narrative.push("No single dominant risk factor — focus on highest-impact opportunities first.");
+  }
+
+  if (bestOpp && recoveryBest > 0) {
+    const oppLabel = bestOpp.opportunity.toLowerCase().includes("inventory")
+      ? "inventory clearance"
+      : bestOpp.opportunity.toLowerCase();
+    narrative.push(
+      `The fastest opportunity is ${oppLabel}, with an estimated recovery of up to $${recoveryBest.toLocaleString()} per month.`,
+    );
+  } else if (input.recoveryEstimateMonthly > 0) {
+    narrative.push(
+      `Combined recovery potential across prioritized actions is up to $${input.recoveryEstimateMonthly.toLocaleString()} per month.`,
+    );
+  }
+
+  if (priority) {
+    narrative.push(`Your highest priority today is ${priority.toLowerCase().includes("approv") ? priority : `approving ${priority}`}.`);
+  } else if (input.openDecisionsCount > 0) {
+    narrative.push(
+      `Your highest priority today is reviewing ${input.openDecisionsCount} recommendation${input.openDecisionsCount > 1 ? "s" : ""} ready for approval.`,
+    );
+  }
+
   return {
     greeting,
     generatedAt: input.morningBrief.generatedAt,
@@ -639,6 +731,7 @@ export function buildDailyExecutiveDigest(input: {
     todayPriority: priority,
     recoveryEstimateMonthly: input.recoveryEstimateMonthly,
     openDecisionsCount: input.openDecisionsCount,
+    narrative,
   };
 }
 
@@ -692,6 +785,9 @@ export function buildExecutiveAiBehavior(input: {
   currentProfit: number;
   todayPriority?: string | null;
   openDecisionsCount?: number;
+  profitUnavailable?: boolean;
+  moneyLeaks?: { items: { label: string; amountMonthly: number }[]; totalLostMonthly: number };
+  priorityAction?: { title: string; impactMonthly: number } | null;
 }): ExecutiveAiBehavior {
   const opportunityHistory = normalizeOpportunityHistorySummary(input.opportunityHistory);
   const decisionMap = new Map(input.decisions.map((d) => [d.id, d]));
@@ -735,6 +831,10 @@ export function buildExecutiveAiBehavior(input: {
       recoveryEstimateMonthly: input.recoveryBreakdown.netMonthly,
       todayPriority: input.todayPriority,
       openDecisionsCount,
+      profitUnavailable: input.profitUnavailable,
+      moneyLeaks: input.moneyLeaks,
+      priorityAction: input.priorityAction,
+      recommendationRows: input.recommendationRows,
     }),
     adoptionScore: buildExecutiveAdoptionScore({
       decisions: input.decisions,

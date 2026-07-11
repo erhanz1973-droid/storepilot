@@ -1,14 +1,13 @@
 import { AskAiChatLauncher } from "@/components/ask-ai/AskAiChatLauncher";
 import { DailyActionsPanel } from "@/components/actions/DailyActionsPanel";
-import { buildDashboard } from "@/lib/services/dashboard";
+import { buildAskAiPageData } from "@/lib/services/dashboard";
 import Link from "next/link";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default async function AskAiPage() {
-  const dashboard = await buildDashboard();
-  const decisions = dashboard.decisionCenter ?? [];
+  const { decisions } = await buildAskAiPageData();
 
   return (
     <>

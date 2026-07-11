@@ -19,7 +19,7 @@ export function AutopilotStatusCard({ status }: { status: AutopilotStatusSummary
           </p>
         </div>
         {status.pendingApprovals > 0 && (
-          <Link href="/decisions" className="btn btn-primary btn-sm">
+          <Link href="#pending-actions" className="btn btn-primary btn-sm">
             Review {status.pendingApprovals} pending
           </Link>
         )}

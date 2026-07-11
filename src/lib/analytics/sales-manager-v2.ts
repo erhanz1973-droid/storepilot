@@ -9,6 +9,10 @@ import {
   type OrderIntelligenceHighlight,
   type SalesOrderRow,
 } from "@/lib/analytics/order-intelligence";
+import { buildRevenueStudio, type RevenueStudio } from "@/lib/analytics/revenue-studio";
+import { buildDailyAiPlaybook, type DailyAiPlaybook } from "@/lib/analytics/ai-daily-playbook";
+export type { RevenueStudio, RevenuePlaybook } from "@/lib/analytics/revenue-studio";
+export type { DailyAiPlaybook } from "@/lib/analytics/ai-daily-playbook";
 export type {
   OrderHealthStatus,
   OrderIntelligenceHighlight,
@@ -80,6 +84,8 @@ export type SalesManagerV2 = {
   revenueQuality: RevenueQuality;
   drivers: RevenueDriver[];
   opportunities: SalesOpportunity[];
+  revenueStudio: RevenueStudio;
+  dailyPlaybook: DailyAiPlaybook;
   orders: SalesOrderRow[];
   orderHighlights: OrderIntelligenceHighlight[];
   trendCommentary: TrendCommentary;
@@ -643,6 +649,12 @@ export function buildSalesManagerV2(input: {
   const shipping = primary?.shippingCost ?? Math.round(revenue * 0.04);
   const taxes = Math.round(revenue * 0.07);
   const orderIntel = buildOrderIntelligence(snapshot, profitDashboard);
+  const revenueStudio = buildRevenueStudio({ snapshot, profitDashboard });
+  const dailyPlaybook = buildDailyAiPlaybook({
+    snapshot,
+    revenueStudio,
+    salesOpportunities: opportunities,
+  });
 
   return {
     brief,
@@ -658,6 +670,8 @@ export function buildSalesManagerV2(input: {
     revenueQuality,
     drivers: buildRevenueDrivers(snapshot),
     opportunities,
+    revenueStudio,
+    dailyPlaybook,
     orders: orderIntel.orders,
     orderHighlights: orderIntel.highlights,
     trendCommentary,

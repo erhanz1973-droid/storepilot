@@ -33,7 +33,7 @@ describe("attribution recommendation trust", () => {
     for (const action of plan.actions) {
       expect(action.impact.simulationStatus).toBe("Simulated");
       expect(action.dependencies.length).toBeGreaterThan(0);
-      expect(action.crossModuleImpacts.length).toBe(4);
+      expect(action.crossModuleImpacts.length).toBe(6);
     }
   });
 

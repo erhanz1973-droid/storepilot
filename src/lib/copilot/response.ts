@@ -1,5 +1,6 @@
 import type { SupportingMetric } from "@/lib/types";
 import { getActionCapability } from "@/lib/insights/actions";
+import { confidenceLabel } from "./conversational-enrichment";
 import type {
   CopilotActionRecommendation,
   CopilotBusinessImpact,
@@ -7,6 +8,91 @@ import type {
 } from "./types";
 
 export function formatCopilotMessage(structured: CopilotStructuredResponse): string {
+  const conv = structured.conversational;
+  if (conv) {
+    const lines: string[] = [
+      conv.mode === "wait"
+        ? "**If you wait**"
+        : conv.mode === "why_priority"
+          ? "**Why this is first**"
+          : "**Direct answer**",
+      "",
+      conv.shortAnswer,
+    ];
+    if (conv.cautionNote) {
+      lines.push("", conv.cautionNote);
+    }
+    if (conv.whySummary) {
+      lines.push("", conv.mode === "wait" ? "**Consequences**" : "**Why this matters**", "", conv.whySummary);
+    }
+    if (conv.mode === "wait" && conv.waitAnalysis) {
+      lines.push(
+        "",
+        `Unnecessary ad spend: ${conv.waitAnalysis.unnecessarySpend ?? "—"}`,
+        `Missed profit: ${conv.waitAnalysis.missedProfit ?? "—"}`,
+        `Learning quality: ${conv.waitAnalysis.learningQuality}`,
+        `Business risk: ${conv.waitAnalysis.businessRisk}`,
+      );
+    }
+    if (conv.financialImpact.calculable && conv.financialImpact.combinedNetMonthly != null) {
+      lines.push("", "**Financial impact**", conv.financialImpact.combinedLabel);
+      if (conv.financialImpact.overlapNote) lines.push(conv.financialImpact.overlapNote);
+    }
+    if (conv.prioritizedRecommendations.length > 0) {
+      lines.push("", `**Today — ${conv.prioritizedRecommendations.length} actions**`);
+      for (const rec of conv.prioritizedRecommendations) {
+        lines.push("", `${rec.rank}. ${rec.recommendedAction} (${rec.effortLabel})`);
+      }
+    }
+    if (conv.mode === "standard" && conv.tradeOff) {
+      lines.push(
+        "",
+        "**If you approve**",
+        `${conv.tradeOff.upsideLabel}: ${conv.tradeOff.upsideValue}`,
+        `${conv.tradeOff.downsideLabel}: ${conv.tradeOff.downsideValue}`,
+        `Stabilization: ${conv.tradeOff.stabilizationTime}`,
+      );
+    }
+    lines.push(
+      "",
+      `**Confidence:** ${confidenceLabel(conv.confidence.level)} (${conv.confidence.pct}%)`,
+      ...conv.confidence.basis.map((b) => `✓ ${b}`),
+    );
+    if (conv.nextStep) {
+      lines.push("", "**Recommended next step**", conv.nextStep, `Time: ${conv.nextStepDuration}`);
+    }
+    if (conv.followUpQuestion) {
+      lines.push("", "**Follow-up:**", conv.followUpQuestion);
+    }
+    return lines.join("\n");
+  }
+
+  if (structured.riskAssessment) {
+    const ra = structured.riskAssessment;
+    const lines: string[] = [
+      "**Executive Briefing**",
+      "",
+      ra.executiveBriefing,
+      "",
+      `**Biggest Business Risk:** ${ra.primaryRisk.title}`,
+      `Estimated Financial Exposure: ${ra.primaryRisk.estimatedExposureDisplay}`,
+      `Likelihood: ${ra.primaryRisk.probabilityPct}%`,
+      `Time Horizon: ${ra.primaryRisk.timeHorizon}`,
+      "",
+      ra.primaryRisk.businessConsequence,
+      "",
+      "**Recommended Actions**",
+    ];
+    for (const step of ra.recommendationSteps) {
+      lines.push(
+        "",
+        `Step ${step.step}: ${step.action}`,
+        `Time: ${step.estimatedTime} · Benefit: ${step.expectedBenefit} · Risk reduction: ${step.riskReductionPct}%`,
+      );
+    }
+    return lines.join("\n");
+  }
+
   const lines: string[] = [];
   if (structured.title) {
     lines.push(`**${structured.title}**`, "");
@@ -132,14 +218,19 @@ export function buildBusinessImpactFromInsights(
   }
 
   const monthlyRevenue = insights.reduce((s, i) => s + i.expectedImpact.revenueMonthly, 0);
-  const monthlyProfit = insights.reduce((s, i) => s + i.expectedImpact.profitMonthly, 0);
+  const profits = insights.map((i) => i.expectedImpact.profitMonthly).filter((p) => p > 0);
+  const sumProfit = profits.reduce((s, p) => s + p, 0);
+  const monthlyProfit =
+    profits.length > 1
+      ? Math.round(sumProfit * (profits.length >= 3 ? 0.72 : 0.85))
+      : Math.round(sumProfit);
 
   return {
     monthlyRevenue: monthlyRevenue > 0 ? Math.round(monthlyRevenue) : undefined,
-    monthlyProfit: monthlyProfit > 0 ? Math.round(monthlyProfit) : undefined,
+    monthlyProfit: monthlyProfit > 0 ? monthlyProfit : undefined,
     label:
       monthlyProfit > 0
-        ? `Combined est. +$${Math.round(monthlyProfit).toLocaleString()}/mo profit`
+        ? `Combined net impact +$${monthlyProfit.toLocaleString()}/mo`
         : monthlyRevenue > 0
           ? `Combined est. +$${Math.round(monthlyRevenue).toLocaleString()}/mo revenue`
           : "Operational efficiency gains expected",

@@ -1,3 +1,5 @@
+import { humanizeSyncError } from "@/lib/connections/connection-state";
+
 export type SyncApiResponse = {
   ok?: boolean;
   error?: string;
@@ -23,72 +25,79 @@ export function buildSyncFeedback(
   body: SyncApiResponse,
 ): SyncFeedback {
   const syncedAt = body.syncedAt
-    ? new Date(body.syncedAt).toLocaleString("tr-TR")
+    ? new Date(body.syncedAt).toLocaleString()
     : undefined;
 
   if (integrationId === "meta_ads") {
     const campaigns = body.campaigns ?? 0;
     const detailParts = [
-      syncedAt ? `Son senkron: ${syncedAt}` : null,
-      `${campaigns} kampanya güncellendi`,
-      body.spend30d != null ? `30 günlük harcama: $${Math.round(body.spend30d).toLocaleString("tr-TR")}` : null,
+      syncedAt ? `Last sync: ${syncedAt}` : null,
+      `${campaigns} campaigns updated`,
+      body.spend30d != null ? `30-day spend: $${Math.round(body.spend30d).toLocaleString()}` : null,
       body.warnings?.length ? body.warnings.join(" · ") : null,
     ].filter(Boolean);
 
     return {
       kind: "success",
-      message: "Meta Ads senkronizasyonu tamamlandı.",
+      message: "Meta Ads sync completed successfully.",
       detail: detailParts.join(" · "),
     };
   }
 
   if (integrationId === "shopify") {
     const detailParts = [
-      syncedAt ? `Son senkron: ${syncedAt}` : null,
-      body.products != null ? `${body.products} ürün` : null,
-      body.orders30d != null ? `${body.orders30d} sipariş (30 gün)` : null,
+      syncedAt ? `Last sync: ${syncedAt}` : null,
+      body.products != null ? `${body.products} products` : null,
+      body.orders30d != null ? `${body.orders30d} orders (30 days)` : null,
     ].filter(Boolean);
 
     return {
       kind: "success",
-      message: "Shopify senkronizasyonu tamamlandı.",
+      message: "Shopify sync completed successfully.",
       detail: detailParts.join(" · "),
     };
   }
 
   if (integrationId === "google_ads") {
     const detailParts = [
-      syncedAt ? `Son senkron: ${syncedAt}` : null,
-      body.campaigns != null ? `${body.campaigns} kampanya` : null,
+      syncedAt ? `Last sync: ${syncedAt}` : null,
+      body.campaigns != null ? `${body.campaigns} campaigns` : null,
     ].filter(Boolean);
 
     return {
       kind: "success",
-      message: "Google Ads senkronizasyonu tamamlandı.",
+      message: "Google Ads sync completed successfully.",
       detail: detailParts.join(" · "),
     };
   }
 
   if (integrationId === "ga4") {
     const detailParts = [
-      syncedAt ? `Son senkron: ${syncedAt}` : null,
-      body.sessions30d != null ? `${body.sessions30d.toLocaleString("tr-TR")} oturum (30g)` : null,
-      body.engagementRatePct != null ? `%${body.engagementRatePct.toFixed(1)} etkileşim` : null,
+      syncedAt ? `Last sync: ${syncedAt}` : null,
+      body.sessions30d != null ? `${body.sessions30d.toLocaleString()} sessions (30d)` : null,
+      body.engagementRatePct != null ? `${body.engagementRatePct.toFixed(1)}% engagement` : null,
     ].filter(Boolean);
 
     return {
       kind: "success",
-      message: "GA4 senkronizasyonu tamamlandı.",
+      message: "GA4 sync completed successfully.",
       detail: detailParts.join(" · "),
     };
   }
 
   return {
     kind: "success",
-    message: "Senkronizasyon tamamlandı.",
-    detail: syncedAt ? `Son senkron: ${syncedAt}` : undefined,
+    message: "Sync completed successfully.",
+    detail: syncedAt ? `Last sync: ${syncedAt}` : undefined,
   };
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  ga4: "Google Analytics",
+  google_ads: "Google Ads",
+  meta_ads: "Meta Ads",
+  shopify: "Shopify",
+};
 
 export async function runIntegrationSync(
   syncEndpoint: string,
@@ -100,8 +109,8 @@ export async function runIntegrationSync(
   } catch {
     return {
       kind: "error",
-      message: "Senkronizasyon isteği gönderilemedi.",
-      detail: "İnternet bağlantınızı kontrol edip tekrar deneyin.",
+      message: "Sync request could not be sent.",
+      detail: "Check your internet connection and try again.",
     };
   }
 
@@ -113,10 +122,12 @@ export async function runIntegrationSync(
   }
 
   if (!response.ok) {
+    const provider = PROVIDER_LABELS[integrationId] ?? "Integration";
+    const friendly = humanizeSyncError(body.error, provider);
     return {
       kind: "error",
-      message: "Senkronizasyon başarısız.",
-      detail: body.error ?? `Sunucu hatası (${response.status}).`,
+      message: "Synchronization failed.",
+      detail: friendly ?? body.error ?? `Server error (${response.status}).`,
     };
   }
 

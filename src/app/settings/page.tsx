@@ -1,17 +1,22 @@
+import Link from "next/link";
 import { AnalyticsPageShell } from "@/components/analytics/AnalyticsPageShell";
 import { BusinessModelSelector } from "@/components/business-model/BusinessModelSelector";
 import { MerchantModeSelector } from "@/components/decisions/MerchantModeSelector";
-import { buildDashboard } from "@/lib/services/dashboard";
+import { PlanSettingsCard } from "@/components/billing/PlanSettingsCard";
+import { buildReadOnlyDashboard } from "@/lib/services/dashboard";
+import { getCachedStoreBundle } from "@/lib/services/store-bundle";
 import { resolveMerchantMode } from "@/lib/store/merchant-mode";
-import Link from "next/link";
+import { resolveStorePlan } from "@/lib/billing/entitlements";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  const bundle = await getCachedStoreBundle();
   const [dashboard, merchantMode] = await Promise.all([
-    buildDashboard(),
+    buildReadOnlyDashboard(bundle.storeId, bundle.snapshot),
     resolveMerchantMode(),
   ]);
+  const planId = resolveStorePlan();
 
   return (
     <AnalyticsPageShell
@@ -21,6 +26,8 @@ export default async function SettingsPage() {
       showDateRange={false}
     >
       <MerchantModeSelector initialMode={merchantMode} />
+
+      <PlanSettingsCard planId={planId} />
 
       {dashboard.businessProfile && (
         <div style={{ marginTop: 16 }}>

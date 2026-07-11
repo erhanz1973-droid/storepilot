@@ -11,13 +11,13 @@ export default async function HealthPage() {
   return (
     <>
       <div className="page-header">
-        <h2>Health</h2>
+        <h2>Morning Risk Briefing</h2>
         <p>
-          Daily executive health check — profit, marketing, inventory, customers, and cash flow with
-          prioritized actions.{" "}
-          <Link href="/">Executive Dashboard</Link>
+          Your daily executive risk check — what could hurt the business most, what to do first, and
+          what happens if you wait.{" "}
+          <Link href="/ask-ai?q=What+is+my+biggest+risk%3F">Ask AI</Link>
           {" · "}
-          <Link href="/integration-health">Integration Health</Link>
+          <Link href="/">Executive Dashboard</Link>
         </p>
       </div>
       <BusinessHealthDashboardClient dashboard={dashboard} />

@@ -50,6 +50,11 @@ describe("RecommendationRepository", () => {
     expect(byKey?.id).toBe(record.id);
   });
 
+  it("normalizes percentage confidence to 0-1 scale", async () => {
+    const { record } = await repo.upsert(sampleInput({ confidence: 82 }));
+    expect(record.confidence).toBe(0.82);
+  });
+
   it("preserves status on upsert update", async () => {
     const { record } = await repo.upsert(sampleInput());
     await repo.updateRawStatus(record.id, "approved");

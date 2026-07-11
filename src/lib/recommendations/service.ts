@@ -44,24 +44,32 @@ export class RecommendationService {
     outputs: AnalyzerOutput[],
     storeId: string,
   ): Promise<RecommendationRecord[]> {
-    const inputs = outputs.map((output) => outputToCreateInput(output, storeId));
-    const results = await this.repo.upsertBatch(inputs);
+    try {
+      const inputs = outputs.map((output) => outputToCreateInput(output, storeId));
+      const results = await this.repo.upsertBatch(inputs);
 
-    for (const { record, created } of results) {
-      if (created) {
-        await this.repo.appendEvent({
-          recommendationId: record.id,
-          eventType: "RecommendationCreated",
-          payloadJson: {
-            dedupeKey: record.dedupeKey,
-            source: "analyzer_sync",
-          },
-        });
+      for (const { record, created } of results) {
+        if (created) {
+          await this.repo.appendEvent({
+            recommendationId: record.id,
+            eventType: "RecommendationCreated",
+            payloadJson: {
+              dedupeKey: record.dedupeKey,
+              source: "analyzer_sync",
+            },
+          });
+        }
       }
-    }
 
-    await this.reconcileStale(storeId, new Set(outputs.map((o) => o.id)));
-    return this.repo.findByStoreId(storeId);
+      await this.reconcileStale(storeId, new Set(outputs.map((o) => o.id)));
+      return this.repo.findByStoreId(storeId);
+    } catch (error) {
+      console.warn(
+        "[StorePilot] syncFromAnalyzerOutputs failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
+      return this.repo.findByStoreId(storeId);
+    }
   }
 
   async getById(id: string): Promise<RecommendationRecord | null> {

@@ -30,12 +30,59 @@ import { PROFIT_INPUT_LABELS } from "@/lib/profit/types";
 export type { ProfitRecoveryOpportunity } from "@/lib/profit/profit-recommendations";
 
 export type ProfitAiSummary = {
-  headline: string;
+  profitStatus: string;
+  estimatedNetProfit: number;
   primaryReason: string;
+  biggestRecoveryTitle: string | null;
+  estimatedMonthlyRecovery: number;
+  confidencePct: number;
+  confidenceLabel: "High" | "Medium" | "Low";
+  status: ProfitConfidence["status"];
+  /** @deprecated use profitStatus */
+  headline: string;
+  /** @deprecated use biggestRecoveryTitle */
   topRecovery: ProfitRecoveryOpportunity | null;
   profitable: boolean;
-  confidencePct: number;
-  status: ProfitConfidence["status"];
+};
+
+export type ProfitConfidenceExplanation = {
+  scorePct: number;
+  verifiedLines: string[];
+  estimatedLines: string[];
+  missingLines: string[];
+  closingLine: string;
+};
+
+export type SetupImpactItem = {
+  id: ProfitInputId;
+  label: string;
+  impact: string;
+};
+
+export type ProductProfitCategory = {
+  id: string;
+  title: string;
+  products: Array<{
+    productId: string;
+    title: string;
+    netProfit: number;
+    marginPct: number;
+    insight: string;
+  }>;
+};
+
+export type ProductProfitCategories = {
+  mostProfitable: ProductProfitCategory;
+  mostOverAdvertised: ProductProfitCategory;
+  highestGrowth: ProductProfitCategory;
+};
+
+export type CfoDecision = {
+  title: string;
+  lines: string[];
+  expectedMonthlyRecovery: number;
+  confidence: "High" | "Medium" | "Low";
+  approvalHref: string;
 };
 
 export type ProfitConfidenceCategory = {
@@ -76,12 +123,16 @@ export type ProfitPageView = {
   };
   waterfall: ProfitWaterfall;
   confidenceCategories: ProfitConfidenceCategory[];
+  confidenceExplanation: ProfitConfidenceExplanation;
+  setupImpacts: SetupImpactItem[];
   timelineCharts: Record<"today" | "last7d" | "last30d" | "last90d", ChartDefinition>;
   channelCards: ChannelProfitCard[];
   enrichedProducts: EnrichedProductProfitRow[];
+  productCategories: ProductProfitCategories;
   whyLosingMoney: WhyLosingMoney | null;
   setupComplete: boolean;
   productAttribution: ProductAttributionDashboard | null;
+  cfoDecision: CfoDecision;
 };
 
 function round(n: number): number {
@@ -162,8 +213,11 @@ function primaryLossReason(dashboard: ProfitDashboard): string {
     return "Revenue exceeds total costs with healthy unit economics.";
   }
 
+  if (p.adSpend > p.grossProfit && p.grossProfit > 0) {
+    return "Advertising costs exceed gross profit.";
+  }
+
   const costs = [
-    { label: "advertising spend exceeding gross profit", value: p.adSpend - p.grossProfit, check: p.adSpend > p.grossProfit },
     { label: "high product costs (COGS)", value: p.cogs - p.revenue * 0.35, check: p.cogs > p.revenue * 0.45 },
     { label: "shipping and fulfillment costs", value: p.shippingCost, check: p.shippingCost > p.revenue * 0.08 },
     { label: "payment processing fees", value: p.transactionFees, check: p.transactionFees > p.revenue * 0.04 },
@@ -175,6 +229,63 @@ function primaryLossReason(dashboard: ProfitDashboard): string {
     : "Multiple cost factors are compressing margin below break-even.";
 }
 
+function confidenceLabelFromPct(pct: number): "High" | "Medium" | "Low" {
+  if (pct >= 80) return "High";
+  if (pct >= 60) return "Medium";
+  return "Low";
+}
+
+const SETUP_IMPACT: Partial<Record<ProfitInputId, string>> = {
+  shipping_costs: "Shipping is estimated — net profit may be off by 3–8%.",
+  payment_fees: "Payment fees are estimated — margin accuracy improves when processor data is connected.",
+  packaging_costs: "Packaging costs are missing — COGS and net profit are understated.",
+  taxes: "Taxes are missing — net profit may appear higher than reality.",
+  product_costs: "Product costs are incomplete — SKU-level margin is unreliable.",
+};
+
+export function buildConfidenceExplanation(
+  confidence: ProfitConfidence,
+  categories: ProfitConfidenceCategory[],
+): ProfitConfidenceExplanation {
+  const verifiedLines = categories
+    .filter((c) => c.state === "verified")
+    .map((c) => `Your ${c.label.toLowerCase()} data are verified.`);
+  const estimatedLines = categories
+    .filter((c) => c.state === "estimated")
+    .map((c) => `${c.label} are estimated.`);
+  const missingLines = categories
+    .filter((c) => c.state === "missing")
+    .map((c) => `${c.label} are missing.`);
+
+  const closingLine = confidence.setupRequired
+    ? "Profit estimates will become more accurate after completing setup."
+    : "Profit estimates are based on verified store data.";
+
+  return {
+    scorePct: confidence.scorePct,
+    verifiedLines,
+    estimatedLines,
+    missingLines,
+    closingLine,
+  };
+}
+
+export function buildSetupImpacts(confidence: ProfitConfidence): SetupImpactItem[] {
+  const ids: ProfitInputId[] = [
+    "shipping_costs",
+    "payment_fees",
+    "packaging_costs",
+    "taxes",
+  ];
+  return ids
+    .filter((id) => confidence.missingInputs.includes(id) || confidence.inputs.find((i) => i.id === id && (i.estimated || !i.available)))
+    .map((id) => ({
+      id,
+      label: PROFIT_INPUT_LABELS[id],
+      impact: SETUP_IMPACT[id] ?? "Completing this input improves profit accuracy.",
+    }));
+}
+
 export function buildAiSummary(
   dashboard: ProfitDashboard,
   recovery: ProfitRecoveryOpportunity[],
@@ -182,8 +293,23 @@ export function buildAiSummary(
   const net = dashboard.primary.netProfit ?? 0;
   const profitable = net >= 0 && dashboard.primaryProfit.status !== "unavailable";
   const topRecovery = recovery[0] ?? null;
+  const profitStatus = profitable
+    ? dashboard.primaryProfit.status === "estimated"
+      ? "Profitable (estimated)"
+      : "Profitable"
+    : dashboard.primaryProfit.status === "unavailable"
+      ? "Unavailable"
+      : "Unprofitable";
 
   return {
+    profitStatus,
+    estimatedNetProfit: net,
+    primaryReason: primaryLossReason(dashboard),
+    biggestRecoveryTitle: topRecovery?.title ?? null,
+    estimatedMonthlyRecovery: topRecovery?.estimatedMonthlyRecovery ?? 0,
+    confidencePct: dashboard.confidence.scorePct,
+    confidenceLabel: confidenceLabelFromPct(dashboard.confidence.scorePct),
+    status: dashboard.confidence.status,
     headline: profitable
       ? dashboard.primaryProfit.status === "estimated"
         ? "Your store appears profitable, but profit is estimated."
@@ -191,11 +317,8 @@ export function buildAiSummary(
       : dashboard.primaryProfit.status === "unavailable"
         ? "Profit cannot be calculated yet."
         : "Your store is currently unprofitable.",
-    primaryReason: primaryLossReason(dashboard),
     topRecovery,
     profitable,
-    confidencePct: dashboard.confidence.scorePct,
-    status: dashboard.confidence.status,
   };
 }
 
@@ -211,20 +334,20 @@ export function buildWhyLosingMoney(
     p.grossProfit > 0 ? Math.round((p.adSpend / p.grossProfit) * 100) : null;
   const paragraphs: string[] = [];
 
-  if (adPctOfGross != null && adPctOfGross > 100) {
-    paragraphs.push(
-      `Advertising costs currently represent ${adPctOfGross}% of your gross profit.`,
-      "Your products are profitable before advertising, but paid acquisition is eliminating all margin.",
-    );
-  } else if (p.cogs > p.revenue * 0.5) {
+  if (p.cogs > p.revenue * 0.5) {
     paragraphs.push(
       "Product costs are consuming more than half of revenue.",
       "Review COGS, supplier pricing, or retail prices on low-margin SKUs.",
     );
+  } else if (adPctOfGross != null && adPctOfGross > 100) {
+    paragraphs.push(
+      `Paid acquisition consumed ${adPctOfGross}% of gross profit — products are profitable before ads.`,
+      "Focus on CAC efficiency and campaign restructuring before scaling spend.",
+    );
   } else {
     paragraphs.push(
       `Net loss of ${formatMoney(Math.abs(net))} over the last 30 days after all cost deductions.`,
-      primaryLossReason(dashboard).replace("The primary reason is ", "The main driver is "),
+      "See the profit waterfall below for where margin is lost at each step.",
     );
   }
 
@@ -586,6 +709,108 @@ export function enrichProductRows(
   });
 }
 
+export function buildProductProfitCategories(
+  rows: EnrichedProductProfitRow[],
+): ProductProfitCategories {
+  const withRevenue = rows.filter((r) => r.revenue > 0);
+
+  const mostProfitable = [...withRevenue]
+    .filter((r) => r.netProfit > 0)
+    .sort((a, b) => b.netProfit - a.netProfit)
+    .slice(0, 3);
+
+  const mostOverAdvertised = [...withRevenue]
+    .filter((r) => r.adSpend > 0)
+    .sort((a, b) => {
+      const aRatio = a.adSpend / Math.max(1, a.revenue);
+      const bRatio = b.adSpend / Math.max(1, b.revenue);
+      return bRatio - aRatio;
+    })
+    .slice(0, 3);
+
+  const highestGrowth = [...withRevenue]
+    .filter((r) => r.netProfit > 0 && r.marginPct >= 25 && r.unitsSold >= 5)
+    .sort((a, b) => b.unitsSold - a.unitsSold)
+    .slice(0, 3);
+
+  const mapRow = (r: EnrichedProductProfitRow, insight: string) => ({
+    productId: r.productId,
+    title: r.title,
+    netProfit: r.netProfit,
+    marginPct: r.marginPct,
+    insight,
+  });
+
+  return {
+    mostProfitable: {
+      id: "most-profitable",
+      title: "Most Profitable Products",
+      products: mostProfitable.map((r) =>
+        mapRow(r, `${r.marginPct}% margin — protect inventory and scale carefully.`),
+      ),
+    },
+    mostOverAdvertised: {
+      id: "over-advertised",
+      title: "Most Over-Advertised Products",
+      products: mostOverAdvertised.map((r) =>
+        mapRow(
+          r,
+          r.roas != null && r.roas < 1.5
+            ? `ROAS ${r.roas.toFixed(1)} — reduce ad spend or improve targeting.`
+            : "Ad spend is high relative to revenue — audit campaign allocation.",
+        ),
+      ),
+    },
+    highestGrowth: {
+      id: "growth-opportunity",
+      title: "Highest Growth Opportunity",
+      products: highestGrowth.map((r) =>
+        mapRow(r, `${r.unitsSold} units sold — strong demand with room to scale.`),
+      ),
+    },
+  };
+}
+
+export function buildCfoDecision(
+  dashboard: ProfitDashboard,
+  recovery: ProfitRecoveryOpportunity[],
+): CfoDecision {
+  const p = dashboard.primary;
+  const top = recovery[0];
+  const breakEven = estimateBreakEvenRoas(dashboard);
+  const lines: string[] = [];
+
+  if (p.adSpend > p.grossProfit && p.grossProfit > 0) {
+    lines.push("Do not increase advertising spend.");
+    lines.push(
+      breakEven != null
+        ? `Reduce acquisition costs until blended ROAS exceeds ${breakEven.toFixed(1)} break-even.`
+        : "Reduce acquisition costs until blended ROAS exceeds break-even.",
+    );
+  } else if ((p.netProfit ?? 0) < 0) {
+    lines.push(top?.title ?? "Address the highest-cost leak in your profit waterfall first.");
+    if (top?.description) lines.push(top.description);
+  } else {
+    lines.push("Protect current margin before scaling acquisition.");
+    lines.push("Reinvest in your highest-margin products and channels.");
+  }
+
+  const confidence =
+    top && top.confidencePct >= 80
+      ? "High"
+      : top && top.confidencePct >= 65
+        ? "Medium"
+        : "Low";
+
+  return {
+    title: "Today's Financial Decision",
+    lines,
+    expectedMonthlyRecovery: top?.estimatedMonthlyRecovery ?? 0,
+    confidence,
+    approvalHref: top ? `/approvals?playbook=profit-${encodeURIComponent(top.id)}` : "/approvals",
+  };
+}
+
 export function assembleProfitPageView(
   dashboard: ProfitDashboard,
   snapshot: StoreSnapshot,
@@ -596,6 +821,8 @@ export function assembleProfitPageView(
     (s, o) => s + o.estimatedMonthlyRecovery,
     0,
   );
+  const confidenceCategories = buildConfidenceCategories(dashboard.confidence);
+  const enrichedProducts = enrichProductRows(dashboard, productAttribution);
 
   return {
     aiSummary: buildAiSummary(dashboard, recoveryOps),
@@ -604,12 +831,16 @@ export function assembleProfitPageView(
       opportunities: recoveryOps.slice(0, 5),
     },
     waterfall: buildProfitWaterfall(dashboard.primary),
-    confidenceCategories: buildConfidenceCategories(dashboard.confidence),
+    confidenceCategories,
+    confidenceExplanation: buildConfidenceExplanation(dashboard.confidence, confidenceCategories),
+    setupImpacts: buildSetupImpacts(dashboard.confidence),
     timelineCharts: buildProfitTimelineCharts(snapshot, dashboard),
     channelCards: buildChannelProfitCards(dashboard, snapshot),
-    enrichedProducts: enrichProductRows(dashboard, productAttribution),
+    enrichedProducts,
+    productCategories: buildProductProfitCategories(enrichedProducts),
     whyLosingMoney: buildWhyLosingMoney(dashboard, totalMonthlyRecovery),
     setupComplete: !dashboard.confidence.setupRequired,
     productAttribution,
+    cfoDecision: buildCfoDecision(dashboard, recoveryOps),
   };
 }

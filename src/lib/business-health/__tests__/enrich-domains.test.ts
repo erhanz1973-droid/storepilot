@@ -41,8 +41,8 @@ describe("enrichDomains", () => {
       opportunities: [],
     });
 
-    expect(domains[0]?.why).toContain("Advertising spend");
-    expect(domains[0]?.recommendedAction).toContain("Prospecting");
+    expect(domains[0]?.currentSituation).toContain("Advertising spend");
+    expect(domains[0]?.recommendedAction).toContain("gross margin");
     expect(domains[0]?.estimatedImpactMonthly).toBe(5420);
   });
 });

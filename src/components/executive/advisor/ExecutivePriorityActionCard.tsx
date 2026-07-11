@@ -4,6 +4,8 @@ import { RecommendationActionButtons } from "@/components/executive/Recommendati
 import { ExecutiveImpactTimeline } from "@/components/executive/advisor/ExecutiveImpactTimeline";
 import { ExecutiveAskAiPanel } from "@/components/executive/advisor/ExecutiveAskAiPanel";
 import { ExecutiveRecommendationHistory } from "@/components/executive/advisor/ExecutiveRecommendationHistory";
+import { EvidenceStrengthBadge } from "@/components/executive/advisor/EvidenceStrengthBadge";
+import { RecommendationWhyPanel } from "@/components/executive/advisor/RecommendationWhyPanel";
 import { EXEC_METRIC_ICONS, MetricLabel } from "@/components/executive/advisor/executive-metric-icons";
 
 function fmtImpact(n: number, label: string): string {
@@ -36,6 +38,8 @@ export function ExecutivePriorityActionCard({
 }) {
   if (!action) return null;
 
+  const meta = action.cardMeta;
+
   return (
     <section className={`exec-advisor-priority card ${compact ? "compact" : ""}`}>
       {!compact && (
@@ -47,7 +51,49 @@ export function ExecutivePriorityActionCard({
       {compact && <p className="exec-advisor-mode-action-label">One Recommended Action</p>}
       <h3 className="exec-featured-title">{action.title}</h3>
 
-      <div className="exec-advisor-priority-metrics">
+      <div className="exec-advisor-priority-metrics exec-advisor-card-meta-grid">
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.opportunity} className="muted">
+            Business Impact
+          </MetricLabel>
+          <strong>{meta.businessImpact}</strong>
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.profit} className="muted">
+            Financial Impact
+          </MetricLabel>
+          <strong className="exec-advisor-priority-impact">{meta.financialImpact}</strong>
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.time} className="muted">
+            Time Required
+          </MetricLabel>
+          <strong>{meta.timeRequired}</strong>
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.difficulty} className="muted">
+            Difficulty
+          </MetricLabel>
+          <strong>{meta.difficulty}</strong>
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.riskMedium} className="muted">
+            Risk Level
+          </MetricLabel>
+          <strong>{meta.riskLevel}</strong>
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.confidence} className="muted">
+            AI Evidence
+          </MetricLabel>
+          <EvidenceStrengthBadge evidence={action.evidence} />
+        </div>
+        <div className="exec-featured-metric">
+          <MetricLabel icon={EXEC_METRIC_ICONS.success} className="muted">
+            Time Until Results
+          </MetricLabel>
+          <strong>{meta.expectedTimeToResults}</strong>
+        </div>
         <div className="exec-featured-metric">
           <MetricLabel icon={EXEC_METRIC_ICONS.opportunity} className="muted">
             Est. Monthly Recovery
@@ -56,26 +102,6 @@ export function ExecutivePriorityActionCard({
             {fmtImpact(action.impactMonthly, action.impactLabel)}
           </strong>
         </div>
-        <div className="exec-featured-metric">
-          <MetricLabel icon={EXEC_METRIC_ICONS.time} className="muted">
-            Time Required
-          </MetricLabel>
-          <strong>{action.timeRequired}</strong>
-        </div>
-        <div className="exec-featured-metric">
-          <MetricLabel icon={EXEC_METRIC_ICONS.confidence} className="muted">
-            Confidence
-          </MetricLabel>
-          <strong>{action.confidencePct}%</strong>
-        </div>
-        {action.estimatedSuccessPct != null && (
-          <div className="exec-featured-metric">
-            <MetricLabel icon={EXEC_METRIC_ICONS.success} className="muted">
-              Est. Success
-            </MetricLabel>
-            <strong>{action.estimatedSuccessPct}%</strong>
-          </div>
-        )}
       </div>
 
       <div className={riskClass(action.risk)}>
@@ -108,18 +134,7 @@ export function ExecutivePriorityActionCard({
         </div>
       )}
 
-      {action.confidenceReasons.length > 0 && (
-        <div className="exec-advisor-confidence-block">
-          <p className="exec-advisor-confidence-label">
-            Confidence {action.confidencePct}% — Based on:
-          </p>
-          <ul className="exec-advisor-confidence-reasons">
-            {action.confidenceReasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <RecommendationWhyPanel explanation={meta.explanation} compact={compact} />
 
       <div className="exec-advisor-inaction">
         <p className="exec-advisor-inaction-label">What happens if I do nothing?</p>

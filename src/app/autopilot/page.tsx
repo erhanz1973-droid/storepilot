@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActionCenterList } from "@/components/autopilot/ActionCenterList";
 import { AutopilotHistoryPanel } from "@/components/autopilot/operations/AutopilotHistoryPanel";
 import { AutopilotRuleGroups } from "@/components/autopilot/operations/AutopilotRuleGroups";
 import { AutopilotSafetyPanel } from "@/components/autopilot/operations/AutopilotSafetyPanel";
@@ -35,6 +36,9 @@ export default async function AutopilotPage() {
       <div className="autopilot-ops-layout">
         <div className="autopilot-ops-main">
           <AutopilotStatusCard status={ops.status} />
+          {dashboard && (
+            <ActionCenterList actions={dashboard.actions} id="pending-actions" />
+          )}
           <AutopilotRuleGroups groups={ops.groups} />
         </div>
         <aside className="autopilot-ops-sidebar">
@@ -45,8 +49,8 @@ export default async function AutopilotPage() {
       </div>
 
       <p className="muted" style={{ marginTop: 20, fontSize: "0.9rem" }}>
-        <Link href="/decisions">Today&apos;s decisions</Link> ·{" "}
-        <Link href="/approvals">Approval Center</Link>
+        <Link href="/approvals">Approval Center</Link> ·{" "}
+        <Link href="/decisions">Decision Engine</Link>
       </p>
     </>
   );

@@ -1,6 +1,18 @@
+import { buildIntegrationReadiness, type IntegrationReadiness } from "@/lib/trust/integration-readiness";
 import { cache } from "react";
 import { buildExecutiveAnalytics } from "@/lib/analytics/executive";
-import { buildExecutiveAdvisorView } from "@/lib/analytics/executive-advisor";
+import { allowDemoData } from "@/lib/env/runtime";
+import { buildExecutiveAdvisorView, type ExecutiveAdvisorView } from "@/lib/analytics/executive-advisor";
+import { buildExecutiveUnifiedLayer } from "@/lib/analytics/executive-unified-layer";
+import { buildExecutiveCeoOsLayer, type ExecutiveCeoOsLayer } from "@/lib/analytics/build-executive-ceo-os";
+import { readExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
+import type { DailyAiPlaybook, ExecutiveFocusSummary } from "@/lib/analytics/ai-daily-playbook";
+import { getPeakOutfittersSnapshot } from "@/lib/demo/peak-outfitters";
+import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
+import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
+import { computeProfitDashboard } from "@/lib/profit/engine";
+import { logServerRenderError } from "@/lib/services/server-render-error";
+import { computeStoreHealthScore } from "@/lib/store-health/score";
 import { buildMarketingManagerView } from "@/lib/analytics/marketing-manager";
 import { buildProductAttributionDashboard } from "@/lib/attribution/product-engine";
 import { buildMarketingCampaigns } from "@/lib/analytics/marketing";
@@ -14,16 +26,18 @@ import { buildPredictiveInsights } from "@/lib/predictions/engine";
 import { buildInventoryForecasts } from "@/lib/autopilot/forecast";
 import { buildLiveMissionControlView, buildLiveKpiUpdate } from "@/lib/live/mission-control";
 import { buildLiveRawMetricsFast, liveDataFingerprint } from "@/lib/live/live-raw-metrics";
-import { getOrCompute } from "@/lib/performance/compute-cache";
+import { getOrCompute, fingerprintData } from "@/lib/performance/compute-cache";
 import { REFRESH_MS } from "@/lib/performance/refresh-schedules";
+import { profileServerAsync, logPerfSummary } from "@/lib/performance/server-profiler";
 import type { LiveMissionControlView } from "@/lib/live/mission-control-types";
 import { buildSalesManagerView } from "@/lib/analytics/sales-manager";
 import { buildTrafficManagerView } from "@/lib/analytics/traffic-manager";
-import { getCachedDashboard } from "@/lib/services/dashboard";
 import {
   getCachedActiveStoreId,
   getCachedStoreBundle,
 } from "@/lib/services/store-bundle";
+import { getCachedDashboard } from "@/lib/services/dashboard";
+import { getLiveExecutiveBundle } from "@/lib/executive/live/bundle";
 
 /** Light bundle — no full dashboard / recommendation sync. */
 async function buildLightAnalyticsContext() {
@@ -74,40 +88,195 @@ export async function buildAnalyticsContext() {
   return buildFullAnalyticsContext();
 }
 
-export async function buildExecutivePageData() {
-  const ctx = await buildFullAnalyticsContext();
-  const view = buildExecutiveAdvisorView({
-    snapshot: ctx.snapshot,
-    profitDashboard: ctx.profitDashboard,
-    trends: ctx.dashboard.storeManager?.trends ?? null,
-    decisions: ctx.dashboard.decisionCenter ?? [],
-    activityFeed: ctx.dashboard.activityFeed ?? [],
-    autopilot: ctx.dashboard.autopilotDashboard ?? null,
-    morningBrief: ctx.dashboard.morningBrief ?? null,
-    aiPerformance: ctx.dashboard.aiPerformance,
-    opportunityHistory: ctx.dashboard.opportunityHistory ?? {
-      total: 0,
-      detected: 0,
-      viewed: 0,
-      ignored: 0,
-      resolved: 0,
-      expired: 0,
-      actionRate: 0,
-    },
-    experienceInput: {
-      snapshot: ctx.snapshot,
-      profitDashboard: ctx.profitDashboard,
-      executiveSummary: ctx.dashboard.storeManager?.executiveSummary ?? null,
-      trends: ctx.dashboard.storeManager?.trends ?? null,
-      decisions: ctx.dashboard.decisionCenter ?? [],
-      opportunityFeed: ctx.dashboard.storeManager?.opportunityFeed ?? [],
-      priorityQueue: ctx.dashboard.storeManager?.priorityQueue ?? [],
-      morningBrief: ctx.dashboard.morningBrief ?? null,
-      predictiveInsights: ctx.dashboard.predictiveInsights ?? [],
-      storeHealth: ctx.dashboard.storeHealth ?? null,
-    },
+export type ExecutivePageData = ExecutiveAdvisorView & {
+  syncedAt: string;
+  dailyPlaybook: DailyAiPlaybook;
+  executiveFocus: ExecutiveFocusSummary;
+  ceoOs: ExecutiveCeoOsLayer;
+  integrationReadiness: IntegrationReadiness;
+};
+
+function attachCeoOsLayer(
+  page: Omit<ExecutivePageData, "ceoOs">,
+  decisions: import("@/lib/decisions/center").DecisionItem[],
+  previousVisit: import("@/lib/analytics/executive-visit").ExecutiveVisitSnapshot | null,
+): ExecutivePageData {
+  const ceoOs = buildExecutiveCeoOsLayer({
+    priorityAction: page.priorityAction,
+    executiveFocus: page.executiveFocus,
+    dailyPlaybook: page.dailyPlaybook,
+    aiBehavior: page.aiBehavior,
+    decisions,
+    executiveMode: page.executiveMode,
+    previousVisit,
   });
-  return { ...view, syncedAt: ctx.snapshot.syncedAt };
+  return { ...page, ceoOs };
+}
+
+function attachUnifiedLayer(
+  view: ExecutiveAdvisorView,
+  snapshot: import("@/lib/connectors/types").StoreSnapshot,
+  profitDashboard: import("@/lib/profit/types").ProfitDashboard | null | undefined,
+  syncedAt: string,
+  businessProfile?: import("@/lib/business-model/types").MerchantBusinessProfile | null,
+): Omit<ExecutivePageData, "ceoOs"> {
+  const unified = buildExecutiveUnifiedLayer({
+    snapshot,
+    profitDashboard,
+    storeHealth: view.storeHealth,
+    topThreatLabel: view.executiveMode.biggestThreat.label,
+    businessProfile,
+  });
+  const integrationReadiness = buildIntegrationReadiness({ snapshot });
+  return {
+    ...view,
+    syncedAt,
+    dailyPlaybook: unified.dailyPlaybook,
+    executiveFocus: unified.executiveFocus,
+    integrationReadiness,
+  };
+}
+
+const EMPTY_OPPORTUNITY_HISTORY = {
+  total: 0,
+  detected: 0,
+  viewed: 0,
+  ignored: 0,
+  resolved: 0,
+  expired: 0,
+  actionRate: 0,
+} as const;
+
+/** Demo fallback when live store/dashboard loading fails in production. */
+export async function buildDemoExecutivePageData(): Promise<ExecutivePageData> {
+  const scenarioId = await getActiveDemoScenarioId();
+  const snapshot = buildDemoSnapshot(scenarioId);
+  const profitDashboard = computeProfitDashboard(snapshot, []);
+  const storeHealth = computeStoreHealthScore({
+    snapshot,
+    profitDashboard,
+    productIntelligence: null,
+    attributionDashboard: null,
+    activeRecommendations: [],
+  });
+  const experienceInput = {
+    snapshot,
+    profitDashboard,
+    executiveSummary: null,
+    trends: null,
+    decisions: [],
+    opportunityFeed: [],
+    priorityQueue: [],
+    morningBrief: null,
+    predictiveInsights: [],
+    storeHealth,
+  };
+  const view = buildExecutiveAdvisorView({
+    snapshot,
+    profitDashboard,
+    trends: null,
+    decisions: [],
+    activityFeed: [],
+    autopilot: null,
+    morningBrief: null,
+      opportunityHistory: EMPTY_OPPORTUNITY_HISTORY,
+      experienceInput,
+      businessProfile: null,
+    });
+  const base = attachUnifiedLayer(view, snapshot, profitDashboard, snapshot.syncedAt);
+  const previousVisit = await readExecutiveVisitSnapshot();
+  return attachCeoOsLayer(base, [], previousVisit);
+}
+
+export async function buildExecutivePageData(): Promise<ExecutivePageData> {
+  try {
+    const timings: Record<string, number> = {};
+    const t0 = performance.now();
+
+    const [bundle, live] = await profileServerAsync("executive-bundle+live", async () =>
+      Promise.all([getCachedStoreBundle(), getLiveExecutiveBundle()]),
+    );
+    timings["bundle+live"] = Math.round(performance.now() - t0);
+
+    const useLiveExtras = live != null && live.storeId === bundle.storeId;
+    const fingerprint = fingerprintData({
+      syncedAt: bundle.snapshot.syncedAt,
+      storeId: bundle.storeId,
+      liveShop: live?.shopDomain ?? null,
+    });
+
+    const base = await getOrCompute(
+      `executive-page:${bundle.storeId}`,
+      fingerprint,
+      REFRESH_MS.executiveDashboard,
+      async () => {
+        const dashStart = performance.now();
+        const dashboard = await getCachedDashboard(bundle.storeId, {
+          snapshotOverride: bundle.snapshot,
+          liveExtraOpportunities: useLiveExtras ? live.liveOpportunities : undefined,
+          liveAnalyzerOutputs: useLiveExtras ? live.liveAnalyzerOutputs : undefined,
+          hybridDataSources: useLiveExtras ? live.dataSources : undefined,
+          readOnly: true,
+          skipRecommendationSync: true,
+        });
+        timings.dashboard = Math.round(performance.now() - dashStart);
+
+        const advisorStart = performance.now();
+        const view = buildExecutiveAdvisorView({
+          snapshot: bundle.snapshot,
+          profitDashboard: bundle.profitDashboard,
+          trends: dashboard.storeManager?.trends ?? null,
+          decisions: dashboard.decisionCenter ?? [],
+          activityFeed: dashboard.activityFeed ?? [],
+          autopilot: dashboard.autopilotDashboard ?? null,
+          morningBrief: dashboard.morningBrief ?? null,
+          aiPerformance: dashboard.aiPerformance,
+          opportunityHistory: dashboard.opportunityHistory ?? EMPTY_OPPORTUNITY_HISTORY,
+          experienceInput: {
+            snapshot: bundle.snapshot,
+            profitDashboard: bundle.profitDashboard,
+            executiveSummary: dashboard.storeManager?.executiveSummary ?? null,
+            trends: dashboard.storeManager?.trends ?? null,
+            decisions: dashboard.decisionCenter ?? [],
+            opportunityFeed: dashboard.storeManager?.opportunityFeed ?? [],
+            priorityQueue: dashboard.storeManager?.priorityQueue ?? [],
+            morningBrief: dashboard.morningBrief ?? null,
+            predictiveInsights: dashboard.predictiveInsights ?? [],
+            storeHealth: dashboard.storeHealth ?? null,
+            metricSourceLabels: useLiveExtras ? live.dataSources.metricLabels : undefined,
+          },
+          businessProfile: dashboard.businessProfile,
+        });
+        timings["executive-advisor"] = Math.round(performance.now() - advisorStart);
+
+        const result = attachUnifiedLayer(
+          view,
+          bundle.snapshot,
+          bundle.profitDashboard,
+          bundle.snapshot.syncedAt,
+          dashboard.businessProfile,
+        );
+        timings.total = Math.round(performance.now() - t0);
+        logPerfSummary("Executive Dashboard", timings);
+        return result;
+      },
+    );
+
+    const dashboard = await getCachedDashboard(bundle.storeId, {
+      snapshotOverride: bundle.snapshot,
+      readOnly: true,
+      skipRecommendationSync: true,
+    });
+    const decisions = dashboard.decisionCenter ?? [];
+    const previousVisit = await readExecutiveVisitSnapshot();
+    return attachCeoOsLayer(base, decisions, previousVisit);
+  } catch (error) {
+    logServerRenderError("buildExecutivePageData", error);
+    if (allowDemoData()) {
+      return await buildDemoExecutivePageData();
+    }
+    throw error;
+  }
 }
 
 export async function buildMarketingPageData() {
@@ -124,7 +293,11 @@ export async function buildMarketingPageData() {
     productAttribution,
     decisions: ctx.dashboard.decisionCenter ?? [],
   });
-  return { ...view, syncedAt: ctx.snapshot.syncedAt };
+  const integrationReadiness = buildIntegrationReadiness({
+    snapshot: ctx.snapshot,
+    campaigns: view.campaigns,
+  });
+  return { ...view, syncedAt: ctx.snapshot.syncedAt, integrationReadiness };
 }
 
 export async function buildTrafficPageData() {

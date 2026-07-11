@@ -5,7 +5,8 @@ import { DecisionCard } from "@/components/decisions/DecisionCard";
 import { MerchantModeSelector } from "@/components/decisions/MerchantModeSelector";
 import { ProfitStrategyPanel } from "@/components/decisions/ProfitStrategyPanel";
 import { RecommendationValidationBlocker } from "@/components/recommendations/RecommendationEvidencePanel";
-import { buildDashboard } from "@/lib/services/dashboard";
+import { buildReadOnlyDashboard } from "@/lib/services/dashboard";
+import { getCachedStoreBundle } from "@/lib/services/store-bundle";
 import { markRecommendationsDisplayed } from "@/lib/recommendations/intelligence/lifecycle";
 import { resolveActiveStoreId } from "@/lib/store/context";
 import { buildProfitDecisionPlan } from "@/lib/services/profit-decisions";
@@ -15,8 +16,9 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function DecisionsPage() {
+  const bundle = await getCachedStoreBundle();
   const [dashboard, profitPlan, merchantMode] = await Promise.all([
-    buildDashboard(),
+    buildReadOnlyDashboard(bundle.storeId, bundle.snapshot),
     buildProfitDecisionPlan(),
     resolveMerchantMode(),
   ]);
@@ -73,8 +75,9 @@ export default async function DecisionsPage() {
       {items.length === 0 ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
-            No open decisions — your store looks healthy.{" "}
-            <Link href="/">Back to today&apos;s actions</Link>
+            No open strategy comparisons right now. Pending autopilot actions live on{" "}
+            <Link href="/autopilot#pending-actions">Autopilot</Link> and{" "}
+            <Link href="/approvals">Approval Center</Link>.
           </p>
         </div>
       ) : (

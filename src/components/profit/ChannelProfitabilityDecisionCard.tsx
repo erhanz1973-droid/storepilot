@@ -141,8 +141,8 @@ export function ChannelProfitabilityDecisionCard({ card }: { card: ChannelProfit
       </div>
 
       <div className="ch-profit-action">
-        <span className="ch-profit-section-label">Recommendation</span>
-        <p className="ch-profit-action-text">{card.recommendedAction}</p>
+        <span className="ch-profit-section-label">Decision</span>
+        <p className="ch-profit-action-text ch-profit-executive-decision">{card.recommendedAction}</p>
         {card.expectedImpactMonthly > 0 && (
           <p className="ch-profit-impact">
             <span className="muted">Expected Impact</span>

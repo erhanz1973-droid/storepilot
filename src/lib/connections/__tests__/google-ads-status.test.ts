@@ -15,7 +15,7 @@ describe("resolveGoogleAdsConnectionPresentation", () => {
         },
       ],
     });
-    expect(state.status).toBe("connected");
+    expect(state.status).toBe("connected_warning");
     expect(state.statusLabel).toContain("sync pending");
     expect(state.syncFailed).toBe(false);
     expect(state.primaryAction).toBe("manage");
@@ -52,8 +52,8 @@ describe("resolveGoogleAdsConnectionPresentation", () => {
       ],
     });
     expect(state.syncFailed).toBe(true);
-    expect(state.statusLabel).toBe("Needs attention");
-    expect(state.errorMessage).toContain("PERMISSION_DENIED");
+    expect(state.statusLabel).toBe("Sync Failed");
+    expect(state.errorMessage).toContain("Permission denied");
   });
 
   it("treats zero campaigns after successful sync as Connected", () => {

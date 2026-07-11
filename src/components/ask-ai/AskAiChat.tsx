@@ -26,8 +26,8 @@ function buildWelcomeMessage(recommendationTitle?: string): AiChatMessage {
   return {
     id: "welcome",
     role: "assistant",
-    content:
-      "I'm your StorePilot AI Copilot — your daily operations manager. I prioritize what to do next based on your store, ads, and inventory.\n\nAsk me to explain any recommendation, dig into a campaign, or explore what-if scenarios. Every answer includes evidence and confidence.",
+      content:
+      "Think of me as your Head of Growth on call. I'll tell you what to do first, why it matters, what it's worth, and what happens if you wait.\n\nAsk about campaigns, ROAS, inventory, or any recommendation — I'll answer with a clear action, not a data dump.",
     createdAt: new Date().toISOString(),
   };
 }
@@ -124,7 +124,11 @@ export function AskAiChat({
       <div className="ask-ai-chat card">
         <div className="chat-messages">
           {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              onFollowUp={(q) => void sendMessage(q)}
+            />
           ))}
           {loading && (
             <div className="chat-message chat-message-assistant">

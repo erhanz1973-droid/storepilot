@@ -7,18 +7,16 @@ import { mergeIntegrationIntoSnapshot } from "@/lib/integrations/engine";
 import { describe, expect, it } from "vitest";
 
 describe("buildFunnelPageView", () => {
-  it("shows readiness mode when GA4 is not connected", () => {
+  it("builds commerce-only optimization workspace when GA4 is not connected", () => {
     const view = buildFunnelPageView({ snapshot: PEAK_OUTFITTERS_BASE_SNAPSHOT });
 
-    expect(view.mode).toBe("readiness");
-    expect(view.ga4Status).toBe("unavailable");
+    expect(view.dataTier).toBe("commerce_only");
     expect(view.funnelSteps).toHaveLength(0);
-    expect(view.aiInsights).toHaveLength(0);
+    expect(view.optimizationActions.length).toBeGreaterThan(0);
     expect(view.availableMetrics.some((m) => m.id === "orders")).toBe(true);
-    expect(view.previewStepLabels).toHaveLength(5);
   });
 
-  it("does not fabricate funnel steps without verified GA4 events", () => {
+  it("shows session-level funnel without fabricating step-level events", () => {
     const snapshot = {
       ...PEAK_OUTFITTERS_BASE_SNAPSHOT,
       ga4Snapshot: {
@@ -33,26 +31,28 @@ describe("buildFunnelPageView", () => {
 
     const view = buildFunnelPageView({ snapshot });
 
-    expect(view.ga4Status).toBe("estimated");
-    expect(view.mode).toBe("readiness");
-    expect(view.funnelSteps).toHaveLength(0);
+    expect(view.dataTier).toBe("session_level");
+    expect(view.funnelSteps).toHaveLength(2);
+    expect(view.funnelSteps[0]?.label).toBe("Sessions");
+    expect(view.optimizationActions.length).toBeGreaterThan(0);
   });
 
-  it("shows full funnel when verified GA4 events exist", () => {
+  it("shows step-level funnel when verified GA4 events exist", () => {
     const snapshot = mergeIntegrationIntoSnapshot(getPeakOutfittersSnapshot());
     const profitDashboard = computeProfitDashboard(snapshot, [])!;
     const attribution = buildAttributionDashboard(snapshot, profitDashboard)!;
     const view = buildFunnelPageView({ snapshot, attribution, profitDashboard });
 
-    expect(view.mode).toBe("full");
-    expect(view.ga4Status).toBe("connected");
+    expect(view.dataTier).toBe("step_level");
     expect(view.funnelSteps).toHaveLength(5);
     expect(view.aiInsights.length).toBeGreaterThan(0);
     expect(view.confidence).toBe("verified");
+    expect(view.bottleneck).not.toBeNull();
   });
 
-  it("never generates AI insights in readiness mode", () => {
+  it("always surfaces optimization actions instead of setup messaging", () => {
     const view = buildFunnelPageView({ snapshot: PEAK_OUTFITTERS_BASE_SNAPSHOT });
-    expect(view.aiInsights).toEqual([]);
+    expect(view.optimizationActions.length).toBeGreaterThan(0);
+    expect(view.bottleneck).not.toBeNull();
   });
 });

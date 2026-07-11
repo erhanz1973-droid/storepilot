@@ -14,16 +14,7 @@ export function MerchantModeWeightsPanel({ mode, weights }: Props) {
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {weights.slice(0, 5).map((w) => (
-          <span
-            key={w.label}
-            style={{
-              fontSize: "0.78rem",
-              padding: "4px 10px",
-              borderRadius: 8,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
-            }}
-          >
+          <span key={w.label} className="merchant-mode-weight-chip">
             {w.label} <strong>{w.weightPct}%</strong>
           </span>
         ))}

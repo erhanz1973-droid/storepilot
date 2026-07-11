@@ -3,6 +3,14 @@ import type { BusinessRiskAssessment, BusinessRiskCategory } from "@/lib/insight
 import type { Opportunity } from "@/lib/types";
 import type { Recommendation } from "@/lib/types";
 import type { StoreHealthFactor } from "@/lib/store-health/score";
+import {
+  buildCurrentSituation,
+  buildExpectedOutcome,
+  buildInactionConsequence,
+  buildWhyItMatters,
+  financialImpactType,
+  pickDomainAction,
+} from "./domain-guidance";
 import type {
   BusinessHealthDomain,
   BusinessHealthStatus,
@@ -51,8 +59,10 @@ export function statusFromScore(score: number, limited = false): BusinessHealthS
   return "critical";
 }
 
-function formatImpact(amount: number): string {
-  if (amount <= 0) return "Prevent revenue loss";
+function formatImpact(amount: number, domainId: string): string {
+  if (amount <= 0) {
+    return domainId === "inventory" ? "Prevent stockout revenue loss" : "Prevent revenue loss";
+  }
   return `+$${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}/month`;
 }
 
@@ -108,8 +118,11 @@ export function enrichDomains(input: {
   activeRecs: Recommendation[];
   opportunities: Opportunity[];
   previousFactorScores?: Partial<Record<StoreHealthFactor, number>>;
+  customersLimited?: boolean;
 }): BusinessHealthDomain[] {
   const riskByCategory = new Map(input.risk.categories.map((c) => [c.category, c]));
+  const customersLimited = input.customersLimited ?? false;
+  const usedActions = new Set<string>();
 
   return input.baseDomains.map((base) => {
     const riskCat = DOMAIN_RISK[base.id];
@@ -117,33 +130,54 @@ export function enrichDomains(input: {
     const rec = pickRecForDomain(base.id, input.activeRecs);
     const opp = pickOppForDomain(base.id, input.opportunities);
 
-    const playbookAction =
-      riskCat && input.risk.recommendationSteps.length > 0
-        ? input.risk.recommendationSteps[0]?.action
-        : "Review this area in Analytics for specific next steps.";
+    let recommendedAction = pickDomainAction(
+      base.id,
+      input.risk,
+      rec,
+      opp,
+      customersLimited,
+    );
 
-    const recommendedAction = rec?.actionLabel ?? rec?.title ?? opp?.title ?? playbookAction;
+    if (usedActions.has(recommendedAction.toLowerCase())) {
+      const riskCatActions = input.risk.recommendationSteps;
+      const alt = riskCatActions.find(
+        (s) => !usedActions.has(s.action.toLowerCase()) && DOMAIN_RISK[base.id],
+      );
+      if (alt) recommendedAction = alt.action;
+    }
+    usedActions.add(recommendedAction.toLowerCase());
+
     const impactMonthly =
       (rec ? parseRevenueImpact(rec.expectedImpact) : 0) ||
       opp?.estimatedMonthlyNetProfitImpact ||
       riskRow?.financialExposure[0]?.amountMonthly ||
       null;
 
-    const why =
-      riskRow && riskRow.score >= 50
-        ? riskRow.summary
-        : base.detail;
+    const status = statusFromScore(base.score, base.limited);
+    const currentSituation = buildCurrentSituation(
+      base.id,
+      base.detail,
+      input.risk,
+      customersLimited,
+    );
+    const whyItMatters = buildWhyItMatters(base.id, input.risk, customersLimited);
+    const expectedOutcome = buildExpectedOutcome(base.id, impactMonthly);
 
     return {
       id: base.id,
       label: base.label,
       score: base.score,
-      status: statusFromScore(base.score, base.limited),
-      why,
+      status,
+      currentSituation,
+      whyItMatters,
       recommendedAction,
-      estimatedImpact: impactMonthly != null ? formatImpact(impactMonthly) : null,
+      expectedOutcome,
+      financialImpactType: financialImpactType(base.id),
+      estimatedImpact: impactMonthly != null ? formatImpact(impactMonthly, base.id) : null,
       estimatedImpactMonthly: impactMonthly,
+      inactionConsequence: buildInactionConsequence(base.id, impactMonthly, status),
       trend: domainTrend(base.id, base.score, input.previousFactorScores),
+      why: currentSituation,
     };
   });
 }
@@ -151,7 +185,11 @@ export function enrichDomains(input: {
 export function findPrimaryIssue(domains: BusinessHealthDomain[]): string {
   const sorted = [...domains].sort((a, b) => a.score - b.score);
   const worst = sorted.find((d) => d.status === "critical") ?? sorted[0];
-  return worst?.label ?? "Profitability";
+  if (!worst) return "Profitability";
+  if (worst.currentSituation) {
+    return `${worst.label}: ${worst.currentSituation.split(".")[0]}.`;
+  }
+  return worst.label;
 }
 
 export function findBiggestOpportunity(

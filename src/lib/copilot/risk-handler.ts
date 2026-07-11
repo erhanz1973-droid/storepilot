@@ -4,26 +4,15 @@ import type { CopilotDataBundle } from "./data";
 import type { CopilotDataSource, CopilotStructuredResponse } from "./types";
 
 function buildSummary(assessment: BusinessRiskAssessment): string {
-  const { primaryRisk, secondaryRisk, rankingExplanation } = assessment;
-  const lines = [`Biggest risk: ${primaryRisk.title}. ${primaryRisk.reason}`];
-
-  if (secondaryRisk) {
-    lines.push(`Secondary risk: ${secondaryRisk.title} — ${secondaryRisk.reason}`);
-  }
-  if (rankingExplanation) {
-    lines.push(rankingExplanation);
-  }
-
-  return lines.join(" ");
+  return assessment.executiveBriefing;
 }
 
 function formatExposure(assessment: BusinessRiskAssessment): string {
-  if (assessment.estimatedExposure.items.length === 0) {
-    return `Business impact: ${assessment.primaryRisk.businessImpact}`;
+  const exposure = assessment.primaryRisk.estimatedExposureMonthly;
+  if (exposure > 0) {
+    return `Estimated financial exposure: $${exposure.toLocaleString()}/month · Likelihood ${assessment.primaryRisk.probabilityPct}%`;
   }
-  return assessment.estimatedExposure.items
-    .map((i) => `${i.label}: ~$${i.amountMonthly.toLocaleString()}/month`)
-    .join(" · ");
+  return `Likelihood ${assessment.primaryRisk.probabilityPct}% · ${assessment.primaryRisk.timeHorizon}`;
 }
 
 export function buildCopilotRiskResponse(

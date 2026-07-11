@@ -9,6 +9,12 @@ function formatTime(iso: string): string {
   });
 }
 
+function formatDuration(hours: number): string {
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round((hours / 24) * 10) / 10;
+  return `${days}d`;
+}
+
 export function JourneyTimeline({ journeys }: { journeys: CustomerJourney[] }) {
   if (journeys.length === 0) {
     return (
@@ -31,8 +37,42 @@ export function JourneyTimeline({ journeys }: { journeys: CustomerJourney[] }) {
             <div className="journey-header">
               <strong>${j.orderValue.toLocaleString()}</strong>
               <span className="muted">
-                {j.isNewCustomer ? "New customer" : "Returning"} · {j.journeyLengthDays}d journey
+                {j.customerType} customer · {j.journeyLengthDays}d journey
               </span>
+            </div>
+            <dl className="journey-metrics-grid">
+              <div>
+                <dt>Revenue</dt>
+                <dd>${j.orderValue.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>Journey Length</dt>
+                <dd>{j.journeyLengthDays} days</dd>
+              </div>
+              <div>
+                <dt>Touchpoints</dt>
+                <dd>{j.touchpointCount}</dd>
+              </div>
+              <div>
+                <dt>Time to Conversion</dt>
+                <dd>{formatDuration(j.timeToConversionHours)}</dd>
+              </div>
+              <div>
+                <dt>Contribution</dt>
+                <dd>{j.revenueContributionPct}%</dd>
+              </div>
+              <div>
+                <dt>Customer Type</dt>
+                <dd>{j.customerType}</dd>
+              </div>
+            </dl>
+            <div className="journey-path-chain">
+              {j.touchpoints.map((tp, idx) => (
+                <span key={tp.id} className="journey-path-step">
+                  {idx > 0 && <span className="attribution-cross-module-arrow">↓</span>}
+                  <span className="journey-source">{tp.source || tp.channelLabel}</span>
+                </span>
+              ))}
             </div>
             <ol className="journey-touchpoints">
               {j.touchpoints.map((tp) => (

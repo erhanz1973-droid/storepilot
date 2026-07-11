@@ -12,6 +12,7 @@ import {
   domainStatusToLegacyDb,
 } from "./types";
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
+import { DEMO_STORE_ID } from "@/lib/types";
 
 type DbRow = {
   id: string;
@@ -115,6 +116,12 @@ function eventRowToEvent(row: DbEventRow): RecommendationEvent {
   };
 }
 
+function normalizeConfidence(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  if (value > 1) return Math.min(1, value / 100);
+  return Math.max(0, Math.min(1, value));
+}
+
 function inputToRow(
   input: CreateRecommendationInput,
   existing?: DbRow,
@@ -134,7 +141,7 @@ function inputToRow(
     reason: input.reason,
     priority: input.priority,
     expected_impact: input.expectedImpact,
-    confidence_score: input.confidence,
+    confidence_score: normalizeConfidence(input.confidence),
     validation_score: input.validationScore ?? null,
     estimated_revenue_gain: input.estimatedRevenueGain ?? null,
     estimated_cost_saving: input.estimatedCostSaving ?? null,
@@ -188,12 +195,65 @@ function buildLegacyUpsertPayload(row: DbRow): Record<string, unknown> {
   };
 }
 
+function isNoRowsReturnedError(message: string): boolean {
+  return /0 rows|no rows|multiple \(or no\) rows returned|PGRST116/i.test(message);
+}
+
 function buildFullUpsertPayload(row: DbRow): Record<string, unknown> {
   return {
-    ...row,
+    id: row.id,
+    store_id: row.store_id,
+    dedupe_key: row.dedupe_key,
+    category: row.category,
+    recommendation_type: row.recommendation_type,
+    title: row.title,
+    description: row.description,
+    reason: row.reason,
+    priority: row.priority,
+    expected_impact: row.expected_impact,
+    confidence_score: row.confidence_score,
+    validation_score: row.validation_score,
+    estimated_revenue_gain: row.estimated_revenue_gain,
+    estimated_cost_saving: row.estimated_cost_saving,
+    evidence: row.evidence,
+    evidence_json: row.evidence_json,
+    entity_type: row.entity_type,
+    entity_id: row.entity_id,
+    status: row.status,
+    snoozed_until: row.snoozed_until,
+    approved_at: row.approved_at,
+    implemented_at: row.implemented_at,
+    completed_at: row.completed_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
     action_label: "Review",
     actions: [],
   };
+}
+
+async function readRecommendationRow(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  row: DbRow,
+): Promise<DbRow | null> {
+  const { data: byKey, error: keyError } = await supabase
+    .from("recommendations")
+    .select("*")
+    .eq("store_id", row.store_id)
+    .eq("dedupe_key", row.dedupe_key)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (keyError) throw new Error(keyError.message);
+  if (byKey?.[0]) return byKey[0] as DbRow;
+
+  const { data: byId, error: idError } = await supabase
+    .from("recommendations")
+    .select("*")
+    .eq("id", row.id)
+    .maybeSingle();
+
+  if (idError) throw new Error(idError.message);
+  return byId ? (byId as DbRow) : null;
 }
 
 function isMissingColumnError(message: string): boolean {
@@ -209,6 +269,79 @@ function isMissingTableError(message: string): boolean {
 }
 
 let legacySchemaWarned = false;
+
+async function ensureStoreExists(storeId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+
+  const { data, error: readError } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("id", storeId)
+    .maybeSingle();
+
+  if (readError) throw new Error(readError.message);
+  if (data) return;
+
+  const { error: insertError } = await supabase.from("stores").insert({
+    id: storeId,
+    name: storeId === DEMO_STORE_ID ? "Demo Store" : "Store",
+    shopify_domain: storeId === DEMO_STORE_ID ? "demo.storepilot.ai" : null,
+  });
+
+  if (insertError && !/duplicate key|unique/i.test(insertError.message)) {
+    throw new Error(`Failed to ensure store exists: ${insertError.message}`);
+  }
+}
+
+async function upsertRecommendationRow(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  row: DbRow,
+): Promise<DbRow> {
+  const attempt = async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase
+      .from("recommendations")
+      .upsert(payload, { onConflict: "store_id,dedupe_key" })
+      .select("*")
+      .single();
+    return { data: data as DbRow | null, error };
+  };
+
+  let { data, error } = await attempt(buildFullUpsertPayload(row));
+
+  if (
+    error &&
+    (isMissingColumnError(error.message) ||
+      isInvalidEnumError(error.message))
+  ) {
+    if (!legacySchemaWarned && isMissingColumnError(error.message)) {
+      legacySchemaWarned = true;
+      console.warn(
+        "[StorePilot] recommendations table is missing extended columns. " +
+          "Run supabase/migrations/20260710120000_pilot_recommendations_catchup.sql. " +
+          "Falling back to legacy upsert payload.",
+      );
+    }
+    ({ data, error } = await attempt(buildLegacyUpsertPayload(row)));
+  }
+
+  if (!error && data) return data;
+
+  if (!error || isNoRowsReturnedError(error.message)) {
+    const reread = await readRecommendationRow(supabase, row);
+    if (reread) return reread;
+  }
+
+  if (error) {
+    throw new Error(`Failed to upsert recommendation: ${error.message}`);
+  }
+
+  console.warn(
+    "[StorePilot] Recommendation upsert returned no row; using in-memory payload for",
+    row.dedupe_key,
+  );
+  return row;
+}
 
 export function clearRecommendationMemoryForTests(): void {
   memoryRecords.clear();
@@ -356,29 +489,9 @@ export class RecommendationRepository {
       row.created_at = existing.createdAt;
     }
 
-    let { error } = await supabase
-      .from("recommendations")
-      .upsert(buildFullUpsertPayload(row), { onConflict: "store_id,dedupe_key" });
-
-    if (error && isMissingColumnError(error.message)) {
-      if (!legacySchemaWarned) {
-        legacySchemaWarned = true;
-        console.warn(
-          "[StorePilot] recommendations table is missing extended columns. " +
-            "Run supabase/migrations/20260710120000_pilot_recommendations_catchup.sql. " +
-            "Falling back to legacy upsert payload.",
-        );
-      }
-      ({ error } = await supabase
-        .from("recommendations")
-        .upsert(buildLegacyUpsertPayload(row), { onConflict: "store_id,dedupe_key" }));
-    }
-
-    if (error) throw new Error(`Failed to upsert recommendation: ${error.message}`);
-
-    const record = await this.findByDedupeKey(input.storeId, input.dedupeKey);
-    if (!record) throw new Error("Upsert succeeded but record not found");
-    return { record, created: !existing };
+    await ensureStoreExists(input.storeId);
+    const data = await upsertRecommendationRow(supabase, row);
+    return { record: rowToRecord(data), created: !existing };
   }
 
   async upsertBatch(

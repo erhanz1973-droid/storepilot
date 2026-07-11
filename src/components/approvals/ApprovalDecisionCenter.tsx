@@ -1,11 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { AiTrackRecordCard } from "@/components/approvals/AiTrackRecordCard";
 import { DecisionMemoCard } from "@/components/approvals/DecisionMemoCard";
 import { ExecutiveDecisionBriefingCard } from "@/components/approvals/ExecutiveDecisionBriefingCard";
+import { SimilarDecisionsCard } from "@/components/approvals/SimilarDecisionsCard";
 import { RecommendationCard } from "@/components/RecommendationCard";
 import { StoreStatusCard } from "@/components/store-status/StoreStatusCard";
 import type { DecisionCenterView } from "@/lib/approvals/decision-center-types";
+import Link from "next/link";
+
+type DecisionCenterViewWithPlan = DecisionCenterView & {
+  planUsage?: import("@/lib/billing/types").CampaignEntitlements;
+  lockedDecisionCount?: number;
+  lockedDecisions?: import("@/lib/billing/apply-approval-entitlements").DecisionMemoWithPlan[];
+};
 
 function LifecycleSection({
   title,
@@ -41,8 +50,8 @@ function LifecycleSection({
   );
 }
 
-export function ApprovalDecisionCenter({ view }: { view: DecisionCenterView }) {
-  const { briefing, primaryDecision, additionalDecisions, presentation } = view;
+export function ApprovalDecisionCenter({ view }: { view: DecisionCenterViewWithPlan }) {
+  const { briefing, primaryDecision, additionalDecisions, presentation, trackRecord } = view;
   const [activeIndex, setActiveIndex] = useState(0);
 
   const allDecisions = primaryDecision
@@ -53,6 +62,12 @@ export function ApprovalDecisionCenter({ view }: { view: DecisionCenterView }) {
   return (
     <>
       <ExecutiveDecisionBriefingCard briefing={briefing} />
+
+      {trackRecord && <AiTrackRecordCard record={trackRecord} />}
+
+      {view.similarDecisions.length > 0 && (
+        <SimilarDecisionsCard decisions={view.similarDecisions} />
+      )}
 
       {!presentation.hasActionableOpportunities && presentation.storeStatus ? (
         <StoreStatusCard status={presentation.storeStatus} />
@@ -113,6 +128,29 @@ export function ApprovalDecisionCenter({ view }: { view: DecisionCenterView }) {
           )}
         </section>
       ) : null}
+
+      {(view.lockedDecisionCount ?? 0) > 0 && view.lockedDecisions && view.planUsage && (
+        <section className="card plan-locked-decisions" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>
+            Locked Recommendations ({view.lockedDecisionCount})
+          </h3>
+          <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.9rem" }}>
+            Visible but locked on Free — approval workflow available for{" "}
+            <strong>{view.planUsage.unlockedCampaignName}</strong> only.
+          </p>
+          <ul className="plan-locked-decision-list">
+            {view.lockedDecisions.map((d) => (
+              <li key={d!.card.key} className="plan-locked-decision-item">
+                <span className="adv-lock-label">🔒 {d!.title}</span>
+                <span className="muted">{d!.planLockMessage}</span>
+              </li>
+            ))}
+          </ul>
+          <Link href="/settings#plan" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>
+            Upgrade to {view.planUsage.upgradePlanLabel}
+          </Link>
+        </section>
+      )}
 
       <LifecycleSection
         title={`Ready to Implement (${presentation.awaitingImplementation.length})`}

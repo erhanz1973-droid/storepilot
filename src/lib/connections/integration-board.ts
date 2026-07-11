@@ -3,6 +3,7 @@ import { buildIntegrationHealth } from "@/lib/integrations/health";
 import { getDataSourceStatuses } from "@/lib/connectors/registry";
 import { isGoogleAdsOAuthConfigured } from "@/lib/google-ads/oauth";
 import { isGa4OAuthConfigured } from "@/lib/ga4/oauth";
+import { buildGa4FunnelOnboardingSteps } from "@/lib/ga4/onboarding";
 import { isMetaOAuthConfigured } from "@/lib/meta/oauth";
 import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 import { shopifyInstallationMissingWriteScopes } from "@/lib/shopify/scopes";
@@ -11,7 +12,14 @@ import { getConnectionsView } from "@/lib/services/connections";
 import { resolveActiveStoreId } from "@/lib/store/context";
 import { listGoogleAdsInstallationsForStore } from "@/lib/db/google-ads";
 import { listGa4Installations } from "@/lib/db/ga4";
-import { resolveGoogleAdsConnectionPresentation } from "@/lib/connections/google-ads-status";
+import {
+  presentationShowsAsConnected,
+  resolveGa4ConnectionPresentation,
+  resolveGoogleAdsConnectionPresentationV2,
+  resolveMetaConnectionPresentation,
+  resolveShopifyConnectionPresentation,
+  type ConnectionPresentation,
+} from "@/lib/connections/connection-state";
 import type { ConnectionCategory } from "./catalog";
 
 export type {
@@ -81,25 +89,71 @@ function formatCurrency(n: number): string {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
-function statusPresentation(
-  planned: boolean,
-  connected: boolean,
-  oauthConfigured: boolean,
-  errored: boolean,
-): { status: IntegrationConnectionStatus; statusLabel: string; primaryAction: IntegrationBoardItem["primaryAction"] } {
-  if (planned) {
-    return { status: "coming_soon", statusLabel: "Coming soon", primaryAction: "none" };
-  }
-  if (errored) {
-    return { status: "error", statusLabel: "Needs attention", primaryAction: "reconnect" };
-  }
-  if (connected) {
-    return { status: "connected", statusLabel: "Connected", primaryAction: "manage" };
-  }
-  if (oauthConfigured) {
-    return { status: "authorization_required", statusLabel: "Authorization required", primaryAction: "connect" };
-  }
-  return { status: "not_connected", statusLabel: "Not connected", primaryAction: "connect" };
+function boardItemFromPresentation(
+  def: PageIntegrationDef,
+  pres: ConnectionPresentation,
+  extras: Omit<IntegrationBoardItem, keyof ConnectionPresentation | "id" | "label" | "category" | "planned" | "logoInitial" | "logoAccent" | "detail" | "health"> & {
+    detail: IntegrationBoardItem["detail"];
+  },
+): IntegrationBoardItem {
+  const statusLabel =
+    pres.state === "connected_warning"
+      ? "Connected"
+      : pres.state === "sync_failed"
+        ? "Sync Failed"
+        : pres.statusLabel;
+
+  return {
+    id: def.id,
+    label: def.label,
+    category: def.category,
+    status: pres.state,
+    statusLabel,
+    logoInitial: def.logoInitial,
+    logoAccent: def.logoAccent,
+    planned: def.planned,
+    primaryAction: pres.primaryAction,
+    attentionMessage: pres.attentionMessage,
+    guidanceMessage: pres.guidanceMessage,
+    errorReason: pres.errorReason,
+    cachedDataNote: pres.cachedDataNote,
+    showCachedMetrics: pres.showCachedMetrics,
+    canSync: pres.canSync,
+    health: pres.health,
+    syncEndpoint: def.syncEndpoint,
+    ...extras,
+  };
+}
+
+function comingSoonItem(def: PageIntegrationDef): IntegrationBoardItem {
+  const health = {
+    authentication: { label: "Authentication", status: "na" as const },
+    permissions: { label: "Permissions", status: "na" as const },
+    accountOrProperty: { label: "Account", status: "na" as const },
+    dataSync: { label: "Data Sync", status: "na" as const },
+    lastSuccessfulSync: null,
+    overallHealth: "not_connected" as const,
+    overallLabel: "Coming Soon",
+  };
+  return {
+    id: def.id,
+    label: def.label,
+    category: def.category,
+    status: "coming_soon",
+    statusLabel: "Coming soon",
+    logoInitial: def.logoInitial,
+    logoAccent: def.logoAccent,
+    summaryLines: ["Available in a future release"],
+    primaryAction: "none",
+    planned: true,
+    health,
+    detail: {
+      type: "generic",
+      connected: false,
+      description: def.description,
+      configured: false,
+    },
+  };
 }
 
 export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> {
@@ -121,31 +175,19 @@ export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> 
     const health = healthById.get(def.id);
 
     if (def.id === "shopify") {
-      const connected = view.commerceConnected || view.isDemo;
-      const needsScopeUpgrade =
-        connected && !view.isDemo && shopifyMissingWriteScopes.length > 0;
-      const pres = statusPresentation(
-        false,
-        connected,
-        isShopifyOAuthConfigured(),
-        health?.syncFailed ?? false,
-      );
-      if (needsScopeUpgrade) {
-        pres.status = "error";
-        pres.statusLabel = "Permissions upgrade required";
-        pres.primaryAction = "reconnect";
-      }
-      return {
-        id: def.id,
-        label: def.label,
-        category: def.category,
-        ...pres,
-        logoInitial: def.logoInitial,
-        logoAccent: def.logoAccent,
-        planned: false,
-        syncEndpoint: def.syncEndpoint,
-        summaryLines: connected
-          ? needsScopeUpgrade
+      const commerceConnected = view.commerceConnected || view.isDemo;
+      const pres = resolveShopifyConnectionPresentation({
+        connected: commerceConnected,
+        isDemo: view.isDemo,
+        oauthConfigured: isShopifyOAuthConfigured(),
+        missingScopes: shopifyMissingWriteScopes,
+        syncFailed: health?.syncFailed ?? false,
+        errorMessage: health?.errorMessage,
+        lastSyncAt: health?.lastSyncAt ?? snapshot.syncedAt,
+      });
+      return boardItemFromPresentation(def, pres, {
+        summaryLines: commerceConnected
+          ? shopifyMissingWriteScopes.length > 0 && !view.isDemo
             ? [`Missing scopes: ${shopifyMissingWriteScopes.join(", ")}`, "Reconnect to enable discounts"]
             : [
                 `${snapshot.products.length} Products`,
@@ -154,34 +196,32 @@ export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> 
           : ["Connect your storefront"],
         detail: {
           type: "shopify",
-          connected,
+          connected: commerceConnected,
           isDemo: view.isDemo,
           storeDomain: view.commerceDomain,
           products: snapshot.products.length,
           orders30d: snapshot.storeMetrics.orders30d,
           revenue30d: snapshot.storeMetrics.revenue30d,
-          lastSyncAt: health?.lastSyncAt ?? snapshot.syncedAt,
+          lastSyncAt: pres.health.lastSuccessfulSync ?? snapshot.syncedAt,
           shopifyOAuthConfigured: isShopifyOAuthConfigured(),
           grantedScopes: shopifyGrantedScopes,
           missingWriteScopes: shopifyMissingWriteScopes,
         } satisfies ShopifyIntegrationDetail,
-      };
+      });
     }
 
     if (def.id === "meta_ads") {
-      const connected = view.metaConnected;
-      const pres = statusPresentation(false, connected, isMetaOAuthConfigured(), health?.syncFailed ?? false);
+      const pres = resolveMetaConnectionPresentation({
+        connected: view.metaConnected,
+        oauthConfigured: view.metaOAuthConfigured,
+        syncFailed: health?.syncFailed ?? false,
+        errorMessage: health?.errorMessage,
+        lastSyncAt: health?.lastSyncAt ?? view.metaAdsAccounts[0]?.lastSyncAt ?? null,
+        hasAccount: view.metaAdsAccounts.length > 0,
+      });
       const business = view.metaAdsAccounts.map((a) => a.businessName).filter(Boolean)[0] ?? null;
-      return {
-        id: def.id,
-        label: def.label,
-        category: def.category,
-        ...pres,
-        logoInitial: def.logoInitial,
-        logoAccent: def.logoAccent,
-        planned: false,
-        syncEndpoint: def.syncEndpoint,
-        summaryLines: connected
+      return boardItemFromPresentation(def, pres, {
+        summaryLines: presentationShowsAsConnected(pres.state)
           ? [
               `${view.metaCampaignTotals.totalCount} Campaigns`,
               `${formatCurrency(snapshot.campaigns.reduce((s, c) => s + c.spend7d, 0))} Spend (7d)`,
@@ -189,42 +229,30 @@ export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> 
           : ["Connect Meta Ads"],
         detail: {
           type: "meta_ads",
-          connected,
+          connected: presentationShowsAsConnected(pres.state),
           metaOAuthConfigured: view.metaOAuthConfigured,
           businessName: business,
           accountCount: view.metaAdsAccounts.length,
-          lastSyncAt: health?.lastSyncAt ?? null,
+          lastSyncAt: pres.health.lastSuccessfulSync,
           activeCampaigns: view.metaCampaignTotals.activeCount,
           pausedCampaigns: view.metaCampaignTotals.pausedCount,
           spend7d: snapshot.campaigns.reduce((s, c) => s + c.spend7d, 0),
           accounts: view.metaAdsAccounts,
         } satisfies MetaAdsIntegrationDetail,
-      };
+      });
     }
 
     if (def.id === "google_ads") {
-      const connected = view.googleConnected;
       const googleSource = dataSources.find((d) => d.id === "google_ads");
-      const googleState = resolveGoogleAdsConnectionPresentation({
-        connected,
+      const pres = resolveGoogleAdsConnectionPresentationV2({
+        connected: view.googleConnected,
         oauthConfigured: view.googleOAuthConfigured,
         installations: googleInstalls,
         connectorSource: googleSource,
       });
       const spendToday = snapshot.googleAdsSnapshot?.rollups.today.spend ?? 0;
-      return {
-        id: def.id,
-        label: def.label,
-        category: def.category,
-        status: googleState.status,
-        statusLabel: googleState.statusLabel,
-        primaryAction: googleState.primaryAction,
-        attentionMessage: googleState.errorMessage,
-        logoInitial: def.logoInitial,
-        logoAccent: def.logoAccent,
-        planned: false,
-        syncEndpoint: def.syncEndpoint,
-        summaryLines: connected
+      return boardItemFromPresentation(def, pres, {
+        summaryLines: presentationShowsAsConnected(pres.state)
           ? [
               `${snapshot.googleAdsSnapshot?.campaigns.length ?? view.googleCampaignTotals.totalCount} Campaigns`,
               `${formatCurrency(spendToday)} Spend (today)`,
@@ -232,107 +260,101 @@ export async function buildIntegrationBoard(): Promise<IntegrationBoardPayload> 
           : ["Connect Google Ads"],
         detail: {
           type: "google_ads",
-          connected,
+          connected: presentationShowsAsConnected(pres.state),
           googleOAuthConfigured: view.googleOAuthConfigured,
           accountCount: view.googleAdsAccounts.length,
-          lastSyncAt: health?.lastSyncAt ?? null,
+          lastSyncAt: pres.health.lastSuccessfulSync,
           enabledCampaigns: view.googleCampaignTotals.enabledCount,
           pausedCampaigns: view.googleCampaignTotals.pausedCount,
           spendToday,
           accounts: view.googleAdsAccounts,
-          syncPending: googleState.syncPending,
-          attentionMessage: googleState.errorMessage,
+          syncPending: pres.state === "connected_warning" && !pres.health.lastSuccessfulSync,
+          attentionMessage: pres.attentionMessage,
         } satisfies GoogleAdsIntegrationDetail,
-      };
+      });
     }
 
     if (def.id === "ga4") {
       const ga4Install = ga4Installs[0];
-      const connected = Boolean(ga4Install) || Boolean(snapshot.ga4Snapshot?.sessions30d);
       const ga4Health = dataSources.find((d) => d.id === "ga4");
-      const pres = statusPresentation(
-        false,
-        connected,
-        isGa4OAuthConfigured(),
-        ga4Health?.status === "error",
-      );
       const ga4 = snapshot.ga4Snapshot;
-      return {
-        id: def.id,
-        label: def.label,
-        category: def.category,
-        ...pres,
-        logoInitial: def.logoInitial,
-        logoAccent: def.logoAccent,
-        planned: false,
-        syncEndpoint: def.syncEndpoint,
-        summaryLines: connected
+      const pres = resolveGa4ConnectionPresentation({
+        oauthConfigured: isGa4OAuthConfigured(),
+        isDemo: view.isDemo,
+        install: ga4Install,
+        connectorSource: ga4Health,
+        cachedSnapshot: ga4,
+      });
+      const showMetrics = pres.state === "connected" || pres.showCachedMetrics;
+      return boardItemFromPresentation(def, pres, {
+        summaryLines: showMetrics && ga4?.sessions30d
           ? [
-              `${(ga4?.sessions30d ?? 0).toLocaleString()} Sessions (30d)`,
-              ga4?.engagementRatePct != null
+              `${ga4.sessions30d.toLocaleString()} Sessions (30d)`,
+              ga4.engagementRatePct != null
                 ? `${ga4.engagementRatePct.toFixed(0)}% Engagement`
                 : "Sync for engagement metrics",
             ]
-          : ["Connect GA4"],
+          : pres.state === "not_connected" || pres.state === "authorization_required"
+            ? ["Connect GA4 for sessions & behavior"]
+            : [pres.attentionMessage ?? pres.guidanceMessage ?? "Complete GA4 setup"],
         detail: {
           type: "ga4",
-          connected,
+          connected: presentationShowsAsConnected(pres.state),
           ga4OAuthConfigured: isGa4OAuthConfigured(),
           propertyName: ga4Install?.property_name ?? null,
           propertyId: ga4Install?.property_id ?? null,
           measurementId: ga4Install?.measurement_id ?? null,
-          lastSyncAt: ga4Health?.lastSyncAt ?? ga4Install?.last_sync_at ?? ga4?.syncedAt ?? null,
-          sessions30d: ga4?.sessions30d ?? null,
-          engagementRatePct: ga4?.engagementRatePct ?? null,
-          ecommerceConversionRatePct: ga4?.ecommerceConversionRatePct ?? null,
+          lastSyncAt: pres.health.lastSuccessfulSync,
+          lastSuccessfulSyncAt: pres.health.lastSuccessfulSync,
+          sessions30d: showMetrics ? (ga4?.sessions30d ?? null) : null,
+          engagementRatePct: showMetrics ? (ga4?.engagementRatePct ?? null) : null,
+          ecommerceConversionRatePct: showMetrics ? (ga4?.ecommerceConversionRatePct ?? null) : null,
           installationId: ga4Install?.id ?? null,
+          funnelEventsVerified: Boolean(
+            ga4?.funnelEvents?.verified && (ga4?.funnelEvents?.productViews30d ?? 0) > 0,
+          ),
+          funnelOnboardingSteps: buildGa4FunnelOnboardingSteps(snapshot),
+          cachedDataNote: pres.cachedDataNote,
+          showCachedMetrics: pres.showCachedMetrics,
         } satisfies Ga4IntegrationDetail,
-      };
+      });
     }
 
     if (def.planned) {
-      return {
-        id: def.id,
-        label: def.label,
-        category: def.category,
-        status: "coming_soon",
-        statusLabel: "Coming soon",
-        logoInitial: def.logoInitial,
-        logoAccent: def.logoAccent,
-        summaryLines: ["Available in a future release"],
-        primaryAction: "none",
-        planned: true,
-        detail: {
-          type: "generic",
-          connected: false,
-          description: def.description,
-          configured: false,
-        },
-      };
+      return comingSoonItem(def);
     }
 
     const connected = health?.status === "connected" || health?.status === "demo";
-    const configured = health?.status === "waiting";
-    const pres = statusPresentation(false, connected, configured, health?.syncFailed ?? false);
+    const genericPres = connected
+      ? resolveShopifyConnectionPresentation({
+          connected: true,
+          isDemo: health?.status === "demo",
+          oauthConfigured: true,
+          missingScopes: [],
+          syncFailed: health?.syncFailed ?? false,
+          errorMessage: health?.errorMessage,
+          lastSyncAt: health?.lastSyncAt ?? null,
+        })
+      : resolveShopifyConnectionPresentation({
+          connected: false,
+          isDemo: false,
+          oauthConfigured: health?.status === "waiting",
+          missingScopes: [],
+          syncFailed: false,
+          lastSyncAt: null,
+        });
 
-    return {
-      id: def.id,
-      label: def.label,
-      category: def.category,
-      ...pres,
-      logoInitial: def.logoInitial,
-      logoAccent: def.logoAccent,
-      planned: false,
+    return boardItemFromPresentation(def, genericPres, {
       syncEndpoint: health?.syncEndpoint,
       summaryLines: health?.metrics.slice(0, 2).map((m) => `${m.value} ${m.label}`) ?? [def.description],
       detail: {
         type: "generic",
         connected,
         description: def.description,
-        configured,
+        configured: health?.status === "waiting",
         preview: health?.metrics[0]?.value,
       },
-    };
+    });
   });
 
   return { items, view };

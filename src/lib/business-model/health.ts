@@ -50,9 +50,24 @@ export function computeBusinessModelHealth(input: {
         break;
       }
       case "warehouse_value": {
-        const value = products.reduce((s, p) => s + p.inventoryQuantity * p.price * 0.35, 0);
-        const score = value > 50000 ? 45 : value > 20000 ? 60 : 80;
-        metrics.push(metric(id, "Warehouse Value", score, `~$${Math.round(value).toLocaleString()} tied in stock`));
+        const value = products.reduce(
+          (s, p) => s + p.inventoryQuantity * (p.unitCost ?? p.price * 0.35),
+          0,
+        );
+        const inStock = products.filter((p) => p.inventoryQuantity > 0).length;
+        const inStockPct = products.length ? (inStock / products.length) * 100 : 0;
+        const lowStock = products.filter(
+          (p) => p.inventoryQuantity > 0 && p.inventoryQuantity <= 5,
+        ).length;
+        const score = Math.round(inStockPct * 0.65 + Math.max(0, 100 - lowStock * 10) * 0.35);
+        metrics.push(
+          metric(
+            id,
+            "Warehouse Value",
+            Math.min(100, score),
+            `~$${Math.round(value).toLocaleString()} tied in stock`,
+          ),
+        );
         break;
       }
       case "winning_products": {

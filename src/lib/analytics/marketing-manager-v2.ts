@@ -6,8 +6,14 @@ import type {
   MarketingForecast,
   MarketingPlatformSummary,
 } from "./marketing-manager";
+import {
+  buildMarketingExecutiveLayer,
+  type MarketingExecutiveLayer,
+} from "./marketing-executive-layer";
 import { RECOMMENDATION_LABELS } from "./marketing-recommendations";
 import { estimateCampaignRecovery } from "./recovery-engine";
+
+export type { MarketingExecutiveLayer } from "./marketing-executive-layer";
 
 export type MarketingBrief = {
   greeting: string;
@@ -29,6 +35,8 @@ export type MarketingBudgetAllocation = {
   estimatedMonthlyImprovement: number;
   rationale: string;
   evidence: string[];
+  mode: "cross_channel" | "single_channel" | "unavailable";
+  unavailableReason?: string;
 };
 
 export type MarketingPriorityItem = {
@@ -137,6 +145,7 @@ export type MarketingAutopilotReadiness = {
 
 export type MarketingManagerV2 = {
   brief: MarketingBrief;
+  executive: MarketingExecutiveLayer;
   budgetAllocation: MarketingBudgetAllocation;
   platformHealthDetails: PlatformHealthDetail[];
   marketingEfficiency: MarketingEfficiency;
@@ -259,12 +268,42 @@ export function buildMarketingBudgetAllocation(input: {
 }): MarketingBudgetAllocation {
   const meta = input.platforms.find((p) => p.channel === "meta");
   const google = input.platforms.find((p) => p.channel === "google");
-  const metaSpend = meta?.spend ?? 0;
-  const googleSpend = google?.spend ?? 0;
+  const metaConnected = meta?.connected ?? false;
+  const googleConnected = google?.connected ?? false;
+  const bothConnected = metaConnected && googleConnected;
+  const anyAdsConnected = metaConnected || googleConnected;
+
+  if (!anyAdsConnected) {
+    return {
+      current: [],
+      suggested: [],
+      estimatedMonthlyImprovement: 0,
+      rationale: "Connect Meta or Google Ads to unlock budget allocation recommendations.",
+      evidence: [],
+      mode: "unavailable",
+      unavailableReason: "No advertising platforms connected.",
+    };
+  }
+
+  const metaSpend = metaConnected ? (meta?.spend ?? 0) : 0;
+  const googleSpend = googleConnected ? (google?.spend ?? 0) : 0;
   const otherSpend = input.campaigns
     .filter((c) => c.channel !== "meta" && c.channel !== "google")
     .reduce((s, c) => s + c.spend, 0);
   const total = metaSpend + googleSpend + otherSpend || 1;
+
+  if (!bothConnected) {
+    const singleChannel = metaConnected ? ("meta" as const) : ("google" as const);
+    const singleLabel = metaConnected ? "Meta" : "Google";
+    return {
+      current: [{ channel: singleChannel, label: singleLabel, pct: 100 }],
+      suggested: [{ channel: singleChannel, label: singleLabel, pct: 100 }],
+      estimatedMonthlyImprovement: 0,
+      rationale: `Budget recommendations use ${singleLabel} only. Connect the other platform for cross-channel allocation.`,
+      evidence: [`${singleLabel} is your only connected advertising platform.`],
+      mode: "single_channel",
+    };
+  }
 
   const metaRoas = meta?.roas ?? 0;
   const googleRoas = google?.roas ?? 0;
@@ -340,11 +379,12 @@ export function buildMarketingBudgetAllocation(input: {
         ? [{ channel: "other" as const, label: "Other", pct: suggestedOther }]
         : []),
     ],
-    estimatedMonthlyImprovement: improvement > 0 ? improvement : Math.round(total * 4.33 * 0.05),
+    estimatedMonthlyImprovement: improvement > 0 ? improvement : 0,
     rationale: shiftTowardGoogle
       ? "Shift budget toward Google where ROAS and efficiency are stronger."
       : "Rebalance spend away from underperforming campaigns toward higher-ROAS channels.",
     evidence,
+    mode: "cross_channel",
   };
 }
 
@@ -872,6 +912,28 @@ export function buildMarketingManagerV2(input: {
     ...p,
     scoreExplanation: buildExtendedScoreExplanation(p, input.campaigns, input.snapshot),
   }));
+  const budgetAllocation = buildMarketingBudgetAllocation({
+    platforms: input.platforms,
+    campaigns: input.campaigns,
+  });
+  const creativeInsights = buildMarketingCreativeInsights(input.snapshot, input.campaigns);
+  const scenarioForecast = buildMarketingScenarioForecast(
+    input.forecast,
+    input.campaigns,
+    input.snapshot,
+  );
+
+  const executive = buildMarketingExecutiveLayer({
+    snapshot: input.snapshot,
+    platforms,
+    campaigns: input.campaigns,
+    forecast: input.forecast,
+    priorityQueue,
+    budgetAllocation,
+    scenarioForecast,
+    creativeInsights,
+    estimatedRecoveryMonthly,
+  });
 
   return {
     brief: buildMarketingBrief({
@@ -880,10 +942,8 @@ export function buildMarketingManagerV2(input: {
       priorityQueue,
       estimatedRecoveryMonthly,
     }),
-    budgetAllocation: buildMarketingBudgetAllocation({
-      platforms: input.platforms,
-      campaigns: input.campaigns,
-    }),
+    executive,
+    budgetAllocation,
     platformHealthDetails: buildPlatformHealthDetails(
       platforms,
       input.snapshot,
@@ -893,13 +953,9 @@ export function buildMarketingManagerV2(input: {
     priorityQueue,
     campaignTimelines: buildCampaignTimelines(input.campaigns, input.snapshot),
     opportunityGroups: buildMarketingOpportunityMap(input.campaigns),
-    creativeInsights: buildMarketingCreativeInsights(input.snapshot, input.campaigns),
+    creativeInsights,
     simulations: buildMarketingSimulations(input.campaigns),
-    scenarioForecast: buildMarketingScenarioForecast(
-      input.forecast,
-      input.campaigns,
-      input.snapshot,
-    ),
+    scenarioForecast,
     autopilotReadiness: buildMarketingAutopilotReadiness({
       campaigns: input.campaigns,
       decisions: input.decisions,

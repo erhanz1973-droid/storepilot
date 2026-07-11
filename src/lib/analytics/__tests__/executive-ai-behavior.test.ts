@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildRecoveryScenarios } from "@/lib/analytics/executive-advisor-enrichment";
 import {
   buildExecutiveAiBehavior,
   buildExecutiveAiLiveStatus,
@@ -35,20 +36,38 @@ describe("executive-ai-behavior", () => {
   });
 
   it("shows encouraging recovery state before first approval", () => {
+    const recoveryBase = {
+      items: [] as const,
+      grossMonthly: 10000,
+      netMonthly: 8000,
+      overlapRemoved: 2000,
+    };
     const progress = buildRecoveryProgress({
-      recoveryBreakdown: { items: [], grossMonthly: 10000, netMonthly: 8000, overlapRemoved: 2000 },
+      recoveryBreakdown: {
+        ...recoveryBase,
+        scenarios: buildRecoveryScenarios(recoveryBase),
+      },
       aiPerformance: { predictionAccuracy: 85, measuredCount: 0, revenueInfluenced: 0, bestCategory: "", bestCategoryLabel: "—" },
       decisions: [],
     });
     expect(progress.goalMonthly).toBe(8000);
     expect(progress.hasMeasurements).toBe(false);
     expect(progress.progressPct).toBe(0);
-    expect(progress.recoveredLabel).toContain("Waiting");
+    expect(progress.recoveredLabel).toContain("potential");
   });
 
   it("builds recovery progress from goal and outcomes", () => {
+    const recoveryBase = {
+      items: [] as const,
+      grossMonthly: 10000,
+      netMonthly: 8000,
+      overlapRemoved: 2000,
+    };
     const progress = buildRecoveryProgress({
-      recoveryBreakdown: { items: [], grossMonthly: 10000, netMonthly: 8000, overlapRemoved: 2000 },
+      recoveryBreakdown: {
+        ...recoveryBase,
+        scenarios: buildRecoveryScenarios(recoveryBase),
+      },
       aiPerformance: { predictionAccuracy: 85, measuredCount: 3, revenueInfluenced: 2500, bestCategory: "", bestCategoryLabel: "—" },
       decisions: [],
     });

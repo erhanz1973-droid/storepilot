@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { resolveEncryptionKey } from "@/lib/crypto/encryption-key";
+import { isTokenAuthenticationError, TokenDecryptionError } from "@/lib/crypto/decrypt-errors";
 
 const ALGO = "aes-256-gcm";
 
@@ -17,14 +18,29 @@ export function encryptMetaToken(plaintext: string): string {
 }
 
 export function decryptMetaToken(payload: string): string {
+  if (!payload.trim()) {
+    throw new TokenDecryptionError("Token decryption failed: empty encrypted payload");
+  }
   const [ivB64, tagB64, dataB64] = payload.split(":");
-  if (!ivB64 || !tagB64 || !dataB64) throw new Error("Invalid encrypted token format");
-  const key = getEncryptionKey();
-  const decipher = createDecipheriv(ALGO, key, Buffer.from(ivB64, "base64"));
-  decipher.setAuthTag(Buffer.from(tagB64, "base64"));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(dataB64, "base64")),
-    decipher.final(),
-  ]);
-  return decrypted.toString("utf8");
+  if (!ivB64 || !tagB64 || !dataB64) {
+    throw new TokenDecryptionError("Token decryption failed: invalid encrypted token format");
+  }
+  try {
+    const key = getEncryptionKey();
+    const decipher = createDecipheriv(ALGO, key, Buffer.from(ivB64, "base64"));
+    decipher.setAuthTag(Buffer.from(tagB64, "base64"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(dataB64, "base64")),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  } catch (error) {
+    if (isTokenAuthenticationError(error)) {
+      throw new TokenDecryptionError(
+        "Token decryption failed: invalid encryption key or corrupted token",
+        error,
+      );
+    }
+    throw error;
+  }
 }

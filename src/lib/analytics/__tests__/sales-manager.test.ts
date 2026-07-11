@@ -14,6 +14,8 @@ describe("sales manager view", () => {
     expect(view.v2.revenueQuality.score).toBeGreaterThan(0);
     expect(view.v2.drivers.length).toBeGreaterThan(0);
     expect(view.v2.opportunities.length).toBeGreaterThan(0);
+    expect(view.v2.revenueStudio.playbooks.length).toBeGreaterThan(0);
+    expect(view.v2.dailyPlaybook.items.length).toBeGreaterThan(0);
     expect(view.v2.orders.length).toBeGreaterThan(0);
   });
 

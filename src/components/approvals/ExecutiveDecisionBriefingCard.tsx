@@ -1,3 +1,4 @@
+import { ExecutiveSummarySection } from "@/components/approvals/ExecutiveSummarySection";
 import type { ExecutiveDecisionBriefing } from "@/lib/approvals/decision-center-types";
 
 function fmt(n: number): string {
@@ -10,6 +11,14 @@ export function ExecutiveDecisionBriefingCard({ briefing }: { briefing: Executiv
     <section className="card decision-exec-briefing">
       <p className="decision-exec-eyebrow">AI Decision Center</p>
       <h3>Today&apos;s Executive Briefing</h3>
+
+      {briefing.executiveSummary ? (
+        <ExecutiveSummarySection summary={briefing.executiveSummary} />
+      ) : (
+        <div className="decision-exec-narrative">
+          <p>{briefing.narrative}</p>
+        </div>
+      )}
 
       <div className="decision-exec-status-row">
         <div className="decision-exec-status">
@@ -54,10 +63,6 @@ export function ExecutiveDecisionBriefingCard({ briefing }: { briefing: Executiv
           <dd>{briefing.completedToday}</dd>
         </div>
       </dl>
-
-      <div className="decision-exec-narrative">
-        <p>{briefing.narrative}</p>
-      </div>
     </section>
   );
 }

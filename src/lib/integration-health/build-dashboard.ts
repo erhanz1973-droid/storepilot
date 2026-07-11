@@ -68,6 +68,7 @@ export async function buildIntegrationHealthDashboard(options?: {
   const systemSummary = buildSystemSummary({
     providers,
     dataQualityPct: qualityPct,
+    overallAiReadinessPct,
     capabilityMatrix,
     gate,
     generatedAt: new Date().toISOString(),
@@ -102,6 +103,7 @@ export async function buildIntegrationHealthDashboard(options?: {
       systemSummary: buildSystemSummary({
         providers,
         dataQualityPct: qualityPct,
+        overallAiReadinessPct,
         capabilityMatrix,
         gate,
         generatedAt: base.generatedAt,

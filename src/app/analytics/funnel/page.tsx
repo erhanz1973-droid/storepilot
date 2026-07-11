@@ -10,11 +10,7 @@ export default async function FunnelAnalyticsPage() {
   return (
     <AnalyticsPageShell
       title="Funnel"
-      description={
-        data.view.mode === "full"
-          ? "Session-to-purchase conversion — where users drop and what AI recommends fixing."
-          : "Funnel readiness — understand what's available now and what GA4 unlocks."
-      }
+      description="Conversion optimization workspace — find drop-offs, prioritize fixes, and improve session-to-purchase performance."
       context="funnel"
       syncedAt={data.syncedAt}
     >

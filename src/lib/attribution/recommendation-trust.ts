@@ -16,6 +16,7 @@ import {
   buildOpportunityCost,
   buildOptimizationWorkflow,
 } from "./executive-summary";
+import { formatRoas } from "./format-roas";
 import type { AcquisitionMetrics, AttributionConfidence } from "./models";
 import type {
   ActionImpactProfile,
@@ -237,7 +238,7 @@ function buildActionWorkflowSteps(
     return [
       { step: 1, label: action.title },
       { step: 2, label: "Wait 7 days for performance to stabilize", waitDays: 7 },
-      { step: 3, label: `Recalculate ROAS against break-even (${breakEvenRoas.toFixed(2)})` },
+      { step: 3, label: `Recalculate ROAS against break-even (${formatRoas(breakEvenRoas)})` },
       { step: 4, label: "Adjust budget only if ROAS remains below break-even" },
     ];
   }
@@ -245,6 +246,16 @@ function buildActionWorkflowSteps(
     return buildOptimizationWorkflow(strategy, breakEvenRoas);
   }
   return [{ step: 1, label: action.title }];
+}
+
+export function buildSimulationAssumptions(): import("./decision-engine-types").SimulationAssumption[] {
+  return [
+    { label: "Conversion Rate", value: "Constant" },
+    { label: "Pricing", value: "Constant" },
+    { label: "Inventory", value: "Available" },
+    { label: "Seasonality", value: "Ignored" },
+    { label: "Customer Demand", value: "Stable" },
+  ];
 }
 
 export function buildCrossModuleImpacts(input: {
@@ -272,6 +283,12 @@ export function buildCrossModuleImpacts(input: {
       verificationStatus: "Estimated",
     },
     {
+      module: "Profit",
+      headline: `Expected recovery +$${input.action.estimatedMonthlyImprovement.toLocaleString()}/mo`,
+      detail: "Based on contribution margin impact from the centralized profit model",
+      verificationStatus: "Simulated",
+    },
+    {
       module: "Inventory",
       headline: inventoryImpact.headline,
       detail: inventoryImpact.detail,
@@ -279,18 +296,27 @@ export function buildCrossModuleImpacts(input: {
       severity: inventory.severity,
     },
     {
-      module: "Profit",
-      headline: `Expected recovery +$${input.action.estimatedMonthlyImprovement.toLocaleString()}/mo`,
-      detail: "Based on simulated contribution margin impact",
+      module: "Cash Flow",
+      headline:
+        input.action.estimatedMonthlyImprovement > 0
+          ? `Frees ~$${Math.round(input.action.estimatedMonthlyImprovement * 0.7).toLocaleString()}/mo in working capital`
+          : "Neutral cash flow impact expected",
+      detail: "Advertising savings improve near-term cash position",
+      verificationStatus: "Estimated",
+    },
+    {
+      module: "Forecast",
+      headline: "Updates 30-day profit forecast",
+      detail: "Projected monthly profit increases if recommendation succeeds",
       verificationStatus: "Simulated",
     },
     {
-      module: "Customer",
+      module: "Customer Lifetime Value",
       headline:
-        repeatRate != null ? `${repeatRate}% returning customers` : "Customer mix unknown",
+        repeatRate != null ? `${repeatRate}% returning customers` : "LTV impact pending more data",
       detail:
         repeatRate != null && repeatRate >= 30
-          ? "Repeat purchase opportunity after acquisition efficiency improves."
+          ? "Efficiency gains compound as repeat purchase rate improves."
           : "Monitor new vs returning mix after budget changes.",
       verificationStatus: repeatRate != null ? "Estimated" : "Simulated",
     },
@@ -426,6 +452,8 @@ export function enrichStrategyPlanSync(input: {
 
   const actions: AttributionStrategyAction[] = input.plan.actions.map((action) => ({
     ...action,
+    implementationTime: action.implementationTime ?? (action.isPackage ? "7–14 days" : "3–7 days"),
+    rollbackAvailable: action.rollbackAvailable ?? true,
     impact: defaultActionImpact(action),
     dependencies: buildActionDependencies(action, input.confidence),
     crossModuleImpacts: buildCrossModuleImpacts({
@@ -473,6 +501,7 @@ export function enrichStrategyPlanSync(input: {
     simulation: {
       ...input.plan.simulation,
       verificationStatus: "Simulated",
+      assumptions: buildSimulationAssumptions(),
     },
     actions,
   };

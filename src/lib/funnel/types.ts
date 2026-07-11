@@ -2,6 +2,9 @@ export type FunnelConfidence = "verified" | "estimated" | "unavailable";
 
 export type Ga4ConnectionStatus = "connected" | "estimated" | "unavailable";
 
+/** How much behavioral data powers the workspace */
+export type FunnelDataTier = "step_level" | "session_level" | "commerce_only";
+
 export type FunnelAvailableMetric = {
   id: string;
   label: string;
@@ -14,6 +17,7 @@ export type FunnelTrafficSource = {
   label: string;
   sharePct: number;
   status: FunnelConfidence;
+  conversionPct?: number | null;
 };
 
 export type FunnelStepView = {
@@ -34,44 +38,44 @@ export type FunnelAiInsight = {
   tone: "positive" | "neutral" | "warning";
 };
 
-export type FunnelWizardStep = {
-  step: number;
-  label: string;
+export type FunnelOptimizationAction = {
+  id: string;
+  priority: "critical" | "high" | "medium";
+  title: string;
   description: string;
-  complete: boolean;
+  recommendation: string;
+  expectedMonthlyImpact: number | null;
+  confidenceScore: number;
+  focusArea: "checkout" | "product_page" | "traffic" | "mobile" | "channel" | "aov" | "retention";
+  dataTier: FunnelConfidence;
+};
+
+export type FunnelBottleneck = {
+  title: string;
+  description: string;
+  impactLabel: string;
+  focusStep: string;
+  confidence: FunnelConfidence;
 };
 
 export type FunnelPageView = {
-  mode: "readiness" | "full";
-  ga4Status: Ga4ConnectionStatus;
-  ga4StatusLabel: string;
-  ga4StatusNotice: string;
+  dataTier: FunnelDataTier;
+  dataTierLabel: string;
   confidence: FunnelConfidence;
   confidenceScore: number;
   confidenceNotice: string;
   availableMetrics: FunnelAvailableMetric[];
   trafficSources: FunnelTrafficSource[];
-  previewStepLabels: string[];
-  limitationMessage: string;
-  unlockCapabilities: string[];
-  wizardSteps: FunnelWizardStep[];
-  setupTimeMinutes: number;
   funnelSteps: FunnelStepView[];
+  bottleneck: FunnelBottleneck | null;
+  optimizationActions: FunnelOptimizationAction[];
   aiInsights: FunnelAiInsight[];
 };
 
-export const FUNNEL_PREVIEW_STEPS = [
+export const FUNNEL_STEP_LABELS = [
   "Sessions",
   "Product Views",
   "Add To Cart",
   "Checkout",
   "Purchase",
-] as const;
-
-export const FUNNEL_UNLOCK_CAPABILITIES = [
-  "Highest abandonment step",
-  "Checkout issues",
-  "Product page problems",
-  "Landing page performance",
-  "Channel-specific conversion rates",
 ] as const;

@@ -7,6 +7,18 @@ import { profitStatusLabel } from "@/lib/profit/metric-value";
 import type { ChartDefinition, MetricCard } from "@/lib/analytics/types";
 import type { ExecutiveSummary } from "@/lib/insights/executive-summary";
 import type { TrendAnalysis } from "@/lib/insights/types";
+import { formatMetricSource } from "@/lib/executive/hybrid/types";
+
+function metricSublabel(
+  metricId: string,
+  fallback: string | undefined,
+  sourceLabels?: Record<string, string>,
+): string | undefined {
+  const label = sourceLabels?.[metricId];
+  if (label && label !== "Unavailable") return formatMetricSource(label);
+  if (label === "Unavailable") return "Connect GA4 for live traffic data";
+  return fallback;
+}
 
 export type ExecutiveAnalytics = {
   syncedAt: string;
@@ -143,8 +155,9 @@ export function buildExecutiveAnalytics(input: {
   profitDashboard?: ProfitDashboard | null;
   executiveSummary?: ExecutiveSummary | null;
   trends?: TrendAnalysis | null;
+  metricSourceLabels?: Record<string, string>;
 }): ExecutiveAnalytics {
-  const { snapshot, profitDashboard, executiveSummary, trends } = input;
+  const { snapshot, profitDashboard, executiveSummary, trends, metricSourceLabels } = input;
   const m = snapshot.storeMetrics;
   const primary = profitDashboard?.primary;
   const blended = profitDashboard?.blendedRoas?.blendedRoas30d ?? 0;
@@ -185,11 +198,7 @@ export function buildExecutiveAnalytics(input: {
           : "—",
       sublabel: profitUnavailable
         ? "Complete Profit Setup"
-        : profitMeta
-          ? `${profitStatusLabel(profitMeta.status)} · ${profitMeta.confidence}%`
-          : primary
-            ? undefined
-            : "Requires Shopify + cost data",
+        : metricSublabel("profit", profitMeta ? `${profitStatusLabel(profitMeta.status)} · ${profitMeta.confidence}%` : undefined, metricSourceLabels),
       changePct: profitUnavailable ? null : profitMetric?.changePct ?? executiveSummary?.profitChangePct,
       emphasize: true,
       tone: profitUnavailable
@@ -210,34 +219,46 @@ export function buildExecutiveAnalytics(input: {
       label: "Revenue",
       value: fmtCurrency(primary?.revenue ?? m.revenue30d),
       changePct: revMetric?.changePct ?? executiveSummary?.revenueChangePct,
-      sublabel: "Shopify",
+      sublabel: metricSublabel("revenue", "Shopify", metricSourceLabels),
     },
     {
       id: "orders",
       label: "Orders",
       value: String(primary?.orders ?? m.orders30d),
       changePct: ordersMetric?.changePct,
-      sublabel: "Shopify",
+      sublabel: metricSublabel("orders", "Shopify", metricSourceLabels),
     },
     {
       id: "roas",
       label: "Blended ROAS",
       value: blended > 0 ? blended.toFixed(2) : "—",
       changePct: roasMetric?.changePct ?? executiveSummary?.roasChangePct,
-      sublabel: blended > 0 ? "Revenue ÷ ad spend" : undefined,
+      sublabel: metricSublabel(
+        "roas",
+        blended > 0 ? "Revenue ÷ ad spend" : undefined,
+        metricSourceLabels,
+      ),
     },
     {
       id: "break-even-roas",
       label: "Break-even ROAS",
       value: breakEven ? breakEven.breakEvenRoas.toFixed(2) : "—",
-      sublabel: breakEven ? "Minimum ROAS for profit" : "Requires profit setup",
+      sublabel: metricSublabel(
+        "break-even-roas",
+        breakEven ? "Minimum ROAS for profit" : "Requires profit setup",
+        metricSourceLabels,
+      ),
       tone: blended > 0 && breakEven && blended < breakEven.breakEvenRoas ? "negative" : undefined,
     },
     {
       id: "cash-flow",
       label: "Cash Flow",
       value: operatingCashFlow != null ? fmtCurrency(operatingCashFlow) : "—",
-      sublabel: profitUnavailable ? "Complete Profit Setup" : "Net profit after ad spend & costs",
+      sublabel: metricSublabel(
+        "cash-flow",
+        profitUnavailable ? "Complete Profit Setup" : "Net profit after ad spend & costs",
+        metricSourceLabels,
+      ),
       tone:
         operatingCashFlow != null
           ? operatingCashFlow >= 0
@@ -249,43 +270,67 @@ export function buildExecutiveAnalytics(input: {
       id: "ad-spend",
       label: "Ad Spend",
       value: spend30 > 0 ? fmtCurrency(spend30) : "—",
-      sublabel: spend30 > 0 ? undefined : "Connect Meta or Google Ads",
+      sublabel: metricSublabel(
+        "ad-spend",
+        spend30 > 0 ? undefined : "Connect Meta or Google Ads",
+        metricSourceLabels,
+      ),
     },
     {
       id: "cvr",
       label: "Conversion Rate",
       value: cvrFromGa4 != null ? `${cvrFromGa4.toFixed(2)}%` : "—",
-      sublabel: ga4?.ecommerceConversionRatePct != null ? "GA4 ecommerce" : cvrFromGa4 != null ? "Orders ÷ GA4 sessions" : "Connect GA4",
+      sublabel: metricSublabel(
+        "cvr",
+        ga4?.ecommerceConversionRatePct != null
+          ? "GA4 ecommerce"
+          : cvrFromGa4 != null
+            ? "Orders ÷ GA4 sessions"
+            : "Connect GA4",
+        metricSourceLabels,
+      ),
     },
     {
       id: "aov",
       label: "Average Order Value",
       value: m.orders30d > 0 ? fmtCurrency(m.aov30d) : "—",
-      sublabel: "Revenue ÷ orders",
+      sublabel: metricSublabel("aov", "Revenue ÷ orders", metricSourceLabels),
     },
     {
       id: "sessions",
       label: "Sessions",
       value: ga4Sessions != null ? ga4Sessions.toLocaleString() : "—",
-      sublabel: ga4Sessions != null ? "GA4" : "Connect GA4",
+      sublabel: metricSublabel("sessions", ga4Sessions != null ? "GA4" : "Connect GA4", metricSourceLabels),
     },
     {
       id: "returning",
       label: "Returning Customers",
       value: returningPct != null ? `${returningPct.toFixed(0)}%` : "—",
-      sublabel: returningPct != null ? "GA4 returning users" : "Connect GA4",
+      sublabel: metricSublabel(
+        "returning",
+        returningPct != null ? "GA4 returning users" : "Connect GA4",
+        metricSourceLabels,
+      ),
     },
     {
       id: "engagement-rate",
       label: "Engagement Rate",
       value: engagementRate != null ? `${engagementRate.toFixed(0)}%` : "—",
-      sublabel: engagementRate != null ? "GA4" : "Connect GA4",
+      sublabel: metricSublabel(
+        "engagement-rate",
+        engagementRate != null ? "GA4" : "Connect GA4",
+        metricSourceLabels,
+      ),
     },
     {
       id: "avg-session-duration",
       label: "Avg Session Duration",
       value: formatSessionDuration(avgSessionDuration),
-      sublabel: avgSessionDuration != null ? "GA4" : "Connect GA4",
+      sublabel: metricSublabel(
+        "avg-session-duration",
+        avgSessionDuration != null ? "GA4" : "Connect GA4",
+        metricSourceLabels,
+      ),
     },
   ];
 

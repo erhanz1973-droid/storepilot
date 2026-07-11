@@ -1,8 +1,13 @@
-import type { AttributionStrategyPlan, ImpactVerificationStatus } from "@/lib/attribution/decision-engine";
+import type {
+  AttributionStrategyPlan,
+  ImpactVerificationStatus,
+} from "@/lib/attribution/decision-engine-types";
+import { formatRoas } from "@/lib/attribution/format-roas";
 import {
   expirationLabel,
   validUntilLabel,
 } from "@/lib/attribution/recommendation-trust";
+import { RecommendationActionCard } from "@/components/attribution/RecommendationActionCard";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, {
@@ -10,12 +15,6 @@ function formatMoney(n: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   });
-}
-
-function riskClass(level: string): string {
-  if (level === "Low") return "positive";
-  if (level === "High") return "negative";
-  return "";
 }
 
 function verificationBadgeClass(status: ImpactVerificationStatus): string {
@@ -55,7 +54,7 @@ function MetricBlock({
       )}
       {roas != null && (
         <div>
-          ROAS <strong>{roas.toFixed(2)}</strong>
+          ROAS <strong>{formatRoas(roas)}</strong>
         </div>
       )}
       {profit != null && (
@@ -166,7 +165,7 @@ export function AttributionStrategyPanel({ plan }: { plan: AttributionStrategyPl
           <VerificationBadge status="Verified" />
         </div>
         <p className="attribution-break-even-value">
-          <strong>{plan.breakEvenModel.breakEvenRoas.toFixed(2)}</strong>
+          <strong>{formatRoas(plan.breakEvenModel.breakEvenRoas)}</strong>
         </p>
         <p className="muted" style={{ fontSize: "0.82rem", lineHeight: 1.45, margin: "8px 0 0" }}>
           {plan.breakEvenModel.summary}
@@ -204,6 +203,17 @@ export function AttributionStrategyPanel({ plan }: { plan: AttributionStrategyPl
                           <li key={reason}>{reason}</li>
                         ))}
                       </ul>
+                      {alt.successProbabilityPct != null && (
+                        <p className="attribution-why-not-probability">
+                          Estimated probability of success:{" "}
+                          <strong>{alt.successProbabilityPct}%</strong>
+                        </p>
+                      )}
+                      {alt.potentialDownside && (
+                        <p className="attribution-why-not-downside">
+                          Potential downside: {alt.potentialDownside}
+                        </p>
+                      )}
                     </div>
                   )}
                 </>
@@ -224,12 +234,27 @@ export function AttributionStrategyPanel({ plan }: { plan: AttributionStrategyPl
             <strong>{formatMoney(plan.simulation.currentSpend)}</strong>
           </span>
           <span>
-            ROAS: <strong>{plan.simulation.currentRoas.toFixed(2)}</strong>
+            ROAS: <strong>{formatRoas(plan.simulation.currentRoas)}</strong>
           </span>
           <span>
-            Break-even: <strong>{plan.simulation.breakEvenRoas.toFixed(2)}</strong>
+            Break-even: <strong>{formatRoas(plan.simulation.breakEvenRoas)}</strong>
           </span>
         </div>
+        {plan.simulation.assumptions.length > 0 && (
+          <div className="attribution-simulation-assumptions">
+            <span className="muted" style={{ fontSize: "0.78rem" }}>
+              Simulation Assumptions
+            </span>
+            <dl>
+              {plan.simulation.assumptions.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
         <div className="attribution-simulation-scenarios">
           {plan.simulation.scenarios.map((scenario) => (
             <div key={scenario.id} className="attribution-simulation-row-extended">
@@ -384,134 +409,47 @@ export function AttributionStrategyPanel({ plan }: { plan: AttributionStrategyPl
 
       <div className="attribution-strategy-actions">
         <h4 style={{ margin: "0 0 12px", fontSize: "0.95rem" }}>
-          Recommended Actions (prioritized by ROI score)
+          Recommended Actions (sorted by priority score)
         </h4>
         {plan.actions.map((action) => (
-          <div
-            key={action.id}
-            className={`attribution-strategy-action ${action.isLastResort ? "last-resort" : ""}`}
-          >
-            <div className="attribution-strategy-action-main">
-              <div className="attribution-strategy-action-title">
-                <span className="attribution-strategy-rank">{action.rank}.</span>
-                <strong>{action.title}</strong>
-                {action.priorityScore != null && (
-                  <span className="muted" style={{ fontSize: "0.75rem" }}>
-                    Priority {action.priorityScore}
-                  </span>
-                )}
-              </div>
-              {action.rankExplanation && (
-                <p className="muted" style={{ margin: "0 0 8px", fontSize: "0.8rem" }}>
-                  {action.rankExplanation}
-                </p>
-              )}
-              <p className="attribution-strategy-description">{action.description}</p>
-              <p className="attribution-strategy-reason muted">
-                <strong>Reason:</strong> {action.reason}
-              </p>
-
-              {action.opportunityCost.items.length > 0 && (
-                <div className="attribution-opportunity-cost">
-                  <strong style={{ fontSize: "0.82rem" }}>Opportunity Cost</strong>
-                  <p className="muted" style={{ margin: "4px 0", fontSize: "0.8rem" }}>
-                    {action.opportunityCost.summary}
-                  </p>
-                  <ul>
-                    {action.opportunityCost.items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {action.workflowSteps.length > 1 && (
-                <div className="attribution-action-workflow">
-                  <span className="muted" style={{ fontSize: "0.75rem" }}>
-                    Execution sequence
-                  </span>
-                  <div className="attribution-workflow-chain compact">
-                    {action.workflowSteps.map((step, idx) => (
-                      <div key={step.step} className="attribution-workflow-step">
-                        {idx > 0 && <span className="attribution-cross-module-arrow">↓</span>}
-                        <span>
-                          Step {step.step}: {step.label}
-                          {step.waitDays != null ? ` (${step.waitDays}d)` : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="attribution-cross-module">
+          <div key={action.id} className="attribution-action-card-wrap">
+            <RecommendationActionCard action={action} />
+            {action.workflowSteps.length > 1 && (
+              <div className="attribution-action-workflow">
                 <span className="muted" style={{ fontSize: "0.75rem" }}>
-                  Cross-module impact
+                  Dependencies
                 </span>
-                <div className="attribution-cross-module-chain">
-                  {action.crossModuleImpacts.map((link, idx) => (
-                    <div key={link.module} className="attribution-cross-module-item">
+                <div className="attribution-workflow-chain compact">
+                  {action.workflowSteps.map((step, idx) => (
+                    <div key={step.step} className="attribution-workflow-step">
                       {idx > 0 && <span className="attribution-cross-module-arrow">↓</span>}
-                      <div>
-                        <strong>{link.module}</strong>
-                        {link.severity === "critical" && (
-                          <span className="attribution-inventory-critical"> Critical Risk</span>
-                        )}
-                        <div>{link.headline}</div>
-                        <div className="muted" style={{ fontSize: "0.78rem" }}>
-                          {link.detail}
-                        </div>
-                        <VerificationBadge status={link.verificationStatus} />
-                      </div>
+                      <span>
+                        {step.label}
+                        {step.waitDays != null ? ` · wait ${step.waitDays} days` : ""}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-
-            <div className="attribution-strategy-metrics">
-              <div>
-                <span className="muted" style={{ fontSize: "0.75rem" }}>
-                  Expected improvement
-                </span>
-                <strong className="positive">
-                  +{formatMoney(action.impact.estimatedMonthlyImprovement)}
-                </strong>
-                <VerificationBadge status={action.impact.simulationStatus} />
-              </div>
-              {action.impact.observedMonthlyImprovement != null && (
-                <div>
-                  <span className="muted" style={{ fontSize: "0.75rem" }}>
-                    Observed improvement
-                  </span>
-                  <strong className="positive">
-                    +{formatMoney(action.impact.observedMonthlyImprovement)}
-                  </strong>
-                  {action.impact.observedStatus && (
-                    <VerificationBadge status={action.impact.observedStatus} />
-                  )}
-                </div>
-              )}
-              <div>
-                <span className="muted" style={{ fontSize: "0.75rem" }}>
-                  Confidence
-                </span>
-                <strong>{action.confidencePct}%</strong>
-              </div>
-              <div>
-                <span className="muted" style={{ fontSize: "0.75rem" }}>
-                  Risk
-                </span>
-                <strong className={riskClass(action.riskLevel)}>{action.riskLevel}</strong>
-              </div>
-              <div>
-                <span className="muted" style={{ fontSize: "0.75rem" }}>
-                  Revenue impact
-                </span>
-                <strong>
-                  {action.expectedRevenueImpactPct >= 0 ? "+" : ""}
-                  {action.expectedRevenueImpactPct}%
-                </strong>
+            )}
+            <div className="attribution-cross-module">
+              <span className="muted" style={{ fontSize: "0.75rem" }}>
+                Cross-module impact
+              </span>
+              <div className="attribution-cross-module-chain">
+                {action.crossModuleImpacts.map((link, idx) => (
+                  <div key={link.module} className="attribution-cross-module-item">
+                    {idx > 0 && <span className="attribution-cross-module-arrow">↓</span>}
+                    <div>
+                      <strong>{link.module}</strong>
+                      {link.severity === "critical" && (
+                        <span className="attribution-inventory-critical"> Critical Risk</span>
+                      )}
+                      <div>{link.headline}</div>
+                      <VerificationBadge status={link.verificationStatus} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

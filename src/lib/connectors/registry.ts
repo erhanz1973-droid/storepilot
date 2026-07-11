@@ -4,7 +4,7 @@ import { createShopifyPlugin } from "./plugins/shopify";
 import { createGoogleAdsPlugin } from "./plugins/google-ads";
 import { createGa4Plugin } from "./plugins/ga4";
 import { createTikTokAdsPlugin, createKlaviyoPlugin } from "./plugins/tiktok-ads";
-import type { ConnectorPlugin, ConnectorRegistry } from "./base";
+import type { ConnectorHealthResult, ConnectorPlugin, ConnectorRegistry } from "./base";
 import type { AdSpendRollups, AdSpendSnapshot, DailyMetricPoint } from "@/lib/ads/types";
 import { buildAdSpendSnapshot } from "@/lib/ads/spend";
 import { mergeIntegrationIntoSnapshot } from "@/lib/integrations/engine";
@@ -17,6 +17,7 @@ import { resolveActiveStoreId } from "@/lib/store/context";
 import type { ConnectorStatus, DataSourceId } from "@/lib/types";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { loadSimulationSnapshot } from "@/lib/simulation-stores/load";
+import { TokenDecryptionError, logTokenDecryptionFailure } from "@/lib/crypto/decrypt-errors";
 
 const DEFAULT_METRICS: StoreSnapshot["storeMetrics"] = {
   revenue30d: 0,
@@ -39,6 +40,44 @@ function mergeDailyFromSnapshot(
     revenueMetrics.map((d) => [d.date, d.adSpend]),
   );
   return mergeDailyMetrics(revenueByDate, spendByDate);
+}
+
+function connectorFailureHealth(
+  connectorId: string,
+  error: unknown,
+): ConnectorHealthResult {
+  if (error instanceof TokenDecryptionError) {
+    logTokenDecryptionFailure(connectorId, error, "aggregateStoreSnapshot");
+    return {
+      status: "error",
+      errorMessage: "Token decryption failed: invalid encryption key",
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[connector:${connectorId}] aggregateStoreSnapshot failed:`, message);
+  if (error instanceof Error && error.stack) {
+    console.error(error.stack);
+  }
+  return {
+    status: "error",
+    errorMessage: message,
+  };
+}
+
+async function collectConnectorResult(connector: ConnectorPlugin) {
+  try {
+    return {
+      id: connector.id,
+      health: await connector.healthCheck(),
+      partial: await connector.fetchStoreSnapshot(),
+    };
+  } catch (error) {
+    return {
+      id: connector.id,
+      health: connectorFailureHealth(connector.id, error),
+      partial: {} as Partial<StoreSnapshot>,
+    };
+  }
 }
 
 export async function getConnectorRegistry(storeId?: string): Promise<ConnectorRegistry> {
@@ -77,13 +116,7 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
   const registry = await getConnectorRegistry(activeStoreId);
   const connectors = Object.values(registry);
 
-  const results = await Promise.all(
-    connectors.map(async (connector) => ({
-      id: connector.id,
-      health: await connector.healthCheck(),
-      partial: await connector.fetchStoreSnapshot(),
-    })),
-  );
+  const results = await Promise.all(connectors.map((connector) => collectConnectorResult(connector)));
 
   const connectorStates = Object.fromEntries(
     results.map((r) => [r.id, r.health.status]),
@@ -97,8 +130,17 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
   const activeProvider = await resolveActiveCommerceProvider(activeStoreId);
   if (activeProvider) {
     commerceProvider = activeProvider.platform;
-    const providerStatus = await activeProvider.getStatus(activeStoreId);
-    commerceStoreDomain = providerStatus.storeDomain;
+    try {
+      const providerStatus = await activeProvider.getStatus(activeStoreId);
+      commerceStoreDomain = providerStatus.storeDomain;
+    } catch (error) {
+      if (error instanceof TokenDecryptionError) {
+        logTokenDecryptionFailure(commerceProvider, error, "resolveActiveCommerceProvider.getStatus");
+      } else if (error instanceof Error) {
+        console.error(`[commerce:${commerceProvider}] getStatus failed:`, error.message);
+        if (error.stack) console.error(error.stack);
+      }
+    }
   }
 
   let products: StoreSnapshot["products"] = [];
@@ -242,17 +284,34 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
 export async function getDataSourceStatuses(storeId?: string) {
   const registry = await getConnectorRegistry(storeId);
   return Promise.all(
-    Object.values(registry).map((connector) => connector.getStatus()),
+    Object.values(registry).map(async (connector) => {
+      try {
+        return connector.getStatus();
+      } catch (error) {
+        const health = connectorFailureHealth(connector.id, error);
+        return { id: connector.id, label: connector.label, ...health };
+      }
+    }),
   );
 }
 
 export async function runConnectorHealthChecks(storeId?: string) {
   const registry = await getConnectorRegistry(storeId);
   return Promise.all(
-    Object.values(registry).map(async (connector) => ({
-      id: connector.id,
-      label: connector.label,
-      ...(await connector.healthCheck()),
-    })),
+    Object.values(registry).map(async (connector) => {
+      try {
+        return {
+          id: connector.id,
+          label: connector.label,
+          ...(await connector.healthCheck()),
+        };
+      } catch (error) {
+        return {
+          id: connector.id,
+          label: connector.label,
+          ...connectorFailureHealth(connector.id, error),
+        };
+      }
+    }),
   );
 }

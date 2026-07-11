@@ -43,6 +43,7 @@ export type CopilotIntent =
   | "product_intelligence"
   | "inventory_intelligence"
   | "marketing_intelligence"
+  | "plan_campaign_locked"
   | "general";
 
 export type CopilotActionRecommendation = {
@@ -59,6 +60,112 @@ export type CopilotBusinessImpact = {
   label: string;
   calculable: boolean;
   reasonIfNot?: string;
+};
+
+export type CopilotConfidenceLevel = "high" | "medium" | "low";
+
+export type CopilotRiskLevel = "low" | "moderate" | "high";
+
+export type CopilotEffortLevel = "low" | "medium" | "high";
+
+export type CopilotTradeOff = {
+  upsideLabel: string;
+  upsideValue: string;
+  downsideLabel: string;
+  downsideValue: string;
+  stabilizationTime: string;
+};
+
+export type CopilotWaitAnalysis = {
+  period: string;
+  unnecessarySpend: string | null;
+  missedProfit: string | null;
+  learningQuality: string;
+  businessRisk: string;
+};
+
+export type CopilotWhyNotAlternative = {
+  label: string;
+  reason: string;
+};
+
+export type CopilotFinancialImpact = {
+  combinedNetMonthly: number | null;
+  combinedLabel: string;
+  overlapNote?: string;
+  calculable: boolean;
+};
+
+export type CopilotRecommendationCard = {
+  rank: number;
+  recommendedAction: string;
+  problem: string;
+  effort: CopilotEffortLevel;
+  effortLabel: string;
+  timeUntilResults: string;
+  includedInCombined: boolean;
+  /** @deprecated Use top-level financialImpact — kept for action card compat */
+  expectedFinancialImpact: string;
+  impactMonthly: number | null;
+  difficulty: "Low" | "Medium" | "High";
+  confidencePct: number;
+  riskLevel: CopilotRiskLevel;
+  riskReason: string;
+  currentPerformance?: string;
+  inactionLabel?: string;
+  inactionAmountMonthly?: number | null;
+};
+
+export type CopilotConversationalMode = "standard" | "wait" | "why_priority";
+
+export type CopilotImpactCalculation = {
+  factors: string[];
+  summary: string;
+};
+
+export type CopilotExecutiveDecision = {
+  decision: string;
+  reason: string;
+  estimatedBenefit: string;
+  confidenceLevel: CopilotConfidenceLevel;
+  confidencePct: number;
+  riskLevel: CopilotRiskLevel;
+  riskReason: string;
+};
+
+export type CopilotConversationalLayer = {
+  mode: CopilotConversationalMode;
+  shortAnswer: string;
+  cautionNote?: string;
+  whySummary?: string;
+  supportingMetrics: string[];
+  financialImpact: CopilotFinancialImpact;
+  recommendedAction: string;
+  prioritizedRecommendations: CopilotRecommendationCard[];
+  remainingOpportunityCount: number;
+  whyFirstPriority: string[];
+  tradeOff: CopilotTradeOff;
+  waitAnalysis: CopilotWaitAnalysis;
+  whyNotAlternatives: CopilotWhyNotAlternative[];
+  impactCalculation: CopilotImpactCalculation;
+  confidence: {
+    level: CopilotConfidenceLevel;
+    pct: number;
+    basis: string[];
+  };
+  risk: {
+    level: CopilotRiskLevel;
+    reason: string;
+  };
+  nextStep: string;
+  nextStepDuration: string;
+  followUpQuestion: string;
+  /** @deprecated Legacy field — no longer rendered */
+  whyBullets?: string[];
+  /** @deprecated Legacy field — no longer rendered */
+  followUpQuestions?: string[];
+  /** @deprecated Legacy field — no longer rendered */
+  executiveDecision?: CopilotExecutiveDecision;
 };
 
 export type CopilotStructuredResponse = {
@@ -81,6 +188,8 @@ export type CopilotStructuredResponse = {
   /** Example questions the AI can answer once data is available. */
   futureInsightExamples?: string[];
   riskAssessment?: BusinessRiskAssessment;
+  /** Conversational performance-marketing layer for Ask AI UI. */
+  conversational?: CopilotConversationalLayer;
 };
 
 export const COPILOT_SUGGESTED_PROMPTS = [

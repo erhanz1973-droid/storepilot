@@ -193,7 +193,15 @@ export function outputToCreateInput(
     description: output.description,
     reason: output.description,
     expectedImpact: output.expectedImpact,
-    confidence: validation?.finalConfidence ?? output.confidence,
+    confidence: Math.min(
+      1,
+      Math.max(
+        0,
+        (validation?.finalConfidence ?? output.confidence) > 1
+          ? (validation?.finalConfidence ?? output.confidence) / 100
+          : (validation?.finalConfidence ?? output.confidence),
+      ),
+    ),
     validationScore: validation?.validationScore ?? null,
     estimatedRevenueGain:
       output.financialImpact?.estimatedMonthlyRevenueIncrease ??

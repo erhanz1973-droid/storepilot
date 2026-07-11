@@ -12,7 +12,8 @@ export default async function IntegrationHealthPage() {
       <div className="page-header">
         <h2>Integration Health</h2>
         <p>
-          System readiness, data quality, sync status, and AI trust — not business performance.{" "}
+          Authentication, data availability, and AI readiness — three separate checks for system
+          trust. Not business performance.{" "}
           <Link href="/health">Business Health</Link>
           {" · "}
           <Link href="/connections">Connections</Link>

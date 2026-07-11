@@ -57,6 +57,12 @@ const ASK_PROMPTS: Record<AnalyticsPageContext, string[]> = {
     "Which channel drives profit?",
     "Compare attribution models",
   ],
+  advertising: [
+    "Which campaigns are losing money?",
+    "Where should I move my budget?",
+    "Which creatives should I replace?",
+    "What should I do first today?",
+  ],
   insights: [
     "Highlight biggest opportunity",
     "Highlight biggest risk",

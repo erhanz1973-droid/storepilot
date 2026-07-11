@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { UnifiedExecutiveBrief } from "@/lib/insights/unified-executive-brief";
+import { PlanScaleBanner } from "@/components/billing/PlanScaleBanner";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, {
@@ -28,6 +29,13 @@ export function ExecutiveInsightsPanel({ brief }: { brief: UnifiedExecutiveBrief
 
   return (
     <div className="exec-insights-panel">
+      {brief.planUsage && (
+        <PlanScaleBanner
+          entitlements={brief.planUsage}
+          unlockedCampaignName={brief.planUsage.unlockedCampaignName}
+        />
+      )}
+
       <div className="card exec-recovery-hero exec-ai-brief">
         <p className="muted exec-recovery-eyebrow">AI Executive Brief</p>
 
@@ -55,6 +63,20 @@ export function ExecutiveInsightsPanel({ brief }: { brief: UnifiedExecutiveBrief
 
         {hasOpportunities ? (
           <>
+            {(brief.visibleOpportunityCount ?? brief.opportunityCount) > 0 && (
+              <p className="muted" style={{ margin: "12px 0 0", fontSize: "0.85rem" }}>
+                <strong>Today&apos;s Recommendations</strong> —{" "}
+                {brief.visibleOpportunityCount ?? brief.opportunityCount} available
+                {(brief.lockedOpportunityCount ?? 0) > 0 && brief.planUsage && (
+                  <span>
+                    {" "}
+                    · {brief.lockedOpportunityCount} additional recommendation
+                    {brief.lockedOpportunityCount === 1 ? "" : "s"} available in{" "}
+                    {brief.planUsage.upgradePlanLabel}.
+                  </span>
+                )}
+              </p>
+            )}
             <div className="exec-ai-brief-priority" style={{ marginTop: 16 }}>
               <span className="muted" style={{ fontSize: "0.78rem" }}>
                 Highest Priority

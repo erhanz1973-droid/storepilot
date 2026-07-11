@@ -1,5 +1,10 @@
-import type { ProfitConfidenceCategory } from "@/lib/profit/profit-page-view";
+import type {
+  ProfitConfidenceCategory,
+  ProfitConfidenceExplanation,
+  SetupImpactItem,
+} from "@/lib/profit/profit-page-view";
 import type { ProfitConfidence } from "@/lib/profit/types";
+import Link from "next/link";
 
 const STATE_LABEL: Record<ProfitConfidenceCategory["state"], string> = {
   verified: "Verified",
@@ -13,12 +18,55 @@ const STATE_CLASS: Record<ProfitConfidenceCategory["state"], string> = {
   missing: "confidence-missing",
 };
 
+function SetupImpactsPanel({
+  impacts,
+  setupComplete,
+}: {
+  impacts: SetupImpactItem[];
+  setupComplete: boolean;
+}) {
+  if (setupComplete && impacts.length === 0) return null;
+
+  return (
+    <div className="profit-setup-impacts">
+      <div className="profit-setup-impacts-head">
+        <h4 style={{ margin: 0 }}>Complete Setup</h4>
+        {!setupComplete && (
+          <Link href="/analytics/profit/setup" className="btn btn-primary btn-sm">
+            Complete Setup
+          </Link>
+        )}
+      </div>
+      {impacts.length > 0 ? (
+        <ul className="profit-setup-impact-list">
+          {impacts.map((item) => (
+            <li key={item.id}>
+              <strong>{item.label}</strong>
+              <span className="muted">{item.impact}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+          All key profit inputs are connected.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function ProfitConfidenceBreakdown({
   categories,
   confidence,
+  explanation,
+  setupImpacts,
+  setupComplete,
 }: {
   categories: ProfitConfidenceCategory[];
   confidence: ProfitConfidence;
+  explanation: ProfitConfidenceExplanation;
+  setupImpacts: SetupImpactItem[];
+  setupComplete: boolean;
 }) {
   const statusClass =
     confidence.status === "verified"
@@ -33,10 +81,23 @@ export function ProfitConfidenceBreakdown({
         <h3 style={{ margin: 0 }}>Profit Confidence</h3>
         <div className="profit-overall-confidence">
           <span className="muted" style={{ fontSize: "0.75rem" }}>
-            Overall Profit Confidence
+            Profit Confidence
           </span>
           <strong>{confidence.status === "unavailable" ? "—" : `${confidence.scorePct}%`}</strong>
         </div>
+      </div>
+
+      <div className="profit-confidence-explanation">
+        {explanation.verifiedLines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+        {explanation.estimatedLines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+        {explanation.missingLines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+        <p className="profit-confidence-closing">{explanation.closingLine}</p>
       </div>
 
       <div className="profit-confidence-grid">
@@ -46,16 +107,11 @@ export function ProfitConfidenceBreakdown({
             <span className={`profit-confidence-state ${STATE_CLASS[cat.state]}`}>
               {STATE_LABEL[cat.state]}
             </span>
-            <span className="profit-confidence-pct">{cat.confidencePct}%</span>
           </div>
         ))}
       </div>
 
-      {confidence.notice && (
-        <p className="profit-confidence-warning" style={{ marginTop: 12, marginBottom: 0 }}>
-          {confidence.notice}
-        </p>
-      )}
+      <SetupImpactsPanel impacts={setupImpacts} setupComplete={setupComplete} />
     </div>
   );
 }

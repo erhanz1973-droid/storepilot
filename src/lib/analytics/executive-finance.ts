@@ -1,6 +1,13 @@
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { ProfitDashboard } from "@/lib/profit/types";
 import { buildMarketingCampaigns } from "@/lib/analytics/marketing";
+import {
+  buildBusinessScaleContext,
+  constrainRecoveryEstimate,
+  constrainRecoveryTotal,
+  type BusinessScaleContext,
+  type RecoveryExplanation,
+} from "@/lib/analytics/recovery-business-constraints";
 
 export type CalculationLine = {
   id: string;
@@ -37,6 +44,9 @@ export type RecoveryTotals = {
   netMonthly: number;
   overlapRemoved: number;
   items: { id: string; label: string; amountMonthly: number; includedInNet: boolean }[];
+  explanation?: RecoveryExplanation;
+  wasCapped?: boolean;
+  forecast?: import("./recovery-business-constraints").RecoveryForecast;
 };
 
 export type RecommendationInput = {
@@ -249,11 +259,34 @@ function rowTitle(row: RecommendationInput): string {
   return row.title ?? "";
 }
 
-export function computeRecoveryTotals(rows: RecommendationInput[]): RecoveryTotals {
-  const grossMonthly = rows.reduce((s, r) => s + r.impactMonthly, 0);
+export function computeRecoveryTotals(
+  rows: RecommendationInput[],
+  options?: {
+    businessContext?: BusinessScaleContext;
+    avgConfidencePct?: number;
+  },
+): RecoveryTotals {
+  const constrainedRows = options?.businessContext
+    ? rows.map((row) => {
+        const constrained = constrainRecoveryEstimate(
+          row.impactMonthly,
+          row.confidencePct,
+          options.businessContext!,
+          undefined,
+          row.title,
+        );
+        return {
+          ...row,
+          impactMonthly: constrained.amount,
+          confidencePct: constrained.confidencePct,
+        };
+      })
+    : rows;
+
+  const grossMonthly = constrainedRows.reduce((s, r) => s + r.impactMonthly, 0);
 
   const byKey = new Map<string, RecommendationInput>();
-  for (const row of rows) {
+  for (const row of constrainedRows) {
     const key = normalizeActionKey(rowTitle(row), row.opportunityKey);
     const existing = byKey.get(key);
     if (!existing || row.impactMonthly > existing.impactMonthly) {
@@ -298,23 +331,61 @@ export function computeRecoveryTotals(rows: RecommendationInput[]): RecoveryTota
     }
   }
 
-  const netMonthly = netRows.reduce((s, r) => s + r.impactMonthly, 0);
   const netIds = new Set(netRows.map((r) => r.id));
 
-  const items = rows.slice(0, 8).map((r) => ({
+  const items = constrainedRows.slice(0, 8).map((r) => ({
     id: r.id,
     label: simplifyLabel(rowTitle(r)),
     amountMonthly: r.impactMonthly,
     includedInNet: netIds.has(r.id) || deduped.some((d) => d.id === r.id),
   }));
 
+  let netMonthly = round(netRows.reduce((s, r) => s + r.impactMonthly, 0));
+  let explanation: RecoveryExplanation | undefined;
+  let wasCapped = false;
+  let forecast: import("./recovery-business-constraints").RecoveryForecast | undefined;
+
+  if (options?.businessContext) {
+    const avgConfidence =
+      options.avgConfidencePct ??
+      (constrainedRows.length > 0
+        ? Math.round(
+            constrainedRows.reduce((s, r) => s + r.confidencePct, 0) /
+              constrainedRows.length,
+          )
+        : 72);
+    const totalConstrained = constrainRecoveryTotal(
+      netMonthly,
+      avgConfidence,
+      options.businessContext,
+    );
+    if (totalConstrained.wasCapped || totalConstrained.amount !== netMonthly) {
+      wasCapped = true;
+      const scale =
+        netMonthly > 0 ? totalConstrained.amount / netMonthly : 0;
+      netMonthly = totalConstrained.amount;
+      if (scale > 0 && scale < 1) {
+        for (const item of items) {
+          item.amountMonthly = round(item.amountMonthly * scale);
+        }
+      }
+    }
+    explanation = totalConstrained.explanation;
+    forecast = totalConstrained.forecast;
+  }
+
   return {
     grossMonthly: round(grossMonthly),
-    netMonthly: round(netMonthly),
+    netMonthly,
     overlapRemoved: round(Math.max(0, grossMonthly - netMonthly)),
     items,
+    explanation,
+    wasCapped,
+    forecast,
   };
 }
+
+export { buildBusinessScaleContext, type BusinessScaleContext, type RecoveryExplanation };
 
 export function computeTrackingScore(snapshot: StoreSnapshot): number {
   const shopify =

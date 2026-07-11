@@ -22,7 +22,7 @@ export type RecoveryEstimateInput = {
   growthBaseMonthly?: number;
 };
 
-const MAX_RECOVERY_RATE = 0.35;
+const MAX_RECOVERY_RATE = 0.5;
 
 export function estimateMonthlyRecovery(input: RecoveryEstimateInput): {
   amountMonthly: number;
@@ -123,5 +123,8 @@ export function estimatePlatformRecoverable(input: {
         }).amountMonthly
       : 0;
 
-  return Math.round(lossRecovery + spendRecovery * 0.5);
+  const monthlySpend = input.atRiskWeeklySpend * 4.33;
+  const spendCap = monthlySpend > 0 ? Math.round(monthlySpend * MAX_RECOVERY_RATE) : Infinity;
+
+  return Math.min(Math.round(lossRecovery + spendRecovery * 0.5), spendCap);
 }

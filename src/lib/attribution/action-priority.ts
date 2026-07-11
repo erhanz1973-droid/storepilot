@@ -42,18 +42,18 @@ export function computeActionPriorityScore(input: {
 
   const profitNorm =
     maxProfit > 0 ? (action.estimatedMonthlyImprovement / maxProfit) * 100 : 50;
-  const profitComponent = Math.round(profitNorm * 0.35);
+  const profitComponent = Math.round(profitNorm * 0.4);
 
   const confidenceComponent = Math.round(action.confidencePct * 0.25);
 
-  const riskComponent = Math.round(RISK_POINTS[action.riskLevel] * 0.15);
+  const riskComponent = Math.round(RISK_POINTS[action.riskLevel] * 0.2);
 
   const revenuePct = action.expectedRevenueImpactPct;
   const revenueFavorability =
     businessObjective === "maximize_revenue" || businessObjective === "maximize_growth"
       ? 50 + revenuePct * 2
       : 50 - Math.min(50, Math.abs(Math.min(0, revenuePct)) * 1.5);
-  const revenueComponent = Math.round(Math.max(0, Math.min(100, revenueFavorability)) * 0.1);
+  const revenueComponent = Math.round(Math.max(0, Math.min(100, revenueFavorability)) * 0.0);
 
   let alignmentRaw = 50;
   const title = action.title.toLowerCase();
@@ -71,12 +71,10 @@ export function computeActionPriorityScore(input: {
   }
   const alignmentComponent = Math.round(Math.max(0, Math.min(100, alignmentRaw)) * 0.15);
 
-  const score =
-    profitComponent +
-    confidenceComponent +
-    riskComponent +
-    revenueComponent +
-    alignmentComponent;
+  const score = Math.min(
+    100,
+    profitComponent + confidenceComponent + riskComponent + alignmentComponent,
+  );
 
   const rankExplanation = buildRankExplanation({
     action,
@@ -91,7 +89,7 @@ export function computeActionPriorityScore(input: {
     profitComponent,
     confidenceComponent,
     riskComponent,
-    revenueComponent,
+    revenueComponent: 0,
     alignmentComponent,
     rankExplanation,
   };
@@ -122,7 +120,7 @@ function buildRankExplanation(input: {
   if (profitComponent >= 30 && riskComponent >= 12) {
     return "Ranked by balanced ROI score: profit impact, confidence, and manageable risk.";
   }
-  return "Ranked by composite priority score (profit, confidence, risk, revenue impact, strategic fit).";
+  return "Ranked by composite priority score (40% financial impact, 25% confidence, 20% risk, 15% strategic alignment).";
 }
 
 export function sortActionsByPriority(

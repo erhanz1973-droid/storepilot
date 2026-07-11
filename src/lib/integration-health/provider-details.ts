@@ -7,34 +7,16 @@ import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { ProviderValidationState } from "@/lib/recommendations/validation/types";
 import type { EntityCheck, ProviderHealthDetail } from "./types";
 import { dataQualityScore, runDataQualityChecks } from "./data-quality";
+import {
+  buildAiReadinessDimension,
+  buildAuthenticationDimension,
+  buildDataAvailabilityDimension,
+} from "./provider-dimensions";
 
 function freshnessFromMinutes(mins: number | null): "fresh" | "stale" | "unknown" {
   if (mins == null) return "unknown";
   if (mins <= 360) return "fresh";
   return "stale";
-}
-
-function aiReadyFromProvider(
-  card: IntegrationHealthCard,
-  validation: ProviderValidationState | undefined,
-  entityScore: number,
-): { pct: number; ready: boolean } {
-  if (card.status === "disconnected" || card.status === "waiting") {
-    return { pct: 0, ready: false };
-  }
-  if (card.syncFailed || card.status === "error") {
-    return { pct: Math.min(40, entityScore), ready: false };
-  }
-  const validationBoost =
-    validation?.readiness === "production_ready"
-      ? 100
-      : validation?.readiness === "development"
-        ? 75
-        : validation?.connected
-          ? 55
-          : 30;
-  const pct = Math.round(entityScore * 0.5 + validationBoost * 0.5);
-  return { pct, ready: pct >= 80 };
 }
 
 function shopifyEntities(
@@ -207,9 +189,6 @@ export async function buildProviderHealthDetails(input: {
       }));
     }
 
-    const entScore = entityScore(entityChecks);
-    const { pct, ready } = aiReadyFromProvider(card, validation, entScore);
-
     const installs =
       card.id === "meta_ads"
         ? metaInstalls
@@ -219,17 +198,39 @@ export async function buildProviderHealthDetails(input: {
             ? ga4Installs
             : [];
 
+    const entScore = entityScore(entityChecks);
+    const dataFreshness = freshnessFromMinutes(validation?.dataAgeMinutes ?? null);
+    const dataQualityPct = card.id === "shopify" ? shopifyQuality : entScore;
+
     const tokenValid =
       card.id === "shopify"
         ? shopifyInstall?.status === "active"
         : installs.length > 0 && !installs.some((i) => "connection_health" in i && i.connection_health === "error");
 
-    const dataAgeMin = validation?.dataAgeMinutes ?? null;
+    const authentication = buildAuthenticationDimension(card, Boolean(tokenValid));
+    const dataAvailability = buildDataAvailabilityDimension({
+      card,
+      entityChecks,
+      entityScore: entScore,
+      dataFreshness,
+      dataQualityPct,
+    });
+    const aiReadiness = buildAiReadinessDimension({
+      card,
+      validation,
+      entityScore: entScore,
+      dataDimension: dataAvailability,
+      authenticationDimension: authentication,
+    });
+    const aiReadyPct = aiReadiness.scorePct ?? 0;
 
     return {
       id: card.id,
       label: card.label,
       connectionStatus: card.status,
+      authentication,
+      dataAvailability,
+      aiReadiness,
       tokenValid: Boolean(tokenValid),
       lastSuccessfulSync: card.lastSuccessfulSyncAt ?? card.lastSyncAt,
       apiLatencyMs: null,
@@ -244,10 +245,10 @@ export async function buildProviderHealthDetails(input: {
               ? (snapshot.googleAdsSnapshot?.campaigns.length ?? 0)
               : null,
       missingFields: entityChecks.filter((e) => e.status === "missing").map((e) => e.label),
-      dataFreshness: freshnessFromMinutes(dataAgeMin),
-      dataQualityPct: card.id === "shopify" ? shopifyQuality : entScore,
-      aiReadyPct: pct,
-      aiReady: ready,
+      dataFreshness,
+      dataQualityPct,
+      aiReadyPct,
+      aiReady: aiReadiness.status === "good",
       entityChecks,
       connectHref: card.connectHref,
       syncEndpoint: card.syncEndpoint,

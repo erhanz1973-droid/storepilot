@@ -24,8 +24,11 @@ import {
   findBiggestOpportunity,
   findPrimaryIssue,
 } from "./enrich-domains";
+import { buildExecutiveDecision, buildBusinessStrengths } from "./executive-decision";
 import { buildHealthExecutiveSummary } from "./executive-summary";
 import { appendCurrentScore, listHealthScoreHistory } from "./health-history";
+import { interpretBenchmarkPercentile } from "./domain-guidance";
+import { buildScoreBreakdown } from "./score-breakdown";
 import type { BusinessHealthDashboard, BusinessHealthTrend } from "./types";
 
 function activeRecommendations(recs: Recommendation[]): Recommendation[] {
@@ -272,7 +275,13 @@ export async function buildBusinessHealthDashboard(): Promise<BusinessHealthDash
     previousFactorScores: previousSnapshot?.factorScores as Partial<
       Record<import("@/lib/store-health/score").StoreHealthFactor, number>
     >,
+    customersLimited,
   });
+
+  const breakdown = buildScoreBreakdown(
+    domains.map((d) => ({ id: d.id, label: d.label, score: d.score })),
+    storeHealth.factors.map((f) => ({ factor: f.factor, weight: f.weight })),
+  );
 
   const trends = snapshot.salesTrends;
   const revenueChangePct =
@@ -297,6 +306,48 @@ export async function buildBusinessHealthDashboard(): Promise<BusinessHealthDash
 
   const inventoryDomain = domains.find((d) => d.id === "inventory");
 
+  const benchmarkRows = [
+    {
+      id: "profit",
+      label: "Profit",
+      percentile: benchmarkData.metrics.find((m) => m.id === "margin")?.cohortPercentile ?? 50,
+    },
+    {
+      id: "marketing",
+      label: "Marketing",
+      percentile: benchmarkData.metrics.find((m) => m.id === "roas")?.cohortPercentile ?? 50,
+    },
+    {
+      id: "conversion",
+      label: "Conversion Rate",
+      percentile: benchmarkData.metrics.find((m) => m.id === "conversion")?.cohortPercentile ?? 50,
+    },
+    {
+      id: "aov",
+      label: "Average Order Value",
+      percentile: benchmarkData.metrics.find((m) => m.id === "aov")?.cohortPercentile ?? 50,
+    },
+    {
+      id: "inventory",
+      label: "Inventory",
+      percentile: Math.max(5, Math.min(95, inventoryDomain?.score ?? 50)),
+    },
+  ].map((row) => {
+    const interp = interpretBenchmarkPercentile(row.label, row.percentile);
+    return {
+      ...row,
+      interpretationKind: interp.kind,
+      interpretation: interp.text,
+    };
+  });
+
+  const strengths = buildBusinessStrengths({ domains, benchmarkRows });
+  const executiveDecision = buildExecutiveDecision({
+    overallScore: storeHealth.score,
+    risk,
+    domains,
+  });
+
   return {
     generatedAt,
     storeId,
@@ -311,44 +362,19 @@ export async function buildBusinessHealthDashboard(): Promise<BusinessHealthDash
       lastUpdated: generatedAt,
     },
     executiveSummary: buildHealthExecutiveSummary({
+      overallScore: storeHealth.score,
       risk,
       domains,
       biggestOpportunity,
       criticalCount: riskDistribution.critical,
     }),
-    breakdown: domains.map((d) => ({ id: d.id, label: d.label, score: d.score })),
+    breakdown,
     domains,
     history: appendCurrentScore(historyRaw, storeHealth.score),
     benchmark: {
       cohortLabel: benchmarkData.cohortLabel,
       similarStoreCount: benchmarkData.similarMerchantCount,
-      rows: [
-        {
-          id: "profit",
-          label: "Profit",
-          percentile: benchmarkData.metrics.find((m) => m.id === "margin")?.cohortPercentile ?? 50,
-        },
-        {
-          id: "marketing",
-          label: "Marketing",
-          percentile: benchmarkData.metrics.find((m) => m.id === "roas")?.cohortPercentile ?? 50,
-        },
-        {
-          id: "conversion",
-          label: "Conversion Rate",
-          percentile: benchmarkData.metrics.find((m) => m.id === "conversion")?.cohortPercentile ?? 50,
-        },
-        {
-          id: "aov",
-          label: "Average Order Value",
-          percentile: benchmarkData.metrics.find((m) => m.id === "aov")?.cohortPercentile ?? 50,
-        },
-        {
-          id: "inventory",
-          label: "Inventory",
-          percentile: Math.max(5, Math.min(95, inventoryDomain?.score ?? 50)),
-        },
-      ],
+      rows: benchmarkRows,
     },
     riskDistribution,
     actionPlan: buildActionPlan({
@@ -358,5 +384,8 @@ export async function buildBusinessHealthDashboard(): Promise<BusinessHealthDash
       risk,
       customersLimited,
     }),
+    strengths,
+    executiveDecision,
+    riskAssessment: risk,
   };
 }

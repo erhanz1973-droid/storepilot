@@ -6,11 +6,27 @@ import { DEMO_STORE_ID } from "@/lib/types";
 
 export const ACTIVE_STORE_COOKIE = "storepilot_active_store_id";
 
+const ACTIVE_STORE_COOKIE_OPTIONS = {
+  path: "/",
+  httpOnly: true,
+  sameSite: "lax" as const,
+  maxAge: 60 * 60 * 24 * 90,
+};
+
+export function activeStoreCookieValue(storeId: string) {
+  return {
+    name: ACTIVE_STORE_COOKIE,
+    value: storeId,
+    options: ACTIVE_STORE_COOKIE_OPTIONS,
+  };
+}
+
 export async function resolveActiveStoreId(): Promise<string> {
   const cookieStore = await cookies();
   const fromCookie = cookieStore.get(ACTIVE_STORE_COOKIE)?.value;
 
   if (fromCookie) {
+    if (fromCookie === DEMO_STORE_ID) return DEMO_STORE_ID;
     if (isSimulationStoreId(fromCookie)) {
       const sim = await getSimulationStoreById(fromCookie);
       if (sim) return fromCookie;

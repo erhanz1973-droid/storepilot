@@ -45,11 +45,23 @@ export type StrategyAssumption = {
 };
 
 export type CrossModuleImpact = {
-  module: "Marketing" | "Inventory" | "Profit" | "Customer";
+  module:
+    | "Marketing"
+    | "Inventory"
+    | "Profit"
+    | "Customer"
+    | "Cash Flow"
+    | "Forecast"
+    | "Customer Lifetime Value";
   headline: string;
   detail: string;
   verificationStatus: ImpactVerificationStatus;
   severity?: "healthy" | "low" | "critical" | "unknown";
+};
+
+export type SimulationAssumption = {
+  label: string;
+  value: string;
 };
 
 export type OpportunityCost = {
@@ -124,6 +136,10 @@ export type AttributionStrategyActionCore = {
   expectedRevenueImpactPct: number;
   cashFlowImpact: "Positive" | "Neutral" | "Negative";
   isLastResort?: boolean;
+  isPackage?: boolean;
+  packageSteps?: string[];
+  implementationTime?: string;
+  rollbackAvailable?: boolean;
   priorityScore?: number;
   rankExplanation?: string;
 };
@@ -143,6 +159,8 @@ export type StrategyAlternative = {
   selected: boolean;
   reason: string;
   whyNot: string[];
+  successProbabilityPct?: number;
+  potentialDownside?: string;
 };
 
 export type SimulationScenario = {
@@ -166,6 +184,7 @@ export type AttributionSimulationCore = {
 
 export type AttributionSimulation = AttributionSimulationCore & {
   verificationStatus: ImpactVerificationStatus;
+  assumptions: SimulationAssumption[];
 };
 
 export type RecommendationStability = {

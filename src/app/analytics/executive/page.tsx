@@ -1,8 +1,15 @@
 import nextDynamic from "next/dynamic";
 import { AnalyticsPageShell } from "@/components/analytics/AnalyticsPageShell";
-import { buildExecutivePageData } from "@/lib/services/analytics";
-import { getCachedActiveStoreId } from "@/lib/services/store-bundle";
-import { hasLiveShopifyConnection } from "@/lib/store/context";
+import {
+  buildDemoExecutivePageData,
+  buildExecutivePageData,
+} from "@/lib/services/analytics";
+import { resolveAdvertisingEntitlements } from "@/lib/billing/resolve-entitlements-light";
+import { logServerRenderError } from "@/lib/services/server-render-error";
+import { allowDemoData } from "@/lib/env/runtime";
+import { resolveActiveStoreId } from "@/lib/store/context";
+import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
+import { DEMO_STORE_ID } from "@/lib/types";
 
 const ExecutivePageClient = nextDynamic(
   () =>
@@ -17,22 +24,34 @@ const ExecutivePageClient = nextDynamic(
 export const dynamic = "force-dynamic";
 
 export default async function ExecutiveAnalyticsPage() {
-  const [data, storeId] = await Promise.all([
-    buildExecutivePageData(),
-    getCachedActiveStoreId(),
+  const [activeStoreId, dataResult, entitlementsResult] = await Promise.all([
+    resolveActiveStoreId(),
+    buildExecutivePageData().catch(async (error) => {
+      logServerRenderError("buildExecutivePageData (page)", error);
+      if (allowDemoData()) {
+        return buildDemoExecutivePageData();
+      }
+      throw error;
+    }),
+    resolveAdvertisingEntitlements().catch(() => ({
+      entitlements: undefined as import("@/lib/billing/types").CampaignEntitlements | undefined,
+    })),
   ]);
-  const isDemo = !(await hasLiveShopifyConnection(storeId));
+
+  const data = dataResult;
+  const isDemo = activeStoreId === DEMO_STORE_ID || isSimulationStoreId(activeStoreId);
+  const planUsage = entitlementsResult.entitlements;
 
   return (
     <AnalyticsPageShell
       title="Executive Dashboard"
-      description="Am I making money? What is hurting my business? What should I do today?"
+      description="What should I focus on today? Your CEO briefing, daily playbook, and links to each executive module."
       context="executive"
       syncedAt={data.syncedAt}
       showDateRange={false}
       executiveAiStatus={data.aiBehavior.liveStatus}
     >
-      <ExecutivePageClient view={data} isDemo={isDemo} />
+      <ExecutivePageClient view={data} isDemo={isDemo} planUsage={planUsage} />
     </AnalyticsPageShell>
   );
 }

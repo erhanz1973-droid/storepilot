@@ -15,6 +15,8 @@ export type ProfitRecoveryOpportunity = {
   reason: string;
   estimatedMonthlyRecovery: number;
   confidencePct: number;
+  difficulty: "Low" | "Medium" | "High";
+  timeRequired: string;
   isLastResort?: boolean;
 };
 
@@ -91,19 +93,35 @@ function canRecommendPause(campaign: MarketingCampaignRow): boolean {
   return campaign.roas < 0.85 && campaign.spend > 200 && campaign.profit < 0;
 }
 
+function recoveryMeta(priority: ProfitRecoveryPriority): {
+  difficulty: ProfitRecoveryOpportunity["difficulty"];
+  timeRequired: string;
+} {
+  if (priority === 1) return { difficulty: "Medium", timeRequired: "2–4 weeks" };
+  if (priority === 2) return { difficulty: "Medium", timeRequired: "1–2 weeks" };
+  if (priority === 3) return { difficulty: "Low", timeRequired: "1–3 weeks" };
+  return { difficulty: "High", timeRequired: "Immediate" };
+}
+
 function addOpportunity(
-  list: Omit<ProfitRecoveryOpportunity, "rank">[],
-  opp: Omit<ProfitRecoveryOpportunity, "rank">,
+  list: ProfitRecoveryOpportunity[],
+  opp: Omit<ProfitRecoveryOpportunity, "rank" | "difficulty" | "timeRequired">,
 ): void {
   if (opp.estimatedMonthlyRecovery <= 0) return;
-  list.push(opp);
+  const meta = recoveryMeta(opp.priority);
+  list.push({
+    ...opp,
+    difficulty: meta.difficulty,
+    timeRequired: meta.timeRequired,
+    rank: 0,
+  });
 }
 
 export function buildStagedRecoveryOpportunities(
   dashboard: ProfitDashboard,
   snapshot: StoreSnapshot,
 ): ProfitRecoveryOpportunity[] {
-  const opportunities: Omit<ProfitRecoveryOpportunity, "rank">[] = [];
+  const opportunities: ProfitRecoveryOpportunity[] = [];
   const campaigns = buildMarketingCampaigns(snapshot);
   const scale = 30 / 7;
   const p = dashboard.primary;
@@ -114,7 +132,6 @@ export function buildStagedRecoveryOpportunities(
 
   for (const c of underperformers) {
     const monthlySpend = Math.round(c.spend * scale);
-    const reason = buildAdvertisingReason(dashboard, c);
     const description = optimizationDescription(c);
 
     addOpportunity(opportunities, {
@@ -123,7 +140,7 @@ export function buildStagedRecoveryOpportunities(
       priorityLabel: PRIORITY_LABELS[1],
       title: `Reduce ${c.campaign} budget by 25%`,
       description,
-      reason,
+      reason: `${c.campaign} ROAS is ${c.roas.toFixed(2)} — trim spend while testing new audiences.`,
       estimatedMonthlyRecovery: Math.round(monthlySpend * 0.25),
       confidencePct: 84,
     });
@@ -137,7 +154,7 @@ export function buildStagedRecoveryOpportunities(
         campaignTone(c.campaign) === "retargeting"
           ? "Refresh audiences and ad creative to recover retargeting efficiency before cutting spend."
           : "Exclude low-performing audiences and test new creative angles to lift ROAS.",
-      reason,
+      reason: `Creative and audience refresh on ${c.campaign} can lift ROAS before budget cuts.`,
       estimatedMonthlyRecovery: Math.round(monthlySpend * 0.18),
       confidencePct: 76,
     });
@@ -150,7 +167,7 @@ export function buildStagedRecoveryOpportunities(
         priorityLabel: PRIORITY_LABELS[2],
         title: `Reallocate budget from ${c.campaign} to ${target.campaign}`,
         description: `Shift spend toward ${target.campaign}, which is delivering ${target.roas.toFixed(2)} ROAS with positive profit.`,
-        reason,
+        reason: `${target.campaign} is outperforming — shift budget from weaker campaigns.`,
         estimatedMonthlyRecovery: Math.round(monthlySpend * 0.22),
         confidencePct: 79,
       });
@@ -166,7 +183,7 @@ export function buildStagedRecoveryOpportunities(
         title: `Pause ${c.campaign} (last resort)`,
         description:
           "Negative profit has persisted with ROAS below break-even and no improving trend detected. Consider pausing only after optimization attempts.",
-        reason: `${reason} Multiple optimization levers should be tested before pausing entirely.`,
+        reason: `Only after targeting and creative tests fail on ${c.campaign}.`,
         estimatedMonthlyRecovery: Math.round(recovery),
         confidencePct: 68,
         isLastResort: true,
@@ -181,10 +198,10 @@ export function buildStagedRecoveryOpportunities(
         id: "reduce-cac-targeting",
         priority: 1,
         priorityLabel: PRIORITY_LABELS[1],
-        title: "Reduce CAC by improving targeting",
+        title: "Reduce Customer Acquisition Cost",
         description:
-          "Acquisition costs exceed gross profit. Tighten audience targeting and refresh underperforming ad sets before reducing overall demand.",
-        reason: buildAdvertisingReason(dashboard),
+          "Tighten audience targeting and refresh underperforming ad sets before increasing overall demand.",
+        reason: "Blended acquisition cost is above gross profit — efficiency gains unlock margin first.",
         estimatedMonthlyRecovery: cacRecovery,
         confidencePct: 85,
       });
@@ -212,7 +229,8 @@ export function buildStagedRecoveryOpportunities(
       title: "Increase AOV with bundles and upsells",
       description:
         "Bundle complementary products and add post-purchase upsells to lift average order value without cutting acquisition.",
-      reason: buildAdvertisingReason(dashboard),
+      reason:
+        "Bundle complementary products and add post-purchase upsells to lift average order value without cutting acquisition.",
       estimatedMonthlyRecovery: Math.round(Math.max(p.revenue * 0.03, 500)),
       confidencePct: 72,
     });
@@ -243,15 +261,20 @@ export function channelOptimizationRecommendation(
   },
   breakEvenRoas: number | null,
 ): string {
-  if (!card.connected && card.revenue === 0) return "Connect channel for attribution";
+  if (!card.connected && card.revenue === 0) {
+    return "Connect integration to measure profitability.";
+  }
   if (card.adSpend > 0 && card.roas != null && card.roas < 1) {
-    const be = breakEvenRoas != null ? breakEvenRoas.toFixed(1) : "break-even";
-    return `${card.channel} is below ${be} ROAS. Reduce budget or improve targeting before pausing entirely.`;
+    return "Reduce spend until ROAS exceeds break-even.";
   }
-  if (card.adSpend > 0 && card.roas != null && card.roas < 1.5) {
-    return "Optimize targeting, creatives, and bidding strategy to lift efficiency.";
+  if (card.adSpend > 0 && card.roas != null && card.roas < (breakEvenRoas ?? 1.5)) {
+    return "Restructure campaigns before increasing budget.";
   }
-  if (card.netProfit > 0 && card.marginPct > 25) return "Scale — high margin channel";
-  if (card.adSpend === 0 && card.revenue > 0) return "Invest in retention — strong organic";
-  return "Monitor performance";
+  if (card.netProfit > 0 && card.marginPct > 25 && card.adSpend > 0) {
+    return "Invest more — channel is profitable with room to scale.";
+  }
+  if (card.adSpend === 0 && card.revenue > 0) {
+    return "Invest more in retention — strong organic contribution.";
+  }
+  return "Hold spend steady and monitor weekly contribution margin.";
 }

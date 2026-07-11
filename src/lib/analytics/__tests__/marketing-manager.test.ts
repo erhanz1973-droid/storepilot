@@ -55,6 +55,7 @@ describe("marketing manager view", () => {
 
     expect(view.v2.brief.greeting).toMatch(/Good (morning|afternoon|evening)/);
     expect(view.v2.brief.lines.length).toBeGreaterThan(0);
+    expect(view.v2.executive.executiveSummary.headline).toBe("Executive Marketing Summary");
     expect(view.v2.budgetAllocation.current.length).toBeGreaterThan(0);
     expect(view.v2.budgetAllocation.suggested.length).toBeGreaterThan(0);
     expect(view.v2.budgetAllocation.evidence.length).toBeGreaterThan(0);

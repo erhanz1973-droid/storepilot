@@ -444,13 +444,16 @@ export function attachInsightMetadata(
 
   const useDynamicNarrative =
     structured.intent === "sales_decrease" ||
+    structured.intent === "roas_decrease" ||
+    structured.intent === "pause_campaigns" ||
+    structured.intent === "marketing_intelligence" ||
     (userQuestion != null && isRevenueDropQuestion(userQuestion));
 
   const recommendations =
     useDynamicNarrative && insight.recommendation
       ? [
           {
-            action: insight.title,
+            action: insight.recommendation.split(".")[0] ?? insight.recommendation,
             detail: insight.recommendation,
             available: false,
           },

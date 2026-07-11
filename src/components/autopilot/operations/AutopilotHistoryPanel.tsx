@@ -22,8 +22,8 @@ export function AutopilotHistoryPanel({ history }: { history: AutopilotHistoryIt
             Recent decisions StorePilot prepared or completed on your behalf.
           </p>
         </div>
-        <Link href="/decisions" className="btn btn-secondary btn-sm">
-          All decisions
+        <Link href="/approvals" className="btn btn-secondary btn-sm">
+          Approval Center
         </Link>
       </div>
       <ol className="autopilot-ops-history-list">

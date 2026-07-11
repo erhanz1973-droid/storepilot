@@ -6,13 +6,13 @@ import {
 } from "@/lib/analytics/recovery-engine";
 
 describe("recovery engine", () => {
-  it("caps recovery at 35% of documented loss", () => {
+  it("caps recovery at 50% of documented loss", () => {
     const result = estimateMonthlyRecovery({
       maxRecoverableMonthly: 100_000,
       gapSeverity: 1,
       confidencePct: 100,
     });
-    expect(result.amountMonthly).toBeLessThanOrEqual(35_000);
+    expect(result.amountMonthly).toBeLessThanOrEqual(50_000);
   });
 
   it("returns zero recovery when no loss and no growth base", () => {

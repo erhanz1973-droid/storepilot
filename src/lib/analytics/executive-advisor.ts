@@ -3,10 +3,12 @@ import type { AutopilotDashboard } from "@/lib/autopilot/types";
 import type { StoreSnapshot, MetaCampaign } from "@/lib/connectors/types";
 import type { DecisionItem } from "@/lib/decisions/center";
 import type { ProfitDashboard } from "@/lib/profit/types";
+import type { MerchantBusinessProfile } from "@/lib/business-model/types";
 import { PROFIT_INPUT_LABELS } from "@/lib/profit/types";
 import type { TrendAnalysis } from "@/lib/insights/types";
 import { computeIntegrationConfidence } from "@/lib/integrations/confidence";
 import {
+  buildBusinessScaleContext,
   buildProfitCalculationTrace,
   buildRawMoneyLeaks,
   clampConfidence,
@@ -17,10 +19,11 @@ import {
   explainInventoryScore,
   explainProfitabilityScore,
   explainTrackingScore,
-  projectedMonthlyProfit,
   sanitizeTimelineText,
+  type BusinessScaleContext,
   type ProfitCalculationTrace,
 } from "./executive-finance";
+import { constrainRecoveryEstimate } from "./recovery-business-constraints";
 import {
   validateExecutiveFinancials,
   type ExecutiveValidationReport,
@@ -35,6 +38,20 @@ import {
   normalizeOpportunityHistorySummary,
   type ExecutiveAiBehavior,
 } from "./executive-ai-behavior";
+import {
+  buildAiEvidence,
+  buildExecutiveFinancialContext,
+  buildExecutiveKpis,
+  buildProfitDisplay,
+  buildRecommendationCardMeta,
+  buildRecoveryScenarios,
+  type AiEvidence,
+  type ExecutiveFinancialContext,
+  type ExecutiveKpi,
+  type ProfitDisplay,
+  type RecommendationCardMeta,
+  type RecoveryScenarios,
+} from "./executive-advisor-enrichment";
 
 export type CeoBrief = {
   greeting: string;
@@ -62,6 +79,10 @@ export type RecoveryBreakdown = {
   grossMonthly: number;
   netMonthly: number;
   overlapRemoved: number;
+  scenarios: RecoveryScenarios;
+  explanation?: import("./executive-finance").RecoveryExplanation;
+  wasCapped?: boolean;
+  forecast?: import("./recovery-business-constraints").RecoveryForecast;
 };
 
 export type MoneyLeaksSection = {
@@ -92,8 +113,11 @@ export type CashFlowBreakdown = {
 export type ExecutiveHealthCategory = {
   id: string;
   label: string;
-  score: number;
+  score: number | null;
   explanation: string;
+  status?: "available" | "waiting";
+  weightContribution?: number;
+  contributionNote?: string;
 };
 
 export type ExecutiveHealthBreakdown = {
@@ -142,6 +166,8 @@ export type RecommendationRow = {
   confidencePct: number;
   estimatedSuccessPct: number;
   confidenceReasons: string[];
+  evidence: AiEvidence;
+  cardMeta: RecommendationCardMeta;
   timeRequired: string;
   risk: RiskAssessment;
   status: "Pending" | "Approved" | "Ignored" | "Open";
@@ -157,6 +183,8 @@ export type PriorityAction = FeaturedRecommendation & {
   timeRequired: string;
   confidenceReasons: string[];
   estimatedSuccessPct: number;
+  evidence: AiEvidence;
+  cardMeta: RecommendationCardMeta;
   whyThisMatters: WhyThisMatters;
   risk: RiskAssessment;
   inactionCost: InactionCost;
@@ -185,6 +213,7 @@ export type AiLearningStatus = {
 
 export type ExecutiveModeSummary = {
   estimatedProfit: number;
+  profitDisplay: ProfitDisplay;
   biggestThreat: { label: string; amountMonthly: number };
   bestOpportunity: { label: string; amountMonthly: number };
   recoveryPotential: number;
@@ -206,8 +235,23 @@ export type ExecutiveAdvisorView = ExecutiveExperience & {
   aiTimeline: AiTimelineEntry[];
   aiLearning: AiLearningStatus;
   executiveMode: ExecutiveModeSummary;
+  financialContext: ExecutiveFinancialContext;
+  executiveKpis: ExecutiveKpi[];
+  profitDisplay: ProfitDisplay;
   aiBehavior: ExecutiveAiBehavior;
 };
+
+export type {
+  AiEvidence,
+  AiEvidenceStrength,
+  ExecutiveFinancialContext,
+  ExecutiveKpi,
+  ProfitDisplay,
+  RecommendationCardMeta,
+  RecommendationExplanation,
+  RecoveryScenario,
+  RecoveryScenarios,
+} from "./executive-advisor-enrichment";
 
 function fmtCurrency(n: number): string {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -273,7 +317,7 @@ function avg(values: number[]): number {
 }
 
 function factorScore(
-  factors: { factor: string; score: number }[],
+  factors: { factor: string; score: number; weight?: number }[],
   ids: string[],
 ): number {
   const matched = factors.filter((f) => ids.includes(f.factor));
@@ -323,14 +367,22 @@ export function buildExecutiveHealthBreakdown(
 ): ExecutiveHealthBreakdown | null {
   if (!storeHealth) return null;
 
-  const factors = storeHealth.factors.map((f) => ({ factor: f.factor, score: f.score }));
+  const factors = storeHealth.factors.map((f) => ({ factor: f.factor, score: f.score, weight: f.weight }));
   const metaRoas = avgMetaRoas(snapshot) ?? 0;
+  const profitUnavailable =
+    !profitDashboard || profitDashboard.primaryProfit.status === "unavailable";
 
-  const marketing = factorScore(factors, ["marketing_efficiency", "blended_roas"]);
+  const advertising = factorScore(
+    factors,
+    ["marketing_efficiency", "blended_roas"],
+  );
   const inventory = factorScore(factors, ["inventory_health"]);
-  const profitability = factorScore(factors, ["profit_trend", "revenue_trend"]);
-  const tracking = computeTrackingScore(snapshot);
+  const pricing = factorScore(factors, ["revenue_trend", "profit_trend"]);
+  const conversion = factorScore(factors, ["conversion_rate"]);
   const retention = factorScore(factors, ["customer_retention"]);
+  const profitability = profitUnavailable
+    ? null
+    : factorScore(factors, ["profit_trend", "revenue_trend"]);
 
   const deadSkus = snapshot.products.filter(
     (p) => p.inventoryQuantity > 0 && p.unitsSold30d < 2,
@@ -339,47 +391,80 @@ export function buildExecutiveHealthBreakdown(
   const p = profitDashboard?.primary;
   const netProfit = p?.netProfit ?? null;
 
+  const weightNote = (ids: string[]) => {
+    const matched = factors.filter((f) => ids.includes(f.factor));
+    const pct = Math.round(matched.reduce((s, f) => s + f.weight, 0) * 100);
+    return `Contributes ~${pct}% to your Store Health score based on connected signals.`;
+  };
+
   return {
     overall: storeHealth.score,
     label: storeHealth.label,
     categories: [
       {
-        id: "marketing",
-        label: "Marketing",
-        score: marketing,
-        explanation:
-          marketing >= 70
-            ? "Marketing efficiency is healthy — paid acquisition is returning strong ROAS."
-            : metaRoas > 0 && metaRoas < 1.5
-              ? `Marketing is underperforming — Meta ROAS is ${metaRoas.toFixed(2)}, below profitable levels.`
-              : "Paid acquisition efficiency is below target and compressing margin.",
-      },
-      {
         id: "inventory",
         label: "Inventory",
         score: inventory,
         explanation: explainInventoryScore(inventory, deadSkus),
-      },
-      {
-        id: "profitability",
-        label: "Profitability",
-        score: profitability,
-        explanation: explainProfitabilityScore(
-          profitability,
-          netProfit,
-          p?.adSpend ?? 0,
-          p?.grossProfit ?? 0,
+        weightContribution: Math.round(
+          factors.filter((f) => f.factor === "inventory_health").reduce((s, f) => s + f.weight, 0) * 100,
         ),
+        contributionNote: weightNote(["inventory_health"]),
       },
       {
-        id: "tracking",
-        label: "Tracking",
-        score: tracking,
-        explanation: explainTrackingScore(tracking, snapshot),
+        id: "advertising",
+        label: "Advertising",
+        score: advertising,
+        explanation:
+          advertising >= 70
+            ? "Paid acquisition is returning strong ROAS — advertising efficiency supports overall health."
+            : metaRoas > 0 && metaRoas < 1.5
+              ? `Advertising is underperforming — Meta ROAS is ${metaRoas.toFixed(2)}, below profitable levels.`
+              : "Paid acquisition efficiency is below target and compressing margin.",
+        weightContribution: Math.round(
+          factors
+            .filter((f) => ["marketing_efficiency", "blended_roas"].includes(f.factor))
+            .reduce((s, f) => s + f.weight, 0) * 100,
+        ),
+        contributionNote: weightNote(["marketing_efficiency", "blended_roas"]),
+      },
+      {
+        id: "pricing",
+        label: "Pricing",
+        score: pricing,
+        explanation:
+          pricing >= 70
+            ? "Revenue and margin trends suggest pricing is aligned with demand."
+            : pricing >= 40
+              ? "Pricing may be leaving margin on the table — review discount depth and category benchmarks."
+              : "Margin pressure detected — pricing and discount strategy likely need adjustment.",
+        weightContribution: Math.round(
+          factors
+            .filter((f) => ["revenue_trend", "profit_trend"].includes(f.factor))
+            .reduce((s, f) => s + f.weight, 0) * 100,
+        ),
+        contributionNote: weightNote(["revenue_trend", "profit_trend"]),
+      },
+      {
+        id: "conversion",
+        label: "Conversion",
+        score: conversion,
+        explanation:
+          snapshot.ga4Snapshot?.ecommerceConversionRatePct != null
+            ? conversion >= 70
+              ? `GA4 conversion rate is ${snapshot.ga4Snapshot.ecommerceConversionRatePct.toFixed(2)}% — site conversion supports revenue goals.`
+              : `GA4 conversion rate is ${snapshot.ga4Snapshot.ecommerceConversionRatePct.toFixed(2)}% — funnel optimization could lift revenue without more ad spend.`
+            : conversion >= 70
+              ? "Conversion signals are healthy across connected analytics."
+              : "Conversion rate is moderate — landing page and checkout friction may be limiting growth.",
+        weightContribution: Math.round(
+          factors.filter((f) => f.factor === "conversion_rate").reduce((s, f) => s + f.weight, 0) * 100,
+        ),
+        contributionNote: weightNote(["conversion_rate"]),
       },
       {
         id: "retention",
-        label: "Retention",
+        label: "Customer Retention",
         score: retention,
         explanation:
           snapshot.ga4Snapshot?.returningUserRatePct != null
@@ -391,6 +476,34 @@ export function buildExecutiveHealthBreakdown(
               : retention >= 40
                 ? "Returning customer share is moderate — repeat purchase programs could help."
                 : "Returning customer share is low — focus on repeat purchase and loyalty programs.",
+        weightContribution: Math.round(
+          factors.filter((f) => f.factor === "customer_retention").reduce((s, f) => s + f.weight, 0) * 100,
+        ),
+        contributionNote: weightNote(["customer_retention"]),
+      },
+      {
+        id: "profitability",
+        label: "Profitability",
+        score: profitability,
+        status: profitUnavailable ? "waiting" : "available",
+        explanation: profitUnavailable
+          ? "Waiting for Data — connect Shopify product costs (COGS) to score profitability."
+          : explainProfitabilityScore(
+              profitability ?? 0,
+              netProfit,
+              p?.adSpend ?? 0,
+              p?.grossProfit ?? 0,
+            ),
+        weightContribution: profitUnavailable
+          ? 0
+          : Math.round(
+              factors
+                .filter((f) => ["profit_trend", "revenue_trend"].includes(f.factor))
+                .reduce((s, f) => s + f.weight, 0) * 100,
+            ),
+        contributionNote: profitUnavailable
+          ? "Excluded from overall score until cost data is connected."
+          : weightNote(["profit_trend", "revenue_trend"]),
       },
     ],
   };
@@ -688,26 +801,44 @@ function enrichRecommendation(input: {
   decisionId?: string;
   recommendationId?: string;
   opportunityKey?: string;
+  businessContext?: BusinessScaleContext;
 }): Omit<RecommendationRow, "opportunity"> & { opportunity: string } {
-  const { title, impactMonthly, confidencePct, decision, snapshot } = input;
-  const risk = buildRiskAssessment(title, confidencePct, snapshot);
-  return {
+  const { title, impactMonthly, confidencePct, decision, snapshot, businessContext } = input;
+  const constrained = businessContext
+    ? constrainRecoveryEstimate(
+        impactMonthly,
+        confidencePct,
+        businessContext,
+        undefined,
+        title,
+      )
+    : null;
+  const resolvedImpact = constrained?.amount ?? impactMonthly;
+  const resolvedConfidence = constrained?.confidencePct ?? confidencePct;
+  const risk = buildRiskAssessment(title, resolvedConfidence, snapshot);
+  const confidenceReasons = buildEvidenceConfidence(decision, title, snapshot, resolvedConfidence);
+  const base = {
     id: input.id,
     opportunity: title,
     title,
-    expectedMonthlyProfit: impactMonthly,
-    confidencePct: clampConfidence(confidencePct),
-    estimatedSuccessPct: estimateSuccessPct(confidencePct, risk),
-    confidenceReasons: buildEvidenceConfidence(decision, title, snapshot, confidencePct),
+    expectedMonthlyProfit: resolvedImpact,
+    confidencePct: clampConfidence(resolvedConfidence),
+    estimatedSuccessPct: estimateSuccessPct(resolvedConfidence, risk),
+    confidenceReasons,
+    evidence: buildAiEvidence(resolvedConfidence, confidenceReasons),
     timeRequired: inferTimeRequired(title),
     risk,
     status: decisionStatus(decision),
-    whyThisMatters: buildWhyThisMatters(title, impactMonthly, snapshot, decision),
-    inactionCost: buildInactionCost(impactMonthly, title),
+    whyThisMatters: buildWhyThisMatters(title, resolvedImpact, snapshot, decision),
+    inactionCost: buildInactionCost(resolvedImpact, title),
     contextualActions: buildContextualActions(title, decision),
     decisionId: input.decisionId,
     recommendationId: input.recommendationId,
     opportunityKey: input.opportunityKey,
+  };
+  return {
+    ...base,
+    cardMeta: buildRecommendationCardMeta({ ...base, opportunity: title }, snapshot),
   };
 }
 
@@ -715,8 +846,15 @@ export function buildRecommendationRows(input: {
   experience: ExecutiveExperience;
   decisions: DecisionItem[];
   snapshot: StoreSnapshot;
+  profitDashboard?: ProfitDashboard | null;
+  businessProfile?: MerchantBusinessProfile | null;
 }): RecommendationRow[] {
   const decisionMap = new Map(input.decisions.map((d) => [d.id, d]));
+  const businessContext = buildBusinessScaleContext(
+    input.profitDashboard ?? null,
+    input.snapshot,
+    { businessProfile: input.businessProfile },
+  );
 
   const rawInputs = input.experience.opportunities.map((opp) => ({
     id: opp.id,
@@ -742,11 +880,30 @@ export function buildRecommendationRows(input: {
       decisionId: opp.decisionId,
       recommendationId: opp.recommendationId,
       opportunityKey: opp.opportunityKey,
+      businessContext,
     });
   });
 }
 
-export function buildRecoveryBreakdown(rows: RecommendationRow[]): RecoveryBreakdown {
+export function buildRecoveryBreakdown(
+  rows: RecommendationRow[],
+  options?: {
+    profitDashboard?: ProfitDashboard | null;
+    snapshot?: StoreSnapshot;
+    businessProfile?: MerchantBusinessProfile | null;
+  },
+): RecoveryBreakdown {
+  const businessContext =
+    options?.snapshot != null
+      ? buildBusinessScaleContext(options.profitDashboard ?? null, options.snapshot, {
+          businessProfile: options.businessProfile,
+        })
+      : undefined;
+  const avgConfidence =
+    rows.length > 0
+      ? Math.round(rows.reduce((s, r) => s + r.confidencePct, 0) / rows.length)
+      : 72;
+
   const totals = computeRecoveryTotals(
     rows.map((r) => ({
       id: r.id,
@@ -757,6 +914,9 @@ export function buildRecoveryBreakdown(rows: RecommendationRow[]): RecoveryBreak
       decisionId: r.decisionId,
       recommendationId: r.recommendationId,
     })),
+    businessContext
+      ? { businessContext, avgConfidencePct: avgConfidence }
+      : undefined,
   );
   return {
     items: totals.items.map((i) => ({
@@ -767,6 +927,14 @@ export function buildRecoveryBreakdown(rows: RecommendationRow[]): RecoveryBreak
     grossMonthly: totals.grossMonthly,
     netMonthly: totals.netMonthly,
     overlapRemoved: totals.overlapRemoved,
+    explanation: totals.explanation,
+    wasCapped: totals.wasCapped,
+    forecast: totals.forecast,
+    scenarios: buildRecoveryScenarios({
+      grossMonthly: totals.grossMonthly,
+      netMonthly: totals.netMonthly,
+      overlapRemoved: totals.overlapRemoved,
+    }),
   };
 }
 
@@ -1089,6 +1257,8 @@ function buildPriorityAction(
     timeRequired: enriched.timeRequired,
     confidenceReasons: enriched.confidenceReasons,
     estimatedSuccessPct: enriched.estimatedSuccessPct,
+    evidence: enriched.evidence,
+    cardMeta: enriched.cardMeta,
     whyThisMatters: enriched.whyThisMatters,
     risk: enriched.risk,
     inactionCost: enriched.inactionCost,
@@ -1101,15 +1271,21 @@ export function buildExecutiveModeSummary(input: {
   moneyLeaks: MoneyLeaksSection;
   recommendationRows: RecommendationRow[];
   recoveryBreakdown: RecoveryBreakdown;
+  profitCalculation: ProfitCalculationTrace;
 }): ExecutiveModeSummary {
   const biggestThreat = input.moneyLeaks.items[0] ?? {
     label: "Rising acquisition costs",
     amountMonthly: 0,
   };
   const bestRow = input.recommendationRows[0];
+  const profitAmount =
+    input.profitCalculation.status !== "unavailable"
+      ? input.profitCalculation.estimatedProfit
+      : input.forecast.projectedMonthlyProfit;
 
   return {
-    estimatedProfit: input.forecast.projectedMonthlyProfit,
+    estimatedProfit: profitAmount,
+    profitDisplay: buildProfitDisplay(input.profitCalculation, profitAmount),
     biggestThreat: {
       label: biggestThreat.label,
       amountMonthly: biggestThreat.amountMonthly,
@@ -1135,6 +1311,7 @@ export function buildExecutiveAdvisorView(input: {
   aiPerformance?: import("@/lib/types").AiPerformanceSummary;
   opportunityHistory?: import("@/lib/opportunities/history").OpportunityHistorySummary | import("@/lib/opportunities/history").OpportunityHistoryRecord[];
   experienceInput: Parameters<typeof buildExecutiveExperience>[0];
+  businessProfile?: MerchantBusinessProfile | null;
 }): ExecutiveAdvisorView {
   const experience = buildExecutiveExperience(input.experienceInput);
   const profitDashboard = input.profitDashboard ?? null;
@@ -1143,8 +1320,14 @@ export function buildExecutiveAdvisorView(input: {
     experience,
     decisions: input.decisions,
     snapshot: input.snapshot,
+    profitDashboard,
+    businessProfile: input.businessProfile,
   });
-  const recoveryBreakdown = buildRecoveryBreakdown(recommendationRows);
+  const recoveryBreakdown = buildRecoveryBreakdown(recommendationRows, {
+    profitDashboard,
+    snapshot: input.snapshot,
+    businessProfile: input.businessProfile,
+  });
   const healthBreakdown = buildExecutiveHealthBreakdown(
     experience.storeHealth,
     input.snapshot,
@@ -1164,7 +1347,9 @@ export function buildExecutiveAdvisorView(input: {
       decisionId: r.decisionId,
       recommendationId: r.recommendationId,
     })),
-    healthCategories: healthBreakdown?.categories ?? [],
+    healthCategories: (healthBreakdown?.categories ?? [])
+      .filter((c): c is typeof c & { score: number } => c.score != null)
+      .map((c) => ({ label: c.label, score: c.score, explanation: c.explanation })),
   });
 
   const moneyLeaks: MoneyLeaksSection = {
@@ -1182,6 +1367,14 @@ export function buildExecutiveAdvisorView(input: {
     grossMonthly: validation.recovery.grossMonthly,
     netMonthly: validation.recovery.netMonthly,
     overlapRemoved: validation.recovery.overlapRemoved,
+    explanation: recoveryBreakdown.explanation,
+    wasCapped: recoveryBreakdown.wasCapped,
+    forecast: recoveryBreakdown.forecast,
+    scenarios: buildRecoveryScenarios({
+      grossMonthly: validation.recovery.grossMonthly,
+      netMonthly: validation.recovery.netMonthly,
+      overlapRemoved: validation.recovery.overlapRemoved,
+    }),
   };
 
   const profitCalculation = validation.profitTrace;
@@ -1190,9 +1383,10 @@ export function buildExecutiveAdvisorView(input: {
 
   const forecast = {
     ...experience.forecast,
-    projectedMonthlyProfit: profitCalculation.isBalanced
-      ? projectedMonthlyProfit(profitDashboard)
-      : profitCalculation.computedProfit,
+    projectedMonthlyProfit:
+      profitCalculation.status === "unavailable"
+        ? 0
+        : profitCalculation.estimatedProfit,
     recoveryMonthly: recoveryBreakdownValidated.netMonthly,
     confidencePct: clampConfidence(experience.forecast.confidencePct),
   };
@@ -1247,6 +1441,21 @@ export function buildExecutiveAdvisorView(input: {
     moneyLeaks,
     recommendationRows,
     recoveryBreakdown: recoveryBreakdownValidated,
+    profitCalculation,
+  });
+
+  const profitDisplay = buildProfitDisplay(profitCalculation, executiveMode.estimatedProfit);
+  const financialContext = buildExecutiveFinancialContext({
+    profitDashboard,
+    profitCalculation,
+    snapshot: input.snapshot,
+    moneyLeaks,
+    recoveryBreakdown: recoveryBreakdownValidated,
+  });
+  const executiveKpis = buildExecutiveKpis({
+    financialContext,
+    moneyLeaks,
+    recoveryScenarios: recoveryBreakdownValidated.scenarios,
   });
 
   const aiBehavior = buildExecutiveAiBehavior({
@@ -1271,6 +1480,11 @@ export function buildExecutiveAdvisorView(input: {
       ? simplifyOpportunityLabel(priorityAction.title)
       : null,
     openDecisionsCount: pendingCount,
+    profitUnavailable: profitDisplay.status === "unavailable",
+    moneyLeaks,
+    priorityAction: priorityAction
+      ? { title: priorityAction.title, impactMonthly: priorityAction.impactMonthly }
+      : null,
   });
 
   return {
@@ -1295,6 +1509,9 @@ export function buildExecutiveAdvisorView(input: {
     aiTimeline,
     aiLearning,
     executiveMode,
+    financialContext,
+    executiveKpis,
+    profitDisplay,
     aiBehavior,
   };
 }

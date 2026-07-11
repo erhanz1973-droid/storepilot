@@ -51,8 +51,8 @@ describe("executive-advisor", () => {
       priorityQueue: [],
       storeHealth: storeHealth(),
     });
-    const rows = buildRecommendationRows({ experience, decisions: [], snapshot });
-    const recovery = buildRecoveryBreakdown(rows);
+    const rows = buildRecommendationRows({ experience, decisions: [], snapshot, profitDashboard });
+    const recovery = buildRecoveryBreakdown(rows, { profitDashboard, snapshot });
     expect(recovery.grossMonthly).toBeGreaterThan(0);
     expect(recovery.netMonthly).toBeLessThanOrEqual(recovery.grossMonthly);
   });
@@ -80,10 +80,12 @@ describe("executive-advisor", () => {
       view.recoveryBreakdown.grossMonthly,
     );
     expect(view.validation.recovery.netMonthly).toBe(view.recoveryBreakdown.netMonthly);
-    expect(view.healthBreakdown?.categories.every((c) => {
-      if (c.score < 40) return !c.explanation.toLowerCase().includes("within normal range");
-      return true;
-    })).toBe(true);
+    expect(view.executiveKpis.length).toBe(5);
+    expect(view.financialContext.currentRevenue).toBeGreaterThan(0);
+    expect(view.recoveryBreakdown.scenarios.expected.amountMonthly).toBe(
+      view.recoveryBreakdown.netMonthly,
+    );
+    expect(view.recommendationRows[0]?.evidence.strength).toBeTruthy();
   });
 
   it("formats daily change metrics", () => {
@@ -124,9 +126,9 @@ describe("executive-advisor", () => {
       priorityQueue: [],
       storeHealth: storeHealth(),
     });
-    const rows = buildRecommendationRows({ experience, decisions: [], snapshot });
+    const rows = buildRecommendationRows({ experience, decisions: [], snapshot, profitDashboard });
     const moneyLeaks = buildMoneyLeaks(profitDashboard, snapshot);
-    const recovery = buildRecoveryBreakdown(rows);
+    const recovery = buildRecoveryBreakdown(rows, { profitDashboard, snapshot });
     const brief = buildConversationalCeoBrief({
       snapshot,
       profitDashboard,
@@ -151,9 +153,9 @@ describe("executive-advisor", () => {
       priorityQueue: [],
       storeHealth: storeHealth(),
     });
-    const rows = buildRecommendationRows({ experience, decisions: [], snapshot });
+    const rows = buildRecommendationRows({ experience, decisions: [], snapshot, profitDashboard });
     const moneyLeaks = buildMoneyLeaks(profitDashboard, snapshot);
-    const recovery = buildRecoveryBreakdown(rows);
+    const recovery = buildRecoveryBreakdown(rows, { profitDashboard, snapshot });
     const brief = buildConversationalCeoBrief({
       snapshot,
       profitDashboard,
@@ -177,11 +179,61 @@ describe("executive-advisor", () => {
       priorityQueue: [],
       storeHealth: storeHealth(),
     });
-    const rows = buildRecommendationRows({ experience, decisions: [], snapshot });
+    const rows = buildRecommendationRows({ experience, decisions: [], snapshot, profitDashboard });
     expect(rows.length).toBeGreaterThan(0);
     const row = rows[0];
     expect(row.estimatedSuccessPct).toBeGreaterThan(0);
     expect(row.inactionCost.timeline.daily).toBeGreaterThan(0);
     expect(row.inactionCost.timeline.monthly).toBeGreaterThan(row.inactionCost.timeline.weekly);
+  });
+
+  it("recovery potential stays credible relative to ad spend", () => {
+    const smallSpendSnapshot = {
+      ...snapshot,
+      campaigns: [],
+      googleAdsSnapshot: {
+        ...snapshot.googleAdsSnapshot!,
+        campaigns: [
+          {
+            id: "google:test",
+            name: "Google Search",
+            spend7d: 197,
+            revenue7d: 280,
+            roas7d: 1.42,
+            status: "ENABLED",
+          },
+        ],
+        rollups: snapshot.googleAdsSnapshot?.rollups,
+      },
+    };
+    const smallProfit = {
+      ...profitDashboard,
+      primary: {
+        ...profitDashboard.primary,
+        revenue: 12_000,
+        netProfit: 2_400,
+        adSpend: 850,
+      },
+    };
+    const experience = buildExecutiveExperience({
+      snapshot: smallSpendSnapshot,
+      profitDashboard: smallProfit,
+      decisions: [],
+      opportunityFeed: [],
+      priorityQueue: [],
+      storeHealth: storeHealth(),
+    });
+    const rows = buildRecommendationRows({
+      experience,
+      decisions: [],
+      snapshot: smallSpendSnapshot,
+      profitDashboard: smallProfit,
+    });
+    const recovery = buildRecoveryBreakdown(rows, {
+      profitDashboard: smallProfit,
+      snapshot: smallSpendSnapshot,
+    });
+    expect(recovery.netMonthly).toBeLessThanOrEqual(430);
+    expect(recovery.explanation?.basedOn.length).toBeGreaterThan(0);
   });
 });

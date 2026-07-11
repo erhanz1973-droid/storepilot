@@ -125,7 +125,7 @@ export function mergeLiveEvents(events: AIEvent[]): MergedLiveEvent[] {
       viewHref: primary.type === "campaign_issue" || primary.type === "roas_change"
         ? "/analytics/marketing"
         : primary.type === "inventory_risk"
-          ? "/inventory"
+          ? "/analytics/inventory"
           : "/decisions",
       sourceEventIds: group.map((e) => e.id),
     });

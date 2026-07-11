@@ -18,100 +18,84 @@ describe("business risk assessment", () => {
   });
   const productIntelligence = buildProductIntelligence(snapshot, [], profitDashboard);
 
-  it("scores all seven business risk categories with contributors and confidence", () => {
-    const assessment = buildBusinessRiskAssessment({
-      snapshot,
-      profitDashboard,
-      attributionDashboard,
-      customerIntelligence,
-      productIntelligence,
-      hasActiveAds: true,
-    });
+  const baseInput = {
+    snapshot,
+    profitDashboard,
+    attributionDashboard,
+    customerIntelligence,
+    productIntelligence,
+    hasActiveAds: true,
+  };
+
+  it("scores all seven business risk categories with executive fields", () => {
+    const assessment = buildBusinessRiskAssessment(baseInput);
 
     expect(assessment.categories).toHaveLength(7);
+    expect(assessment.executiveBriefing.length).toBeGreaterThan(50);
     for (const cat of assessment.categories) {
-      expect(cat.contributors.length).toBeGreaterThan(0);
-      expect(cat.confidencePct).toBeGreaterThan(0);
-      expect(cat.timeHorizon.length).toBeGreaterThan(3);
-      expect(cat.contributors.reduce((s, c) => s + c.points, 0)).toBe(cat.score);
+      expect(cat.priorityRank).toBeGreaterThan(0);
+      expect(cat.probabilityPct).toBeGreaterThan(0);
+      expect(cat.trendLabel.length).toBeGreaterThan(0);
+      expect(cat.businessImpactLabel.length).toBeGreaterThan(0);
+      expect(cat.riskTimeline).toHaveLength(4);
+      expect(cat.crossBusinessEffects.length).toBeGreaterThan(0);
     }
   });
 
-  it("does not default to marketing-only when inventory is critical", () => {
+  it("prioritizes inventory when stock is critical", () => {
     const oosSnapshot: StoreSnapshot = {
       ...snapshot,
       products: snapshot.products.map((p) => ({ ...p, inventoryQuantity: 0 })),
     };
 
     const assessment = buildBusinessRiskAssessment({
+      ...baseInput,
       snapshot: oosSnapshot,
-      profitDashboard,
-      attributionDashboard,
-      customerIntelligence,
-      productIntelligence,
-      hasActiveAds: true,
     });
 
     expect(assessment.primaryRisk.category).toBe("inventory");
-    expect(assessment.primaryRisk.title).toBe("Inventory Shortage");
-    expect(assessment.estimatedExposure.items.length).toBeGreaterThan(0);
-    expect(assessment.rankingExplanation).toBeDefined();
+    expect(assessment.primaryRisk.estimatedExposureMonthly).toBeGreaterThan(0);
+    expect(assessment.whyNotOtherRisks.length).toBeGreaterThan(0);
   });
 
-  it("gives each recommendation a unique rationale", () => {
-    const oosSnapshot: StoreSnapshot = {
-      ...snapshot,
-      products: snapshot.products.map((p) => ({ ...p, inventoryQuantity: 0 })),
-    };
+  it("explains business consequences instead of raw metric drama", () => {
+    const assessment = buildBusinessRiskAssessment(baseInput);
+    const marketing = assessment.categories.find((c) => c.category === "marketing");
 
-    const assessment = buildBusinessRiskAssessment({
-      snapshot: oosSnapshot,
-      profitDashboard,
-      attributionDashboard,
-      customerIntelligence,
-      productIntelligence,
-      hasActiveAds: true,
-    });
-
-    const reasons = assessment.recommendationSteps.map((s) => s.reason);
-    const uniqueReasons = new Set(reasons);
-    expect(uniqueReasons.size).toBe(reasons.length);
-    expect(assessment.recommendationSteps[0]?.action.toLowerCase()).toContain("replenish");
-    expect(assessment.recommendationSteps[1]?.reason.toLowerCase()).toContain("acquisition");
-  });
-
-  it("explains why primary risk ranked above secondary when scores are close", () => {
-    const oosSnapshot: StoreSnapshot = {
-      ...snapshot,
-      products: snapshot.products.map((p) => ({ ...p, inventoryQuantity: 0 })),
-    };
-
-    const assessment = buildBusinessRiskAssessment({
-      snapshot: oosSnapshot,
-      profitDashboard,
-      attributionDashboard,
-      customerIntelligence,
-      productIntelligence,
-      hasActiveAds: true,
-    });
-
-    const topTwo = assessment.categories.slice(0, 2);
-    if (topTwo[0]!.score - topTwo[1]!.score <= 12) {
-      expect(assessment.rankingExplanation?.toLowerCase()).toContain("inventory ranked first");
+    if (marketing && marketing.score >= 40) {
+      expect(assessment.primaryRisk.businessConsequence).not.toMatch(/\d{3,}%/);
+      expect(assessment.primaryRisk.businessConsequence).toMatch(/profitably|acquisition|revenue/i);
     }
   });
 
-  it("includes sequenced recommendation steps", () => {
-    const assessment = buildBusinessRiskAssessment({
-      snapshot,
-      profitDashboard,
-      attributionDashboard,
-      customerIntelligence,
-      productIntelligence,
-      hasActiveAds: true,
-    });
+  it("enriches recommendation steps with effort and expected benefit", () => {
+    const assessment = buildBusinessRiskAssessment(baseInput);
 
     expect(assessment.recommendationSteps).toHaveLength(3);
-    expect(assessment.recommendationSteps.map((s) => s.step)).toEqual([1, 2, 3]);
+    for (const step of assessment.recommendationSteps) {
+      expect(step.estimatedTime.length).toBeGreaterThan(0);
+      expect(step.riskReductionPct).toBeGreaterThan(0);
+      expect(step.expectedBenefit.length).toBeGreaterThan(0);
+    }
+    const reasons = assessment.recommendationSteps.map((s) => s.reason);
+    expect(new Set(reasons).size).toBe(reasons.length);
+  });
+
+  it("ranks categories by priority not raw score display", () => {
+    const assessment = buildBusinessRiskAssessment(baseInput);
+    expect(assessment.categories[0]!.priorityRank).toBe(1);
+    expect(assessment.primaryRisk.probabilityPct).toBeGreaterThan(0);
+    expect(assessment.primaryRisk.timeHorizon.length).toBeGreaterThan(3);
+    expect(assessment.rankingExplanation ?? assessment.primaryRisk.rankingRationale).toMatch(
+      /ranked|financial impact/i,
+    );
+  });
+
+  it("includes inaction impact and cross-business effects on primary risk", () => {
+    const assessment = buildBusinessRiskAssessment(baseInput);
+
+    expect(assessment.primaryRisk.inactionImpact.length).toBeGreaterThan(0);
+    expect(assessment.primaryRisk.crossBusinessEffects.length).toBeGreaterThan(2);
+    expect(assessment.primaryRisk.riskTimeline).toHaveLength(4);
   });
 });

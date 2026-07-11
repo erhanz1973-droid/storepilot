@@ -1,6 +1,11 @@
 import type { ChartDefinition, MetricCard } from "@/lib/analytics/types";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { ProfitDashboard } from "@/lib/profit/types";
+import {
+  buildBusinessScaleContext,
+  constrainRecoveryEstimate,
+  constrainRecoveryTotal,
+} from "@/lib/analytics/recovery-business-constraints";
 import type { ExecutiveSummary } from "@/lib/insights/executive-summary";
 import type { TrendAnalysis } from "@/lib/insights/types";
 import type { MorningExecutiveBrief } from "@/lib/brief/morning-brief";
@@ -176,6 +181,7 @@ function buildForecast(input: {
   profitDashboard?: ProfitDashboard | null;
   opportunities: ExecutiveOpportunity[];
   predictiveInsights?: PredictiveInsight[];
+  snapshot: StoreSnapshot;
 }): BusinessForecast {
   const projected =
     input.profitDashboard?.primaryProfit.status !== "unavailable" &&
@@ -183,22 +189,32 @@ function buildForecast(input: {
       ? input.profitDashboard.primary.netProfit
       : 0;
 
+  const businessContext = buildBusinessScaleContext(
+    input.profitDashboard ?? null,
+    input.snapshot,
+  );
   const grossRecovery = input.opportunities.reduce((s, o) => s + o.impactMonthly, 0);
-  const recovery = Math.round(grossRecovery * 0.65);
+  const avgConfidence =
+    input.opportunities.length > 0
+      ? Math.round(
+          input.opportunities.reduce((s, o) => s + o.confidencePct, 0) /
+            input.opportunities.length,
+        )
+      : 72;
+  const constrained = constrainRecoveryTotal(
+    Math.round(grossRecovery * 0.65),
+    avgConfidence,
+    businessContext,
+  );
+  const recovery = constrained.amount;
 
   const revenueForecast = input.predictiveInsights?.find((p) => p.type === "profit_forecast");
-  const confidence =
-    revenueForecast?.confidencePct ??
-    Math.round(
-      input.opportunities.length > 0
-        ? input.opportunities.reduce((s, o) => s + o.confidencePct, 0) / input.opportunities.length
-        : 72,
-    );
+  const confidence = constrained.confidencePct;
 
   return {
     projectedMonthlyProfit: projected,
     recoveryMonthly: recovery,
-    confidencePct: Math.min(95, Math.max(55, confidence)),
+    confidencePct: Math.min(95, Math.max(35, confidence)),
     trendLabel:
       projected < 0
         ? "If performance continues unchanged"
@@ -242,21 +258,47 @@ function fromPriorityItem(p: PriorityQueueItem): ExecutiveOpportunity {
   };
 }
 
+function constrainOpportunity(
+  opp: ExecutiveOpportunity,
+  ctx: ReturnType<typeof buildBusinessScaleContext>,
+): ExecutiveOpportunity {
+  const constrained = constrainRecoveryEstimate(
+    opp.impactMonthly,
+    opp.confidencePct,
+    ctx,
+  );
+  return {
+    ...opp,
+    impactMonthly: constrained.amount,
+    confidencePct: constrained.confidencePct,
+    impactLabel:
+      constrained.amount > 0
+        ? `+${fmtCurrency(constrained.amount)}/month`
+        : opp.impactLabel,
+  };
+}
+
 function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): ExecutiveOpportunity[] {
+  const ctx = buildBusinessScaleContext(null, snapshot);
   const out: ExecutiveOpportunity[] = [];
   const worstCamp = [...snapshot.campaigns]
     .filter((c) => c.spend7d > 50 && c.roas7d < 1.2)
     .sort((a, b) => a.roas7d - b.roas7d)[0];
   if (worstCamp && out.length < need) {
     const savings = Math.round(worstCamp.spend7d * 4 * 0.35);
-    out.push({
-      id: `syn-pause-${worstCamp.id}`,
-      title: `Pause low ROAS campaign — ${worstCamp.name}`,
-      impactLabel: `+${fmtCurrency(savings)}/month savings`,
-      impactMonthly: savings,
-      confidencePct: 88,
-      opportunityKey: `camp-${worstCamp.id}`,
-    });
+    out.push(
+      constrainOpportunity(
+        {
+          id: `syn-pause-${worstCamp.id}`,
+          title: `Pause low ROAS campaign — ${worstCamp.name}`,
+          impactLabel: `+${fmtCurrency(savings)}/month savings`,
+          impactMonthly: savings,
+          confidencePct: 88,
+          opportunityKey: `camp-${worstCamp.id}`,
+        },
+        ctx,
+      ),
+    );
   }
 
   const bestCamp = [...snapshot.campaigns]
@@ -264,45 +306,60 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
     .sort((a, b) => b.roas7d - a.roas7d)[0];
   if (bestCamp && out.length < need) {
     const gain = Math.round(bestCamp.revenue7d * 0.15);
-    out.push({
-      id: `syn-scale-${bestCamp.id}`,
-      title: `Increase budget on ${bestCamp.name}`,
-      impactLabel: `+${fmtCurrency(gain)}/month`,
-      impactMonthly: gain,
-      confidencePct: 76,
-      opportunityKey: `camp-scale-${bestCamp.id}`,
-    });
+    out.push(
+      constrainOpportunity(
+        {
+          id: `syn-scale-${bestCamp.id}`,
+          title: `Increase budget on ${bestCamp.name}`,
+          impactLabel: `+${fmtCurrency(gain)}/month`,
+          impactMonthly: gain,
+          confidencePct: 76,
+          opportunityKey: `camp-scale-${bestCamp.id}`,
+        },
+        ctx,
+      ),
+    );
   }
 
   const deadProduct = snapshot.products.find((p) => p.inventoryQuantity > 5 && p.unitsSold30d < 2);
   if (deadProduct && out.length < need) {
-    out.push({
-      id: `syn-inv-${deadProduct.id}`,
-      title: `Clear slow-moving inventory — ${deadProduct.title}`,
-      impactLabel: "+$3,400/month",
-      impactMonthly: 3400,
-      confidencePct: 71,
-      opportunityKey: `inv-${deadProduct.id}`,
-    });
+    out.push(
+      constrainOpportunity(
+        {
+          id: `syn-inv-${deadProduct.id}`,
+          title: `Clear slow-moving inventory — ${deadProduct.title}`,
+          impactLabel: `+${fmtCurrency(Math.min(3400, ctx.monthlyProfit * 0.2 || 800))}/month`,
+          impactMonthly: Math.min(3400, ctx.monthlyProfit * 0.2 || 800),
+          confidencePct: 71,
+          opportunityKey: `inv-${deadProduct.id}`,
+        },
+        ctx,
+      ),
+    );
   }
 
   const fallbacks = [
-    { title: "Review ad spend efficiency", impact: 1200, confidence: 68 },
-    { title: "Optimize product margins", impact: 850, confidence: 65 },
-    { title: "Improve checkout conversion", impact: 2100, confidence: 62 },
+    { title: "Review ad spend efficiency", impact: Math.min(1200, ctx.monthlyAdSpend * 0.3 || 400), confidence: 68 },
+    { title: "Optimize product margins", impact: Math.min(850, (ctx.monthlyProfit || 2000) * 0.15), confidence: 65 },
+    { title: "Improve checkout conversion", impact: Math.min(2100, ctx.monthlyRevenue * 0.08 || 600), confidence: 62 },
   ];
   for (const f of fallbacks) {
     if (out.length >= need) break;
     if (out.some((o) => o.title === f.title)) continue;
-    out.push({
-      id: `syn-fb-${f.title}`,
-      title: f.title,
-      impactLabel: `+${fmtCurrency(f.impact)}/month`,
-      impactMonthly: f.impact,
-      confidencePct: f.confidence,
-    });
+    out.push(
+      constrainOpportunity(
+        {
+          id: `syn-fb-${f.title}`,
+          title: f.title,
+          impactLabel: `+${fmtCurrency(f.impact)}/month`,
+          impactMonthly: f.impact,
+          confidencePct: f.confidence,
+        },
+        ctx,
+      ),
+    );
   }
-  return out;
+  return out.map((o) => constrainOpportunity(o, ctx));
 }
 
 export function buildExecutiveOpportunities(input: {
@@ -310,17 +367,19 @@ export function buildExecutiveOpportunities(input: {
   opportunityFeed: CommerceOpportunity[];
   priorityQueue: PriorityQueueItem[];
   snapshot: StoreSnapshot;
+  profitDashboard?: ProfitDashboard | null;
   minCount?: number;
 }): ExecutiveOpportunity[] {
   const min = input.minCount ?? 3;
   const seen = new Set<string>();
   const out: ExecutiveOpportunity[] = [];
+  const ctx = buildBusinessScaleContext(input.profitDashboard ?? null, input.snapshot);
 
   const add = (o: ExecutiveOpportunity) => {
     const key = o.title.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push(o);
+    out.push(constrainOpportunity(o, ctx));
   };
 
   for (const d of input.decisions.filter((x) => x.status === "open")) {
@@ -417,12 +476,14 @@ export function buildExecutiveExperience(input: {
   morningBrief?: MorningExecutiveBrief | null;
   predictiveInsights?: PredictiveInsight[];
   storeHealth?: StoreHealthScore | null;
+  metricSourceLabels?: Record<string, string>;
 }): ExecutiveExperience {
   const base = buildExecutiveAnalytics({
     snapshot: input.snapshot,
     profitDashboard: input.profitDashboard,
     executiveSummary: input.executiveSummary,
     trends: input.trends,
+    metricSourceLabels: input.metricSourceLabels,
   });
 
   const opportunities = buildExecutiveOpportunities({
@@ -430,6 +491,7 @@ export function buildExecutiveExperience(input: {
     opportunityFeed: input.opportunityFeed,
     priorityQueue: input.priorityQueue,
     snapshot: input.snapshot,
+    profitDashboard: input.profitDashboard,
   });
 
   const spend30 =
@@ -467,6 +529,7 @@ export function buildExecutiveExperience(input: {
       profitDashboard: input.profitDashboard,
       opportunities,
       predictiveInsights: input.predictiveInsights,
+      snapshot: input.snapshot,
     }),
     featuredRecommendation: buildFeaturedRecommendation({
       opportunities,

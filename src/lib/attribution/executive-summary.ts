@@ -1,4 +1,4 @@
-import type { AcquisitionMetrics } from "./models";
+import { formatRoas } from "./format-roas";
 import type {
   ActionRiskLevel,
   AttributionExecutiveSummary,
@@ -9,6 +9,7 @@ import type {
   OptimizationWorkflowStep,
   OpportunityCost,
 } from "./decision-engine-types";
+import type { AcquisitionMetrics } from "./models";
 
 export function buildObjectiveReconciliation(
   plan: Pick<
@@ -86,7 +87,7 @@ export function buildOptimizationWorkflow(
   return [
     { step: 1, label: "Refresh creatives and tighten audience targeting" },
     { step: 2, label: "Wait 7 days for learning phase to stabilize", waitDays: 7 },
-    { step: 3, label: `Recalculate ROAS against break-even (${breakEvenRoas.toFixed(2)})` },
+    { step: 3, label: `Recalculate ROAS against break-even (${formatRoas(breakEvenRoas)})` },
     {
       step: 4,
       label: "Reduce budget only if ROAS remains below break-even",

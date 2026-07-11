@@ -55,6 +55,9 @@ export type UnifiedExecutiveBrief = {
   };
   /** Legacy shape for completed decisions */
   completed: ExecutiveRecommendation[];
+  planUsage?: import("@/lib/billing/types").CampaignEntitlements;
+  visibleOpportunityCount?: number;
+  lockedOpportunityCount?: number;
 };
 
 const MODULE_META: Record<
@@ -63,7 +66,7 @@ const MODULE_META: Record<
 > = {
   attribution: { label: "Attribution", href: "/analytics/attribution" },
   profit: { label: "Profit", href: "/analytics/profit" },
-  marketing: { label: "Marketing", href: "/analytics/marketing" },
+  marketing: { label: "Advertising", href: "/advertising" },
   inventory: { label: "Inventory", href: "/analytics/inventory" },
   customers: { label: "Customers", href: "/analytics/customers" },
   products: { label: "Products", href: "/analytics/products" },
@@ -375,6 +378,7 @@ export function buildUnifiedExecutiveBrief(input: {
   snapshot: StoreSnapshot;
   decisions?: DecisionItem[];
   customerIntelligence?: CustomerIntelligenceDashboard | null;
+  planUsage?: import("@/lib/billing/types").CampaignEntitlements;
 }): UnifiedExecutiveBrief {
   const actions: UnifiedExecutiveAction[] = [];
 
@@ -395,22 +399,37 @@ export function buildUnifiedExecutiveBrief(input: {
   }
 
   const ranked = [...actions].sort((a, b) => b.priorityScore - a.priorityScore);
-  const highestPriority = ranked[0] ?? null;
-  const otherOpportunities = ranked.slice(1, 8);
+
+  const plan = input.planUsage;
+  let visibleRanked = ranked;
+  let lockedOpportunityCount = 0;
+
+  if (plan && !plan.isUnlimited && plan.unlockedCampaignName) {
+    const unlockedLower = plan.unlockedCampaignName.toLowerCase();
+    const campaignSources: ExecutiveModuleSource[] = ["attribution", "marketing"];
+    visibleRanked = ranked.filter((a) => {
+      if (!campaignSources.includes(a.source)) return true;
+      return a.title.toLowerCase().includes(unlockedLower);
+    });
+    lockedOpportunityCount = ranked.length - visibleRanked.length;
+  }
+
+  const highestPriority = visibleRanked[0] ?? null;
+  const otherOpportunities = visibleRanked.slice(1, 8);
 
   const byPriority = {
-    critical: ranked.filter((a) => a.priority === "critical").length,
-    high: ranked.filter((a) => a.priority === "high").length,
-    medium: ranked.filter((a) => a.priority === "medium").length,
-    low: ranked.filter((a) => a.priority === "low").length,
+    critical: visibleRanked.filter((a) => a.priority === "critical").length,
+    high: visibleRanked.filter((a) => a.priority === "high").length,
+    medium: visibleRanked.filter((a) => a.priority === "medium").length,
+    low: visibleRanked.filter((a) => a.priority === "low").length,
   };
 
-  const estimatedMonthlyRecovery = ranked.reduce(
+  const estimatedMonthlyRecovery = visibleRanked.reduce(
     (sum, a) => sum + a.estimatedMonthlyImpact,
     0,
   );
 
-  const confidenceValues = ranked.map((a) => a.confidencePct).filter((v) => v > 0);
+  const confidenceValues = visibleRanked.map((a) => a.confidencePct).filter((v) => v > 0);
   const overallConfidencePct =
     confidenceValues.length > 0
       ? Math.round(
@@ -423,7 +442,7 @@ export function buildUnifiedExecutiveBrief(input: {
   const businessHealth = computeGlobalBusinessHealth({
     dashboard: input.dashboard,
     snapshot: input.snapshot,
-    actions: ranked,
+    actions: visibleRanked,
     customerIntelligence: input.customerIntelligence,
   });
 
@@ -437,9 +456,12 @@ export function buildUnifiedExecutiveBrief(input: {
     highestPriority,
     otherOpportunities,
     opportunityCount: ranked.length,
+    visibleOpportunityCount: visibleRanked.length,
+    lockedOpportunityCount,
     estimatedMonthlyRecovery,
     byPriority,
     completed: legacyView.completed,
+    planUsage: plan,
   };
 }
 

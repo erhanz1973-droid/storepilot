@@ -1,6 +1,6 @@
 import type { BusinessGoal } from "@/lib/business-goals/types";
 import type { DailyMetricPoint } from "@/lib/connectors/types";
-import { revenueToNetProfitImpact } from "@/lib/opportunities/profit-impact";
+import { formatRoas } from "./format-roas";
 import type { ProfitDashboard } from "@/lib/profit/types";
 import type { Opportunity } from "@/lib/types";
 import {
@@ -19,6 +19,7 @@ import {
   scoreAllStrategies,
   strategyShortLabel,
 } from "./decision-context";
+import { consolidateCampaignActions } from "./action-packages";
 import { sortActionsByPriority, type PrioritizedActionCore, type UnrankedStrategyAction } from "./action-priority";
 import type {
   ActionRiskLevel,
@@ -144,7 +145,7 @@ function buildReasonSnippet(
   if (campaign && campaign.roas != null) {
     const gap = computeRoasGapPct(campaign.roas, breakEven);
     parts.push(
-      `Current ROAS ${campaign.roas.toFixed(2)} vs break-even ${breakEven.toFixed(2)} (gap ${gap > 0 ? "-" : "+"}${Math.abs(gap)}%).`,
+      `Current ROAS ${formatRoas(campaign.roas)} vs break-even ${formatRoas(breakEven)} (gap ${gap > 0 ? "-" : "+"}${Math.abs(gap)}%).`,
     );
   }
   if (acquisition.cac != null) {
@@ -231,7 +232,7 @@ function buildActionsForStrategy(input: {
       id: `scale-${best.campaignId}`,
       title: `Increase ${best.campaignName} budget by 15–20%`,
       description: `${best.campaignName} exceeds break-even ROAS with positive net profit — scale while monitoring blended efficiency.`,
-      reason: `ROAS ${best.roas?.toFixed(2)} vs break-even ${breakEven.toFixed(2)}. Increase budget only while ROAS exceeds break-even.`,
+      reason: `ROAS ${formatRoas(best.roas)} vs break-even ${formatRoas(breakEven)}. Increase budget only while ROAS exceeds break-even.`,
       estimatedMonthlyImprovement: Math.round(best.netProfit * 0.35),
       confidencePct: 88,
       ...actionRiskProfile({ id: `scale-${best.campaignId}`, title: `Increase ${best.campaignName} budget by 15–20%` }, strategy),
@@ -307,7 +308,7 @@ function buildActionsForStrategy(input: {
       actions.push({
         id: "shift-meta-to-google",
         title: "Shift 15% of Meta spend to Google Ads",
-        description: `Google profit ROAS (${google.profitRoas?.toFixed(2)}) outperforms Meta (${meta.profitRoas?.toFixed(2) ?? "—"}). Reallocate rather than cut total acquisition.`,
+        description: `Google profit ROAS (${formatRoas(google.profitRoas)}) outperforms Meta (${formatRoas(meta.profitRoas)}). Reallocate rather than cut total acquisition.`,
         reason: "Cross-channel reallocation preserves acquisition volume while improving blended ROAS.",
         estimatedMonthlyImprovement: Math.round(meta.adSpend * 0.15 * 0.35),
         confidencePct: 74,
@@ -352,7 +353,7 @@ function buildActionsForStrategy(input: {
     actions.push({
       id: `reallocate-${worst.campaignId}-to-${best.campaignId}`,
       title: `Move budget from ${worst.campaignName} to ${best.campaignName}`,
-      description: `Shift 20–30% of spend from ${worst.campaignName} (ROAS ${worst.roas?.toFixed(2) ?? "—"}) to ${best.campaignName} (${best.roas?.toFixed(2) ?? "—"}).`,
+      description: `Shift 20–30% of spend from ${worst.campaignName} (ROAS ${formatRoas(worst.roas)}) to ${best.campaignName} (${formatRoas(best.roas)}).`,
       reason: baseReason,
       estimatedMonthlyImprovement: Math.round(worst.adSpend * 0.25 * 0.7),
       confidencePct: 86,
@@ -409,7 +410,7 @@ function buildActionsForStrategy(input: {
       id: `landing-${underperformingCreative.creativeId}`,
       title: `Test a new landing page for ${underperformingCreative.creativeName}`,
       description: "CTR is acceptable but ROAS is poor — the landing page or offer may be the bottleneck.",
-      reason: `CTR ${underperformingCreative.ctr}% with ROAS ${underperformingCreative.roas?.toFixed(2) ?? "—"} suggests post-click conversion issues.`,
+      reason: `CTR ${underperformingCreative.ctr}% with ROAS ${formatRoas(underperformingCreative.roas)} suggests post-click conversion issues.`,
       estimatedMonthlyImprovement: Math.round(underperformingCreative.spend * 0.2),
       confidencePct: 77,
       riskLevel: "Low",
@@ -418,7 +419,11 @@ function buildActionsForStrategy(input: {
     });
   }
 
-  return sortActionsByPriority(actions, strategy, businessObjective);
+  return sortActionsByPriority(
+    consolidateCampaignActions(actions, campaigns),
+    strategy,
+    businessObjective,
+  );
 }
 
 function buildSimulation(signals: ReturnType<typeof buildDecisionSignals>): AttributionSimulationCore {
@@ -493,6 +498,30 @@ function buildSimulation(signals: ReturnType<typeof buildDecisionSignals>): Attr
   };
 }
 
+function strategySuccessProbability(
+  strategy: AttributionStrategyId,
+  signals: ReturnType<typeof buildDecisionSignals>,
+): number {
+  const be = signals.breakEven.breakEvenRoas;
+  const avg = signals.avgRoas ?? 0;
+  if (strategy === "scale") return avg >= be ? 78 : 18;
+  if (strategy === "optimize") return 62;
+  if (strategy === "reallocate") return signals.hasWinnerLoser ? 55 : 32;
+  if (strategy === "reduce_budget") return 48;
+  return 22;
+}
+
+function strategyPotentialDownside(
+  strategy: AttributionStrategyId,
+  signals: ReturnType<typeof buildDecisionSignals>,
+): string {
+  if (strategy === "scale") return "Increase advertising losses if ROAS deteriorates.";
+  if (strategy === "reduce_budget") return "Expected revenue loss of 3–8% during rebalancing.";
+  if (strategy === "pause") return "Customer acquisition stops; assisted revenue may decline.";
+  if (strategy === "reallocate") return "Short-term learning-phase disruption on shifted campaigns.";
+  return "Opportunity cost if efficiency gains take longer than forecast.";
+}
+
 function buildStrategyAlternatives(
   scores: ReturnType<typeof scoreAllStrategies>,
   selected: AttributionStrategyId,
@@ -508,6 +537,10 @@ function buildStrategyAlternatives(
       ? "Selected based on performance signals and business objective."
       : entry.reason,
     whyNot: buildWhyNotForStrategy(entry.strategy, signals, selected, objective),
+    successProbabilityPct:
+      entry.strategy === selected ? undefined : strategySuccessProbability(entry.strategy, signals),
+    potentialDownside:
+      entry.strategy === selected ? undefined : strategyPotentialDownside(entry.strategy, signals),
   }));
 }
 
@@ -518,15 +551,15 @@ function buildStrategyReason(
   const be = signals.breakEven.breakEvenRoas;
   switch (strategy) {
     case "scale":
-      return `${signals.scope} is profitable with ROAS at or above break-even (${be.toFixed(2)}). Scale while monitoring efficiency.`;
+      return `${signals.scope} is profitable with ROAS at or above break-even (${formatRoas(be)}). Scale while monitoring efficiency.`;
     case "reallocate":
-      return `${signals.scope} has winners and losers — shift budget toward campaigns above break-even ROAS (${be.toFixed(2)}).`;
+      return `${signals.scope} has winners and losers — shift budget toward campaigns above break-even ROAS (${formatRoas(be)}).`;
     case "reduce_budget":
-      return `${signals.scope} is generating revenue but acquisition costs exceed break-even ROAS (${be.toFixed(2)}). Reduce spend while improving efficiency.`;
+      return `${signals.scope} is generating revenue but acquisition costs exceed break-even ROAS (${formatRoas(be)}). Reduce spend while improving efficiency.`;
     case "pause":
-      return `${signals.scope} shows sustained losses below break-even (${be.toFixed(2)}). Pause only after optimization options are exhausted.`;
+      return `${signals.scope} shows sustained losses below break-even (${formatRoas(be)}). Pause only after optimization options are exhausted.`;
     default:
-      return `${signals.scope} is generating revenue but acquisition costs exceed break-even ROAS (${be.toFixed(2)}). Optimize before pausing entirely.`;
+      return `${signals.scope} is generating revenue but acquisition costs exceed break-even ROAS (${formatRoas(be)}). Optimize before pausing entirely.`;
   }
 }
 
@@ -615,24 +648,24 @@ export function strategyPlanToOpportunities(
   netMarginPct?: number,
 ): Opportunity[] {
   return plan.actions.map((action) => {
-    const revenueImpact = Math.round(action.estimatedMonthlyImprovement / 0.38);
+    const margin = netMarginPct ?? plan.breakEvenModel.contributionMarginPct / 100;
+    const profitImpact = action.estimatedMonthlyImprovement;
+    const revenueImpact =
+      margin > 0 ? Math.round(profitImpact / margin) : Math.round(profitImpact / 0.38);
     return {
       id: action.id,
       category: "marketing_attribution",
       title: action.title,
       description: `${action.description} ${action.reason}`,
       estimatedMonthlyRevenueImpact: revenueImpact,
-      estimatedMonthlyNetProfitImpact: revenueToNetProfitImpact(
-        revenueImpact,
-        "marketing_attribution",
-        netMarginPct,
-      ),
+      estimatedMonthlyNetProfitImpact: profitImpact,
       confidenceScore: action.confidencePct / 100,
       evidence: [
         { label: "Strategy", value: plan.strategyLabel },
         { label: "Confidence", value: `${action.confidencePct}%` },
         { label: "Risk", value: action.riskLevel },
-        { label: "Break-even ROAS", value: plan.breakEvenModel.breakEvenRoas.toFixed(2) },
+        { label: "Break-even ROAS", value: formatRoas(plan.breakEvenModel.breakEvenRoas) },
+        { label: "Priority Score", value: `${action.priorityScore ?? "—"} / 100` },
       ],
       requiredActions: [action.description],
       implementationEffort: action.isLastResort ? "Low" : "Medium",

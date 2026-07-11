@@ -1,4 +1,5 @@
 import type { AcquisitionMetrics } from "@/lib/attribution/models";
+import { formatRoas } from "@/lib/attribution/format-roas";
 
 function formatMoney(n: number | null): string {
   if (n == null) return "—";
@@ -8,8 +9,8 @@ function formatMoney(n: number | null): string {
 export function AcquisitionKpiStrip({ metrics }: { metrics: AcquisitionMetrics }) {
   const kpis = [
     { label: "CAC", value: formatMoney(metrics.cac) },
-    { label: "New Customer ROAS", value: metrics.newCustomerRoas?.toFixed(2) ?? "—" },
-    { label: "Returning ROAS", value: metrics.returningCustomerRoas?.toFixed(2) ?? "—" },
+    { label: "New Customer ROAS", value: formatRoas(metrics.newCustomerRoas) },
+    { label: "Returning ROAS", value: formatRoas(metrics.returningCustomerRoas) },
     { label: "Payback Period", value: metrics.paybackPeriodDays != null ? `${metrics.paybackPeriodDays}d` : "—" },
     { label: "LTV:CAC", value: metrics.ltvCacRatio?.toFixed(1) ?? "—" },
     {

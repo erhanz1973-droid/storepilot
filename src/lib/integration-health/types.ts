@@ -2,6 +2,16 @@ export type ConnectionState = "connected" | "disconnected" | "error" | "waiting"
 
 export type Severity = "critical" | "warning" | "info";
 
+/** Visual status for a single health dimension — never mix auth, data, and AI in one label */
+export type HealthDimensionStatus = "good" | "warning" | "bad" | "neutral";
+
+export type IntegrationHealthDimension = {
+  label: string;
+  detail: string;
+  status: HealthDimensionStatus;
+  scorePct?: number | null;
+};
+
 export type EntityCheck = {
   label: string;
   value: string;
@@ -11,7 +21,11 @@ export type EntityCheck = {
 export type ProviderHealthDetail = {
   id: string;
   label: string;
+  /** @deprecated Use authentication — kept for internal routing */
   connectionStatus: ConnectionState;
+  authentication: IntegrationHealthDimension;
+  dataAvailability: IntegrationHealthDimension;
+  aiReadiness: IntegrationHealthDimension;
   tokenValid: boolean;
   lastSuccessfulSync: string | null;
   apiLatencyMs: number | null;
@@ -83,13 +97,32 @@ export type IntegrationTestResult = {
 };
 
 export type SystemSummary = {
-  systemStatus: "operational" | "degraded" | "attention";
-  dataQualityPct: number;
-  connectedProviders: number;
-  totalProviders: number;
-  aiFeaturesAvailable: number;
-  totalAiFeatures: number;
+  authentication: {
+    authorizedCount: number;
+    totalProviders: number;
+    label: string;
+    status: HealthDimensionStatus;
+  };
+  data: {
+    qualityPct: number;
+    label: string;
+    status: HealthDimensionStatus;
+  };
+  aiReadiness: {
+    readinessPct: number;
+    featuresAvailable: number;
+    totalFeatures: number;
+    label: string;
+    status: HealthDimensionStatus;
+  };
   lastValidationAt: string;
+  /** @deprecated Prefer authentication/data/aiReadiness summaries */
+  systemStatus?: "operational" | "degraded" | "attention";
+  dataQualityPct?: number;
+  connectedProviders?: number;
+  totalProviders?: number;
+  aiFeaturesAvailable?: number;
+  totalAiFeatures?: number;
 };
 
 export type AiTrustSummary = {

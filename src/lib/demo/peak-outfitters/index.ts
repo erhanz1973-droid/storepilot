@@ -2,12 +2,15 @@ import { estimateProductOrderStats } from "@/lib/products/enrich";
 import { buildAdSpendSnapshot, scaleCampaignSpendToRollups } from "@/lib/ads/spend";
 import type { ProfitOrderRollups, StoreSnapshot } from "@/lib/connectors/types";
 import type { AdSpendSnapshot, DailyMetricPoint } from "@/lib/ads/types";
+import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
+import { buildStrugglingStoreSnapshot } from "@/lib/demo/scenarios/struggling";
 import { PEAK_OUTFITTERS, DEMO_COLLECTIONS } from "./constants";
 import { PEAK_OUTFITTERS_PRODUCTS } from "./products";
 import { PEAK_OUTFITTERS_META_CAMPAIGNS } from "./meta-campaigns";
 import { peakOutfittersDailyMetrics } from "./daily-metrics";
 import { peakOutfittersAttributionEvents } from "./attribution";
 import { peakOutfittersCustomerSnapshot } from "./customers";
+import { peakOutfittersCommerceOrders } from "./orders";
 
 function buildProfitRollups(): ProfitOrderRollups {
   const revenue30d = PEAK_OUTFITTERS.revenue30d;
@@ -95,24 +98,16 @@ export const PEAK_OUTFITTERS_AD_SPEND: AdSpendSnapshot = buildAdSpendSnapshot({
 
 export const PEAK_OUTFITTERS_DAILY_METRICS: DailyMetricPoint[] = peakOutfittersDailyMetrics();
 
+/** Legacy struggling snapshot builder — same as buildStrugglingStoreSnapshot */
 export function getPeakOutfittersSnapshot(): StoreSnapshot {
-  const productOrderStats: NonNullable<StoreSnapshot["productOrderStats"]> = {};
-  for (const p of PEAK_OUTFITTERS_PRODUCTS) {
-    productOrderStats[p.id] = estimateProductOrderStats(p.id, p.unitsSold30d, p.revenue30d);
-  }
-
-  return {
-    ...PEAK_OUTFITTERS_BASE_SNAPSHOT,
-    adSpendSnapshot: PEAK_OUTFITTERS_AD_SPEND,
-    dailyMetrics: PEAK_OUTFITTERS_DAILY_METRICS,
-    metaAccountRollups: scaleCampaignSpendToRollups(PEAK_OUTFITTERS_META_CAMPAIGNS),
-    productOrderStats,
-    attributionEvents: peakOutfittersAttributionEvents(),
-    customerSnapshot: peakOutfittersCustomerSnapshot(),
-  };
+  return buildStrugglingStoreSnapshot();
 }
 
-/** @deprecated Use getPeakOutfittersSnapshot — alias for legacy imports */
+/** Active demo snapshot for the selected scenario (sync — use struggling if no cookie context). */
+export function getDemoStoreSnapshotForScenario(scenarioId?: import("@/lib/demo/scenarios/types").DemoScenarioId): StoreSnapshot {
+  return buildDemoSnapshot(scenarioId ?? "healthy_growth");
+}
+
 export const getDemoStoreSnapshot = getPeakOutfittersSnapshot;
 export const DEMO_STORE_SNAPSHOT = PEAK_OUTFITTERS_BASE_SNAPSHOT;
 export const DEMO_AD_SPEND_SNAPSHOT = PEAK_OUTFITTERS_AD_SPEND;

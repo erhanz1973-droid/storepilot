@@ -16,7 +16,7 @@ export function FunnelInsightsPanel({ insights }: { insights: FunnelAiInsight[] 
 
   return (
     <div className="card funnel-insights-panel">
-      <h3 style={{ margin: "0 0 12px" }}>AI Insights</h3>
+      <h3 style={{ margin: "0 0 12px" }}>Conversion Insights</h3>
       <ul className="funnel-insight-list">
         {insights.map((insight) => (
           <li key={insight.id} className={`funnel-insight-item ${toneClass(insight.tone)}`}>

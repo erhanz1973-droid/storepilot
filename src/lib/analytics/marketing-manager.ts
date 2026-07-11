@@ -14,6 +14,10 @@ import {
   type MarketingManagerV2,
 } from "@/lib/analytics/marketing-manager-v2";
 import { estimatePlatformRecoverable } from "@/lib/analytics/recovery-engine";
+import {
+  buildBusinessScaleContext,
+  constrainPlatformRecovery,
+} from "@/lib/analytics/recovery-business-constraints";
 import { evaluateCampaignRecovery } from "@/lib/analytics/campaign-recovery-engine";
 import type { CampaignRecommendationKind } from "@/lib/analytics/marketing-recommendations";
 
@@ -415,11 +419,19 @@ function buildPlatformSummary(
     losing.length > 0
       ? losing.reduce((sum, c) => sum + c.recoveryProbabilityPct, 0) / losing.length
       : 50;
-  const recoverable = estimatePlatformRecoverable({
+  const recoverableRaw = estimatePlatformRecoverable({
     losingWeeklyProfit,
     atRiskWeeklySpend,
     avgRecoveryProbabilityPct,
   });
+  const monthlyPlatformSpend = Math.round(spend * 4.33);
+  const businessContext = buildBusinessScaleContext(profitDashboard, snapshot);
+  const recoverable = constrainPlatformRecovery(
+    recoverableRaw,
+    monthlyPlatformSpend,
+    avgRecoveryProbabilityPct,
+    businessContext,
+  ).amount;
 
   let aiSummary =
     campaigns.length === 0
@@ -591,7 +603,14 @@ export function buildMarketingManagerView(input: {
   const decisions = input.decisions ?? [];
   const rev = profitDashboard?.primary.revenue ?? 0;
   const net = profitDashboard?.primary.netProfit ?? 0;
-  const marginRate = rev > 0 && net != null ? net / rev : 0.25;
+  const adSpend = profitDashboard?.primary.adSpend ?? 0;
+  // Margin BEFORE advertising: estimateProfit subtracts each campaign's spend
+  // separately, so using net margin (which already includes ad spend) would
+  // double-count advertising costs for estimated-profit campaigns.
+  const marginRate =
+    rev > 0 && net != null
+      ? Math.min(0.9, Math.max(0, (net + adSpend) / rev))
+      : 0.25;
 
   const totals = {
     spend: base.reduce((s, c) => s + c.spend, 0),

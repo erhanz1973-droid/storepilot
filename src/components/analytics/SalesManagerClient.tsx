@@ -14,6 +14,9 @@ import {
   SecondaryMetricsRow,
   TrendCommentaryPanel,
 } from "./sales/SalesV2Sections";
+import { RevenueStudioSection } from "./sales/RevenueStudioSection";
+import { DailyAiPlaybookSection } from "@/components/executive/DailyAiPlaybookSection";
+import { ExecutiveStoryNav } from "@/components/executive/ExecutiveStoryNav";
 
 type Props = SalesManagerView;
 
@@ -29,7 +32,9 @@ export function SalesManagerClient({ v2 }: Props) {
       </div>
 
       <RevenueDriversSection drivers={v2.drivers} />
+      <DailyAiPlaybookSection playbook={v2.dailyPlaybook} compact />
       <SalesOpportunitySection opportunities={v2.opportunities} />
+      <RevenueStudioSection studio={v2.revenueStudio} />
       <OrderIntelligenceSection orders={v2.orders} highlights={v2.orderHighlights} />
 
       {v2.charts.length > 0 && (
@@ -57,6 +62,8 @@ export function SalesManagerClient({ v2 }: Props) {
           (shared recovery engine)
         </p>
       )}
+
+      <ExecutiveStoryNav current="sales" />
     </div>
   );
 }

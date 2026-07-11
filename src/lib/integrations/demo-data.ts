@@ -1,4 +1,9 @@
 import type { AdSpendRollups } from "@/lib/ads/types";
+import type { StoreSnapshot } from "@/lib/connectors/types";
+import {
+  buildScenarioIntegrationSnapshot,
+  isScenarioAwareDemoSnapshot,
+} from "@/lib/demo/scenario-integrations";
 import { emptyAdSpendRollups } from "@/lib/ads/spend";
 import { PEAK_OUTFITTERS } from "@/lib/demo/peak-outfitters/constants";
 import { peakOutfittersGoogleAdsSnapshot } from "@/lib/demo/peak-outfitters/google-campaigns";
@@ -184,10 +189,12 @@ export function buildOperationalCosts(
 }
 
 export function buildDemoIntegrationSnapshot(
-  storeMetrics: {
-    revenue30d: number;
-    orders30d: number;
-  },
+  storeMetricsOrSnapshot:
+    | {
+        revenue30d: number;
+        orders30d: number;
+      }
+    | StoreSnapshot,
   options?: { includeGoogleAds?: boolean },
 ): {
   googleAds?: GoogleAdsSnapshot;
@@ -205,6 +212,26 @@ export function buildDemoIntegrationSnapshot(
   estimatedCount: number;
   liveDataPct: number;
 } {
+  const snapshot: StoreSnapshot =
+    "products" in storeMetricsOrSnapshot || "demoScenario" in storeMetricsOrSnapshot
+      ? (storeMetricsOrSnapshot as StoreSnapshot)
+      : {
+          source: "demo",
+          syncedAt: new Date().toISOString(),
+          storeMetrics: storeMetricsOrSnapshot,
+          products: [],
+        };
+
+  if (isScenarioAwareDemoSnapshot(snapshot)) {
+    const scenarioBundle = buildScenarioIntegrationSnapshot(snapshot);
+    const includeGoogleAds = options?.includeGoogleAds !== false;
+    return {
+      ...scenarioBundle,
+      googleAds: includeGoogleAds ? scenarioBundle.googleAds : undefined,
+    };
+  }
+
+  const storeMetrics = snapshot.storeMetrics;
   const includeGoogleAds = options?.includeGoogleAds !== false;
   const googleAds = includeGoogleAds ? demoGoogleAdsSnapshot() : undefined;
   const tiktokAds = demoTikTokAdsSnapshot();

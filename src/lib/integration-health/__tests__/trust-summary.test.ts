@@ -2,11 +2,23 @@ import { describe, expect, it } from "vitest";
 import { buildAiTrustSummary, buildSystemSummary } from "../trust-summary";
 import type { ProviderHealthDetail } from "../types";
 
+function dim(
+  label: string,
+  status: "good" | "warning" | "bad",
+  detail = "",
+  scorePct?: number,
+) {
+  return { label, detail: detail || label, status, scorePct };
+}
+
 const providers: ProviderHealthDetail[] = [
   {
     id: "shopify",
     label: "Shopify",
     connectionStatus: "connected",
+    authentication: dim("Authorized", "good"),
+    dataAvailability: dim("Partial data", "warning", "Customers missing", 72),
+    aiReadiness: dim("Limited confidence", "warning", "", 68),
     tokenValid: true,
     lastSuccessfulSync: new Date().toISOString(),
     apiLatencyMs: null,
@@ -16,14 +28,17 @@ const providers: ProviderHealthDetail[] = [
     missingFields: ["Customers"],
     dataFreshness: "fresh",
     dataQualityPct: 90,
-    aiReadyPct: 85,
-    aiReady: true,
+    aiReadyPct: 68,
+    aiReady: false,
     entityChecks: [{ label: "Customers", value: "0", status: "missing" }],
   },
   {
     id: "google_ads",
     label: "Google Ads",
     connectionStatus: "disconnected",
+    authentication: dim("Not authorized", "bad"),
+    dataAvailability: dim("No data", "bad", "", 0),
+    aiReadiness: dim("Not ready", "bad", "", 0),
     tokenValid: false,
     lastSuccessfulSync: null,
     apiLatencyMs: null,
@@ -40,7 +55,7 @@ const providers: ProviderHealthDetail[] = [
 ];
 
 describe("buildAiTrustSummary", () => {
-  it("includes confidence reductions for gaps", () => {
+  it("includes dimension-prefixed confidence reductions", () => {
     const trust = buildAiTrustSummary({
       overallAiReadinessPct: 66,
       dataQualityPct: 82,
@@ -63,15 +78,16 @@ describe("buildAiTrustSummary", () => {
       ],
     });
     expect(trust.aiTrustScorePct).toBeGreaterThan(0);
-    expect(trust.confidenceReductions.some((r) => r.includes("Google Ads"))).toBe(true);
+    expect(trust.confidenceReductions.some((r) => r.startsWith("Authentication:"))).toBe(true);
   });
 });
 
 describe("buildSystemSummary", () => {
-  it("counts connected providers and AI features", () => {
+  it("returns separate authentication, data, and ai readiness summaries", () => {
     const summary = buildSystemSummary({
       providers,
       dataQualityPct: 82,
+      overallAiReadinessPct: 66,
       capabilityMatrix: [
         { feature: "A", status: "ready", reason: "" },
         { feature: "B", status: "ready", reason: "" },
@@ -90,9 +106,11 @@ describe("buildSystemSummary", () => {
       generatedAt: new Date().toISOString(),
       testSuiteRanAt: null,
     });
-    expect(summary.connectedProviders).toBe(1);
-    expect(summary.totalProviders).toBe(2);
-    expect(summary.aiFeaturesAvailable).toBe(2);
-    expect(summary.totalAiFeatures).toBe(3);
+    expect(summary.authentication.authorizedCount).toBe(1);
+    expect(summary.authentication.totalProviders).toBe(2);
+    expect(summary.data.qualityPct).toBe(82);
+    expect(summary.aiReadiness.readinessPct).toBe(66);
+    expect(summary.aiReadiness.featuresAvailable).toBe(2);
+    expect(summary.authentication.label).not.toBe(summary.data.label);
   });
 });

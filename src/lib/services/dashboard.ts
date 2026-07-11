@@ -29,9 +29,12 @@ import { computeBusinessModelHealth } from "@/lib/business-model/health";
 import { resolveMerchantDNA } from "@/lib/merchant-dna/resolver";
 import {
   getCachedVerifiedStoreData,
+  getVerifiedStoreDataForSnapshot,
   recordRecommendationAuditBatch,
   listRecommendationAudit,
 } from "@/lib/recommendations/validation";
+import type { CommerceOpportunity } from "@/lib/insights/opportunity-schema";
+import type { StoreSnapshot } from "@/lib/connectors/types";
 import {
   onRecommendationsCreated,
   markRecommendationsDisplayed,
@@ -49,17 +52,28 @@ import { allowDemoData } from "@/lib/env/runtime";
 import { applyLearningToOutputs } from "@/lib/learning/outcomes";
 import { recommendationHasMeasurableImpact } from "@/lib/recommendations/impact";
 import { resolveActiveStoreId } from "@/lib/store/context";
+import {
+  annotateSimulatedAdRecommendations,
+  tagSimulatedAdOpportunities,
+} from "@/lib/executive/hybrid";
+import type { HybridDataSources } from "@/lib/executive/hybrid";
 import { computeProfitDashboard } from "@/lib/profit/engine";
 import {
   getCachedActiveStoreId,
   getCachedProductCosts,
   getCachedSnapshot,
+  getCachedStoreBundle,
 } from "@/lib/services/store-bundle";
 import { buildProductIntelligence } from "@/lib/products/engine";
 import { buildAttributionDashboard } from "@/lib/attribution/engine";
 import { buildAutopilotDashboard } from "@/lib/autopilot/engine";
 import { buildStoreManagerDashboard } from "@/lib/services/store-manager";
 import { syncOpportunityHistory } from "@/lib/services/opportunity-sync";
+import { summarizeOpportunityHistory } from "@/lib/opportunities/history";
+import { profileServerAsync } from "@/lib/performance/server-profiler";
+import { fingerprintData, getOrCompute } from "@/lib/performance/compute-cache";
+import { REFRESH_MS } from "@/lib/performance/refresh-schedules";
+import type { DecisionItem } from "@/lib/decisions/center";
 import {
   computeStoreHealthScore,
   factorScoresToBreakdown,
@@ -89,6 +103,15 @@ const RECOMMENDATION_SYNC_TTL_MS = 15 * 60 * 1000;
 
 export type BuildDashboardOptions = {
   skipRecommendationSync?: boolean;
+  /** Force analyzer → DB sync when combined with snapshotOverride (default: TTL cache). */
+  syncRecommendations?: boolean;
+  /** Live Supabase snapshot — bypasses simulation sync caches. */
+  snapshotOverride?: StoreSnapshot;
+  liveExtraOpportunities?: CommerceOpportunity[];
+  liveAnalyzerOutputs?: import("@/lib/types").AnalyzerOutput[];
+  hybridDataSources?: HybridDataSources;
+  /** Page read path — skip writes (measurements, snapshots, connector sync, opportunity upserts). */
+  readOnly?: boolean;
 };
 
 function isActiveRecommendation(rec: Recommendation): boolean {
@@ -103,8 +126,15 @@ function isActiveRecommendation(rec: Recommendation): boolean {
   return true;
 }
 
-export async function ensureRecommendationsSynced(storeId: string): Promise<Recommendation[]> {
-  const { snapshot, gate } = await getCachedVerifiedStoreData(storeId);
+export async function ensureRecommendationsSynced(
+  storeId: string,
+  snapshotOverride?: StoreSnapshot,
+  extraAnalyzerOutputs: import("@/lib/types").AnalyzerOutput[] = [],
+  hybridDataSources?: HybridDataSources,
+): Promise<Recommendation[]> {
+  const { snapshot, gate } = snapshotOverride
+    ? await getVerifiedStoreDataForSnapshot(storeId, snapshotOverride)
+    : await getCachedVerifiedStoreData(storeId);
   const costRecords = await getCachedProductCosts(storeId);
   const profitDashboard = computeProfitDashboard(snapshot, costRecords);
   const businessProfile = await resolveMerchantBusinessProfile({
@@ -134,32 +164,49 @@ export async function ensureRecommendationsSynced(storeId: string): Promise<Reco
     }
   }
   await purgeRecommendationsByCategories(storeId, categoriesToPurge);
+  const analyzerOutputs = runBusinessModelAwareAnalyzers(
+    snapshot,
+    gate,
+    decisionPackContext.pack,
+    analyzerContext,
+  );
+  const mergedOutputs = [...extraAnalyzerOutputs, ...analyzerOutputs];
   const outputs = await applyLearningToOutputs(
-    runBusinessModelAwareAnalyzers(snapshot, gate, decisionPackContext.pack, analyzerContext),
+    hybridDataSources
+      ? annotateSimulatedAdRecommendations(mergedOutputs, hybridDataSources)
+      : mergedOutputs,
     storeId,
   );
-  await syncRecommendations(outputs, storeId);
-  const recs = await listStoredRecommendations(storeId);
-  const idByDedupe = new Map<string, string>();
-  for (const output of outputs) {
-    const match = recs.find(
-      (r) =>
-        r.title === output.title ||
-        (output.entityId != null &&
-          r.entityId === output.entityId &&
-          r.category === output.category),
+  try {
+    await syncRecommendations(outputs, storeId);
+    const recs = await listStoredRecommendations(storeId);
+    const idByDedupe = new Map<string, string>();
+    for (const output of outputs) {
+      const match = recs.find(
+        (r) =>
+          r.title === output.title ||
+          (output.entityId != null &&
+            r.entityId === output.entityId &&
+            r.category === output.category),
+      );
+      if (match) idByDedupe.set(output.id, match.id);
+    }
+    await recordRecommendationAuditBatch({
+      storeId,
+      outputs,
+      recommendationIds: idByDedupe,
+      durationMs: Date.now() - started,
+    });
+    await persistRecommendationIntelligenceFields(storeId, outputs, idByDedupe);
+    await onRecommendationsCreated(storeId, outputs, idByDedupe);
+    return recs;
+  } catch (error) {
+    console.warn(
+      "[StorePilot] Recommendation sync failed (non-fatal):",
+      error instanceof Error ? error.message : error,
     );
-    if (match) idByDedupe.set(output.id, match.id);
+    return listStoredRecommendations(storeId);
   }
-  await recordRecommendationAuditBatch({
-    storeId,
-    outputs,
-    recommendationIds: idByDedupe,
-    durationMs: Date.now() - started,
-  });
-  await persistRecommendationIntelligenceFields(storeId, outputs, idByDedupe);
-  await onRecommendationsCreated(storeId, outputs, idByDedupe);
-  return recs;
 }
 
 /** Skip full analyzer sync when recommendations were refreshed recently. */
@@ -188,6 +235,18 @@ export const getCachedDashboard = cache(
   },
 );
 
+/** Page read path — skip sync writes (opportunity upserts, measurements, connector sync). */
+export async function buildReadOnlyDashboard(
+  storeIdOverride?: string,
+  snapshotOverride?: StoreSnapshot,
+) {
+  return getCachedDashboard(storeIdOverride, {
+    readOnly: true,
+    skipRecommendationSync: true,
+    snapshotOverride,
+  });
+}
+
 export async function buildDashboard(
   storeIdOverride?: string,
   options?: BuildDashboardOptions,
@@ -195,15 +254,26 @@ export async function buildDashboard(
   DashboardSnapshot & { dataSources: Awaited<ReturnType<typeof getDataSourceStatuses>> }
 > {
   const storeId = storeIdOverride ?? (await getCachedActiveStoreId());
+  const snapshotPromise = options?.snapshotOverride
+    ? getVerifiedStoreDataForSnapshot(storeId, options.snapshotOverride)
+    : getCachedVerifiedStoreData(storeId);
+
   const [{ snapshot, gate }, validationAudits, dataSources, costRecords] = await Promise.all([
-    getCachedVerifiedStoreData(storeId),
+    snapshotPromise,
     listRecommendationAudit(storeId, 100),
     getDataSourceStatuses(storeId),
     getCachedProductCosts(storeId),
   ]);
   const allRecs = options?.skipRecommendationSync
     ? await listStoredRecommendations(storeId)
-    : await getCachedRecommendations(storeId);
+    : options?.syncRecommendations && options?.snapshotOverride
+      ? await ensureRecommendationsSynced(
+          storeId,
+          options.snapshotOverride,
+          options.liveAnalyzerOutputs ?? [],
+          options.hybridDataSources,
+        )
+      : await getCachedRecommendations(storeId);
   const activeRecs = allRecs.filter(isActiveRecommendation);
   const inventorySummary = computeInventorySummary(snapshot.products);
   const adsConnected = hasActiveAdsConnector(snapshot.connectorStates);
@@ -242,7 +312,9 @@ export async function buildDashboard(
   if (allowDemoData()) {
     await seedDemoLearningIfNeeded(storeId);
   }
-  await runPendingMeasurements(storeId);
+  if (!options?.readOnly) {
+    await profileServerAsync("outcome-measurements", () => runPendingMeasurements(storeId));
+  }
 
   const measuredRecs = await listMeasuredRecommendations(storeId);
   const outcomeHistory = await listOutcomeHistory(storeId);
@@ -255,6 +327,18 @@ export async function buildDashboard(
     extra: [
       ...(productIntelligence?.productOpportunities ?? []),
       ...(attributionDashboard?.attributionOpportunities ?? []),
+      ...(options?.liveExtraOpportunities?.map((opp) => ({
+        id: opp.id,
+        category: "product_growth" as const,
+        title: opp.title,
+        description: opp.description,
+        estimatedMonthlyRevenueImpact: opp.expectedImpact.revenueMonthly,
+        estimatedMonthlyNetProfitImpact: opp.expectedImpact.profitMonthly,
+        confidenceScore: opp.confidence / 100,
+        evidence: opp.supportingMetrics,
+        requiredActions: [opp.recommendation],
+        implementationEffort: "Low" as const,
+      })) ?? []),
     ],
   });
 
@@ -284,32 +368,51 @@ export async function buildDashboard(
     allRecs,
   );
 
-  const storeManager = await buildStoreManagerDashboard({
-    snapshot,
-    profitDashboard,
-    dataSources,
-    storeId,
-    storeHealthScore: healthScore,
-    topOpportunities,
-    criticalAlerts,
-  });
-
-  const opportunityHistory = await syncOpportunityHistory(
-    storeId,
-    topOpportunities,
-    storeManager.opportunityFeed ?? [],
+  const storeManager = await profileServerAsync("store-manager", () =>
+    buildStoreManagerDashboard({
+      snapshot,
+      profitDashboard,
+      dataSources,
+      storeId,
+      storeHealthScore: healthScore,
+      topOpportunities,
+      criticalAlerts,
+    }),
   );
 
-  const historyRecords = await listOpportunityHistory(storeId);
-  const outcomeRecords = await listOutcomeRecords(storeId, 100);
-  const shopifyInstallation = await getInstallationForStore(storeId);
+  let opportunityHistory: ReturnType<typeof summarizeOpportunityHistory>;
+  let historyRecords: Awaited<ReturnType<typeof listOpportunityHistory>>;
+  if (options?.readOnly) {
+    historyRecords = await listOpportunityHistory(storeId);
+    opportunityHistory = summarizeOpportunityHistory(historyRecords);
+  } else {
+    opportunityHistory = await profileServerAsync("opportunity-sync", () =>
+      syncOpportunityHistory(storeId, topOpportunities, storeManager.opportunityFeed ?? []),
+    );
+    historyRecords = await listOpportunityHistory(storeId);
+  }
+
+  const [outcomeRecords, shopifyInstallation] = await Promise.all([
+    listOutcomeRecords(storeId, 100),
+    getInstallationForStore(storeId),
+  ]);
   const memoryIndex = buildMemoryIndex({
     opportunityHistory: historyRecords,
     recommendations: allRecs,
   });
 
+  const liveFeedExtras = options?.hybridDataSources
+    ? tagSimulatedAdOpportunities(
+        options.liveExtraOpportunities ?? [],
+        options.hybridDataSources,
+      )
+    : (options?.liveExtraOpportunities ?? []);
+  const mergedFeed = sortCommerceOpportunities([
+    ...liveFeedExtras,
+    ...(storeManager.opportunityFeed ?? []),
+  ]);
   const adjustedFeed = sortCommerceOpportunities(
-    (storeManager.opportunityFeed ?? []).map((o) => applyMemoryToOpportunity(o, memoryIndex)),
+    mergedFeed.map((o) => applyMemoryToOpportunity(o, memoryIndex)),
   );
   const adjustedPriorityQueue = buildPriorityQueue(
     adjustedFeed,
@@ -389,6 +492,7 @@ export async function buildDashboard(
     snapshot,
     profitDashboard,
     productIntelligence,
+    skipPersist: options?.readOnly,
   });
   const profitEngine = profitDashboard
     ? buildProfitDecisionEngine({
@@ -439,27 +543,29 @@ export async function buildDashboard(
     priorityQueue: adjustedPriorityQueue,
   };
 
-  await syncConnectorStatuses(
-    storeId,
-    dataSources.map((d) => ({
-      connector_type: d.id,
-      label: d.label,
-      status: d.status,
-      last_sync_at: d.lastSyncAt,
-    })),
-  );
+  if (!options?.readOnly) {
+    await syncConnectorStatuses(
+      storeId,
+      dataSources.map((d) => ({
+        connector_type: d.id,
+        label: d.label,
+        status: d.status,
+        last_sync_at: d.lastSyncAt,
+      })),
+    );
 
-  await saveDailySnapshot(
-    storeId,
-    healthScore,
-    breakdown,
-    aiBrief,
-    {
-      syncedAt: snapshot.syncedAt,
-      productCount: snapshot.products.length,
-    },
-    factorScoresToBreakdown(storeHealth.factors),
-  );
+    await saveDailySnapshot(
+      storeId,
+      healthScore,
+      breakdown,
+      aiBrief,
+      {
+        syncedAt: snapshot.syncedAt,
+        productCount: snapshot.products.length,
+      },
+      factorScoresToBreakdown(storeHealth.factors),
+    );
+  }
 
   return {
     storeHealthScore: healthScore,
@@ -499,9 +605,11 @@ export async function buildDashboard(
   };
 }
 
-export async function listRecommendations() {
+export async function listRecommendations(options?: { forceSync?: boolean }) {
   const storeId = await resolveActiveStoreId();
-  const recs = await ensureRecommendationsSynced(storeId);
+  const recs = options?.forceSync
+    ? await ensureRecommendationsSynced(storeId)
+    : await getCachedRecommendations(storeId);
   const approvals = await getAllApprovals();
   const approvalMap = new Map(approvals.map((a) => [a.recommendationId, a]));
 
@@ -565,4 +673,24 @@ export async function getHistory(filters?: {
         : campaignDetailsFromEvidence(entry.recommendation),
     };
   });
+}
+
+export async function buildAskAiPageData(): Promise<{ decisions: DecisionItem[] }> {
+  const bundle = await getCachedStoreBundle();
+  const fingerprint = fingerprintData({
+    storeId: bundle.storeId,
+    syncedAt: bundle.snapshot.syncedAt,
+  });
+
+  const decisions = await getOrCompute(
+    `ask-ai-page:${bundle.storeId}`,
+    fingerprint,
+    REFRESH_MS.dashboardRead,
+    async () => {
+      const dashboard = await buildReadOnlyDashboard(bundle.storeId, bundle.snapshot);
+      return dashboard.decisionCenter ?? [];
+    },
+  );
+
+  return { decisions };
 }
