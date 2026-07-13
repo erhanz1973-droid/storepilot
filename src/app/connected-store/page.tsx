@@ -118,7 +118,11 @@ export default async function ConnectedStorePage({
             </div>
             <div className="metric-pill">
               <span>Discounts</span>
-              <span>{store.stats.discountCount}</span>
+              <span>
+                {store.stats.discountsUnavailable
+                  ? "Unavailable"
+                  : store.stats.discountCount}
+              </span>
             </div>
           </div>
         </div>

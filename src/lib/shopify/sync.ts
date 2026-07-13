@@ -10,7 +10,8 @@ import { ESTIMATED_COGS_RATE } from "@/lib/profit/constants";
 import { computeDailyRevenueMetrics } from "@/lib/ads/daily-metrics";
 import { computeProductOrderStats } from "@/lib/products/enrich";
 import { mergeDailyMetrics } from "@/lib/profit/roas";
-import { paginateGraphQL, shopifyGraphQL, type ShopifyGraphQLContext } from "./graphql-client";
+import { paginateGraphQL, shopifyGraphQL, shopifyGraphQLResult, type ShopifyGraphQLContext } from "./graphql-client";
+import { isGraphQLFieldAccessDenied } from "./graphql-errors";
 import { handleShopifyAuthFailure } from "./handle-auth-failure";
 
 export type ShopifySyncStats = {
@@ -20,6 +21,7 @@ export type ShopifySyncStats = {
   customerCount: number;
   collectionCount: number;
   discountCount: number;
+  discountsUnavailable?: boolean;
 };
 
 export type ShopifySyncResult = {
@@ -120,9 +122,6 @@ const SHOP_QUERY = `
       currencyCode
     }
     customersCount { count }
-    discountNodes(first: 1) {
-      edges { node { id } }
-    }
   }
 `;
 
@@ -317,7 +316,8 @@ async function syncShopifyStoreInner(
     graphqlContext,
   );
 
-  const discountCount = await countDiscounts(shop, accessToken, graphqlContext);
+  const discountResult = await countDiscounts(shop, accessToken, graphqlContext);
+  const discountCount = discountResult.count;
 
   const salesByProduct = aggregateProductSales(
     rawOrders.filter((o) => {
@@ -351,6 +351,7 @@ async function syncShopifyStoreInner(
     customerCount: shopInfo.customersCount.count,
     collectionCount: rawCollections.length,
     discountCount,
+    discountsUnavailable: discountResult.unavailable || undefined,
   };
 
   return {
@@ -413,29 +414,50 @@ async function fetchAllOrders(
   return orders;
 }
 
+type DiscountCountResult = {
+  count: number;
+  unavailable: boolean;
+};
+
 async function countDiscounts(
   shop: string,
   accessToken: string,
   context?: ShopifyGraphQLContext,
-): Promise<number> {
+): Promise<DiscountCountResult> {
   let cursor: string | null = null;
   let hasNextPage = true;
   let count = 0;
 
   while (hasNextPage) {
-    const data: DiscountQueryResult = await shopifyGraphQL<DiscountQueryResult>(
+    const { data, errors } = await shopifyGraphQLResult<DiscountQueryResult>(
       shop,
       accessToken,
       DISCOUNTS_COUNT_QUERY,
       { cursor },
       context,
     );
+
+    if (errors.length > 0) {
+      if (isGraphQLFieldAccessDenied(errors, "discountNodes")) {
+        console.warn(
+          "[shopify-sync] discounts unavailable — missing read_discounts scope",
+          { shop, message: errors.map((e) => e.message).join("; ") },
+        );
+        return { count: 0, unavailable: true };
+      }
+      throw new Error(errors.map((e) => e.message).join("; "));
+    }
+
+    if (!data?.discountNodes) {
+      return { count: 0, unavailable: true };
+    }
+
     count += data.discountNodes.edges.length;
     hasNextPage = data.discountNodes.pageInfo.hasNextPage;
     cursor = data.discountNodes.pageInfo.endCursor;
   }
 
-  return count;
+  return { count, unavailable: false };
 }
 
 function aggregateProductSales(orders: RawOrder[]): Map<string, { units: number; revenue: number }> {

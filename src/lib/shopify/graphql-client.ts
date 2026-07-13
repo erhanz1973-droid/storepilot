@@ -2,10 +2,15 @@ import { SHOPIFY_API_VERSION } from "./oauth";
 import { ShopifyAccessTokenInvalidError } from "./auth-errors";
 import { markAccessTokenInvalidFromHttp } from "./installation-auth";
 import { detectAppMismatch, logShopifyTokenDiagnostics } from "./token-diagnostics";
+import {
+  type GraphQLErrorEntry,
+  graphQLErrorSummary,
+  isGraphQLFieldAccessDenied,
+} from "./graphql-errors";
 
 type GraphQLResponse<T> = {
   data?: T;
-  errors?: { message: string }[];
+  errors?: GraphQLErrorEntry[];
 };
 
 export type ShopifyGraphQLContext = {
@@ -13,13 +18,18 @@ export type ShopifyGraphQLContext = {
   storedClientId?: string | null;
 };
 
-export async function shopifyGraphQL<T>(
+export type ShopifyGraphQLResult<T> = {
+  data?: T;
+  errors: GraphQLErrorEntry[];
+};
+
+async function fetchShopifyGraphQL<T>(
   shop: string,
   accessToken: string,
   query: string,
   variables?: Record<string, unknown>,
   context?: ShopifyGraphQLContext,
-): Promise<T> {
+): Promise<GraphQLResponse<T>> {
   const mismatch = detectAppMismatch(context?.storedClientId);
   logShopifyTokenDiagnostics({
     shopDomain: shop,
@@ -66,9 +76,34 @@ export async function shopifyGraphQL<T>(
     throw new Error(`Shopify GraphQL HTTP ${response.status}`);
   }
 
-  const json = (await response.json()) as GraphQLResponse<T>;
+  return (await response.json()) as GraphQLResponse<T>;
+}
+
+/** Returns data and errors without throwing — for optional resource probes. */
+export async function shopifyGraphQLResult<T>(
+  shop: string,
+  accessToken: string,
+  query: string,
+  variables?: Record<string, unknown>,
+  context?: ShopifyGraphQLContext,
+): Promise<ShopifyGraphQLResult<T>> {
+  const json = await fetchShopifyGraphQL<T>(shop, accessToken, query, variables, context);
+  return {
+    data: json.data,
+    errors: json.errors ?? [],
+  };
+}
+
+export async function shopifyGraphQL<T>(
+  shop: string,
+  accessToken: string,
+  query: string,
+  variables?: Record<string, unknown>,
+  context?: ShopifyGraphQLContext,
+): Promise<T> {
+  const json = await fetchShopifyGraphQL<T>(shop, accessToken, query, variables, context);
   if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
+    throw new Error(graphQLErrorSummary(json.errors));
   }
   if (!json.data) {
     throw new Error("Shopify GraphQL returned no data");
