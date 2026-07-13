@@ -244,6 +244,17 @@ export async function upsertShopifyInstallation(input: {
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
 
+  console.log(
+    "[shopify-persist]",
+    JSON.stringify({
+      phase: "upsertShopifyInstallation",
+      shopDomain: input.shopDomain,
+      storeId: input.storeId,
+      clientIdPrefix: clientId ? clientId.slice(0, 6) : null,
+      hasSupabase: Boolean(supabase),
+    }),
+  );
+
   if (!supabase) {
     const existing = [...memoryInstallations.values()].find(
       (i) => i.shop_domain === input.shopDomain,
@@ -305,8 +316,27 @@ export async function upsertShopifyInstallation(input: {
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
-  return rowToInstallation(data as Record<string, unknown>);
+  if (error) {
+    console.error("[shopify-persist] upsertShopifyInstallation failed", {
+      shopDomain: input.shopDomain,
+      message: error.message,
+      code: error.code,
+    });
+    throw new Error(error.message);
+  }
+
+  const installation = rowToInstallation(data as Record<string, unknown>);
+  console.log(
+    "[shopify-persist]",
+    JSON.stringify({
+      phase: "upsertShopifyInstallation complete",
+      shopDomain: installation.shop_domain,
+      storeId: installation.store_id,
+      status: installation.status,
+      clientIdPrefix: installation.clientId ? installation.clientId.slice(0, 6) : null,
+    }),
+  );
+  return installation;
 }
 
 export async function markShopifyUninstalled(shopDomain: string): Promise<void> {
@@ -471,12 +501,17 @@ export async function markShopifyReinstallRequired(
   const supabase = getSupabaseAdmin();
   const message = `${SHOPIFY_REINSTALL_REQUIRED_PREFIX} ${reason}`;
 
+  console.log("[shopify-persist] markShopifyReinstallRequired", {
+    shopDomain,
+    reason,
+    hasSupabase: Boolean(supabase),
+  });
+
   if (!supabase) {
     for (const [id, row] of memoryInstallations) {
       if (row.shop_domain === shopDomain) {
         memoryInstallations.set(id, {
           ...row,
-          status: "error",
           connection_health: "error",
           error_message: message,
         });
@@ -485,15 +520,21 @@ export async function markShopifyReinstallRequired(
     return;
   }
 
-  await supabase
+  const { error } = await supabase
     .from("shopify_installations")
     .update({
-      status: "error",
       connection_health: "error",
       error_message: message,
     } as Record<string, unknown>)
-    .eq("shop_domain", shopDomain)
-    .eq("status", "active");
+    .eq("shop_domain", shopDomain);
+
+  if (error) {
+    console.error("[shopify-persist] markShopifyReinstallRequired failed", {
+      shopDomain,
+      message: error.message,
+    });
+    throw new Error(error.message);
+  }
 }
 
 export async function getCachedShopifySnapshot(

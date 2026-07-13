@@ -1,5 +1,6 @@
 import { AppNav } from "@/components/AppNav";
 import { DemoDataBadge } from "@/components/DemoDataBadge";
+import { ensureEmbeddedShopifyBootstrap } from "@/lib/shopify/embedded-bootstrap.server";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -8,7 +9,19 @@ export const metadata: Metadata = {
   description: "Multi-platform commerce intelligence — analyze and recommend, never auto-act",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  try {
+    await ensureEmbeddedShopifyBootstrap();
+  } catch (error) {
+    // Shopify authenticate.admin() throws Response for App Bridge / bounce redirects.
+    if (error instanceof Response) throw error;
+    console.error("[embedded-bootstrap] layout bootstrap failed (non-fatal)", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return (
     <html lang="en">
       <body>

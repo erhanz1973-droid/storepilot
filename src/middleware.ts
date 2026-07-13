@@ -57,6 +57,7 @@ export function middleware(request: NextRequest) {
   }
 
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-storepilot-request-url", request.url);
   if (shop) {
     requestHeaders.set("x-storepilot-shop-domain", shop);
   }

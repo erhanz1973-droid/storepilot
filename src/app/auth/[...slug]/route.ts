@@ -6,12 +6,20 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function isOAuthCodeCallback(request: Request): boolean {
+  const url = new URL(request.url);
+  return url.pathname.endsWith("/auth/callback") && url.searchParams.has("code");
+}
+
 async function handleAuth(request: Request): Promise<Response> {
-  // The login route must never require authentication. It starts OAuth via
-  // shopify.login(); every other /auth/* path uses authenticate.admin().
   if (isShopifyLoginPath(request)) {
     return runEmbeddedLogin(request);
   }
+
+  if (isOAuthCodeCallback(request)) {
+    console.log("[embedded-auth] /auth/callback OAuth code detected — delegating to authenticate.admin");
+  }
+
   return runEmbeddedAuth(request);
 }
 

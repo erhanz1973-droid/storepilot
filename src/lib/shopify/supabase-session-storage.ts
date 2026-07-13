@@ -1,11 +1,7 @@
 import { Session, type SessionParams } from "@shopify/shopify-api";
 import type { SessionStorage } from "@shopify/shopify-app-session-storage";
-import {
-  createStoreForShop,
-  findStoreByShopDomain,
-  getInstallationByShopDomain,
-  upsertShopifyInstallation,
-} from "@/lib/db/shopify";
+import { getInstallationByShopDomain } from "@/lib/db/shopify";
+import { persistInstallationFromSession } from "@/lib/shopify/persist-installation.server";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 
 type AuthSessionRow = {
@@ -39,28 +35,7 @@ function sessionFromJson(value: Record<string, unknown>): Session {
 }
 
 async function persistOfflineInstallation(session: Session): Promise<void> {
-  if (!session.accessToken) return;
-
-  const shop = session.shop;
-  let storeId = await findStoreByShopDomain(shop);
-  if (!storeId) {
-    storeId = await createStoreForShop(shop, shop);
-  }
-
-  const scopes =
-    session.scope
-      ?.split(",")
-      .map((scope) => scope.trim())
-      .filter(Boolean) ?? [];
-
-  await upsertShopifyInstallation({
-    storeId,
-    shopDomain: shop,
-    accessToken: session.accessToken,
-    scopes,
-    refreshToken: session.refreshToken ?? undefined,
-    refreshTokenExpires: session.refreshTokenExpires ?? undefined,
-  });
+  await persistInstallationFromSession(session, "SupabaseSessionStorage.storeSession");
 }
 
 async function offlineSessionFromInstallation(id: string): Promise<Session | undefined> {
@@ -82,6 +57,17 @@ async function offlineSessionFromInstallation(id: string): Promise<Session | und
 
 export class SupabaseSessionStorage implements SessionStorage {
   async storeSession(session: Session): Promise<boolean> {
+    console.log(
+      "[shopify-persist]",
+      JSON.stringify({
+        phase: "storeSession",
+        sessionId: session.id,
+        shop: session.shop,
+        isOnline: session.isOnline,
+        hasAccessToken: Boolean(session.accessToken),
+      }),
+    );
+
     if (!session.isOnline && session.accessToken) {
       await persistOfflineInstallation(session);
       return true;
