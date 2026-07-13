@@ -1,108 +1,101 @@
-import { cookies, headers } from "next/headers";
 import { getActiveStoreIdForShopDomain } from "@/lib/db/shopify";
 import { getShopifyApp } from "@/lib/shopify/shopify-app.server";
 import { persistInstallationFromSession } from "@/lib/shopify/persist-installation.server";
-import { embeddedActiveStoreCookieValue } from "@/lib/store/context";
 import { logEmbeddedBootstrap } from "@/lib/store/embedded-context";
 
 export type EmbeddedBootstrapResult = {
   shop: string;
   storeId: string | null;
   sessionId: string;
+  persisted: boolean;
 };
 
-function headerRecord(headerStore: Headers): Record<string, string> {
-  const record: Record<string, string> = {};
-  headerStore.forEach((value, key) => {
-    record[key] = value;
-  });
-  return record;
+function isEmbeddedBootstrapRequest(request: Request): boolean {
+  const url = new URL(request.url);
+  const shop = url.searchParams.get("shop");
+  const host = url.searchParams.get("host");
+  const embedded = url.searchParams.get("embedded");
+  const headerShop = request.headers.get("x-storepilot-shop-domain");
+  const headerEmbedded = request.headers.get("x-storepilot-embedded");
+  return Boolean(shop || host || embedded === "1" || headerShop || headerEmbedded === "1");
 }
 
 /**
- * Runs Shopify token exchange on embedded document requests so offline tokens
- * are persisted before dashboard RSC renders.
+ * Runs Shopify authenticate.admin + installation persistence.
+ * Must only be called from a Route Handler (or Server Action) so cookie
+ * mutations from the Shopify SDK are legal in Next.js.
  */
-export async function ensureEmbeddedShopifyBootstrap(): Promise<EmbeddedBootstrapResult | null> {
-  const headerStore = await headers();
-  const shopDomain = headerStore.get("x-storepilot-shop-domain");
-  const embedded = headerStore.get("x-storepilot-embedded") === "1";
-  const requestUrl = headerStore.get("x-storepilot-request-url");
-
-  if (!embedded && !shopDomain) {
-    return null;
+export async function runEmbeddedShopifyBootstrap(
+  request: Request,
+): Promise<EmbeddedBootstrapResult | { skipped: true; reason: string }> {
+  if (!isEmbeddedBootstrapRequest(request)) {
+    return { skipped: true, reason: "not_embedded" };
   }
 
-  logEmbeddedBootstrap("layout bootstrap start", {
-    shopDomain,
-    shopSource: shopDomain ? "header" : null,
-    storeId: shopDomain ? await getActiveStoreIdForShopDomain(shopDomain) : null,
-    installationFound: shopDomain ? Boolean(await getActiveStoreIdForShopDomain(shopDomain)) : false,
+  const url = new URL(request.url);
+  const shopParam = url.searchParams.get("shop");
+  const headerShop = request.headers.get("x-storepilot-shop-domain");
+  const shopDomain = shopParam ?? headerShop;
+
+  logEmbeddedBootstrap("route bootstrap start", {
+    shopDomain: shopDomain
+      ? shopDomain.includes(".")
+        ? shopDomain
+        : `${shopDomain}.myshopify.com`
+      : null,
+    shopSource: shopParam ? "header" : headerShop ? "header" : null,
+    storeId: shopDomain ? await getActiveStoreIdForShopDomain(
+      shopDomain.includes(".") ? shopDomain : `${shopDomain}.myshopify.com`,
+    ) : null,
+    installationFound: shopDomain
+      ? Boolean(
+          await getActiveStoreIdForShopDomain(
+            shopDomain.includes(".") ? shopDomain : `${shopDomain}.myshopify.com`,
+          ),
+        )
+      : false,
   });
 
-  if (!requestUrl) {
-    console.log("[embedded-bootstrap] skip authenticate.admin — missing x-storepilot-request-url");
-    return shopDomain ? { shop: shopDomain, storeId: null, sessionId: "" } : null;
-  }
+  // Reconstruct the document URL for Shopify session-token / bounce handling.
+  // Client calls /api/shopify/bootstrap?... with the same search params as the page.
+  const documentUrl =
+    request.headers.get("x-storepilot-request-url") ??
+    request.url.replace(/\/api\/shopify\/bootstrap/, "/");
 
   console.log("[embedded-bootstrap] before authenticate.admin", {
-    requestUrl,
+    requestUrl: documentUrl,
     shopDomain,
-    hasAuthorizationHeader: Boolean(headerStore.get("authorization")),
-    hasIdToken: requestUrl.includes("id_token="),
+    hasAuthorizationHeader: Boolean(request.headers.get("authorization")),
+    hasIdToken: documentUrl.includes("id_token=") || url.searchParams.has("id_token"),
   });
 
-  try {
-    const request = new Request(requestUrl, {
-      method: "GET",
-      headers: headerRecord(headerStore),
-    });
+  const authRequest = new Request(documentUrl, {
+    method: "GET",
+    headers: request.headers,
+  });
 
-    const { session } = await getShopifyApp().authenticate.admin(request);
+  const { session } = await getShopifyApp().authenticate.admin(authRequest);
+  const persisted = await persistInstallationFromSession(session, "embedded-bootstrap");
 
-    const persisted = await persistInstallationFromSession(session, "embedded-bootstrap");
+  const storeId =
+    persisted?.storeId ?? (await getActiveStoreIdForShopDomain(session.shop));
 
-    const storeId =
-      persisted?.storeId ??
-      (await getActiveStoreIdForShopDomain(session.shop));
+  const result: EmbeddedBootstrapResult = {
+    shop: session.shop,
+    storeId,
+    sessionId: session.id,
+    persisted: Boolean(persisted),
+  };
 
-    if (storeId) {
-      const cookieStore = await cookies();
-      const { name, value, options } = embeddedActiveStoreCookieValue(storeId);
-      cookieStore.set(name, value, options);
-    }
+  console.log(
+    "[embedded-bootstrap]",
+    JSON.stringify({
+      phase: "authenticate.admin complete",
+      ...result,
+      isOnline: session.isOnline,
+      hasAccessToken: Boolean(session.accessToken),
+    }),
+  );
 
-    const result: EmbeddedBootstrapResult = {
-      shop: session.shop,
-      storeId,
-      sessionId: session.id,
-    };
-
-    console.log(
-      "[embedded-bootstrap]",
-      JSON.stringify({
-        phase: "authenticate.admin complete",
-        ...result,
-        isOnline: session.isOnline,
-        hasAccessToken: Boolean(session.accessToken),
-        persisted: Boolean(persisted),
-      }),
-    );
-
-    return result;
-  } catch (errorOrResponse) {
-    if (errorOrResponse instanceof Response) {
-      console.log("[embedded-bootstrap] authenticate.admin returned Response", {
-        status: errorOrResponse.status,
-        location: errorOrResponse.headers.get("location"),
-        contentType: errorOrResponse.headers.get("content-type"),
-      });
-      throw errorOrResponse;
-    }
-
-    const message =
-      errorOrResponse instanceof Error ? errorOrResponse.message : String(errorOrResponse);
-    console.error("[embedded-bootstrap] authenticate.admin exception", { message });
-    throw errorOrResponse;
-  }
+  return result;
 }

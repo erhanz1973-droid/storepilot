@@ -1,6 +1,10 @@
 import {
   buildAdvertisingWorkspace,
 } from "@/lib/advertising/build-workspace";
+import {
+  emptyAdvertisingWorkspace,
+  emptyAttributionDashboard,
+} from "@/lib/advertising/empty-workspace";
 import { buildCampaignDetailPage } from "@/lib/advertising/build-campaign-detail";
 import { buildAiAccountabilityLayer } from "@/lib/advertising/build-ai-accountability";
 import { readAdvertisingVisitSnapshot } from "@/lib/advertising/advertising-visit";
@@ -47,7 +51,18 @@ async function buildAdvertisingWorkspaceCore(bundle: StoreBundle) {
   );
 
   if (!attribution) {
-    throw new Error("Attribution dashboard unavailable");
+    console.warn("[advertising] Attribution dashboard unavailable — returning empty model", {
+      storeId: bundle.storeId,
+    });
+    return {
+      workspace: emptyAdvertisingWorkspace(bundle.snapshot.syncedAt),
+      rejections: [],
+      outcomes: [],
+      marketing,
+      attribution: emptyAttributionDashboard(bundle.snapshot.syncedAt),
+      decisions: dashboard.decisionCenter ?? [],
+      attributionUnavailable: true as const,
+    };
   }
 
   const workspace = buildAdvertisingWorkspace({
@@ -75,6 +90,7 @@ async function buildAdvertisingWorkspaceCore(bundle: StoreBundle) {
     marketing,
     attribution,
     decisions: dashboard.decisionCenter ?? [],
+    attributionUnavailable: false as const,
   };
 }
 
@@ -117,6 +133,7 @@ export async function buildAdvertisingPageData() {
     ...limited,
     snapshot: bundle.snapshot,
     enrichedCampaigns: core.marketing.campaigns,
+    attributionUnavailable: core.attributionUnavailable,
   };
 }
 

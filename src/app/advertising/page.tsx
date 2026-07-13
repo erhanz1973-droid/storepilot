@@ -33,7 +33,15 @@ export default async function AdvertisingPage() {
       syncedAt={data.syncedAt}
     >
       <AdvertisingIntegrationBanner readiness={readiness} />
-      {!hasData ? (
+      {data.attributionUnavailable ? (
+        <div className="card">
+          <p style={{ margin: 0 }}>Attribution data is not available yet.</p>
+          <p className="muted" style={{ margin: "8px 0 0" }}>
+            Connect ad platforms and ensure orders sync so StorePilot can build journeys.{" "}
+            <Link href="/connections">Open Connections</Link>
+          </p>
+        </div>
+      ) : !hasData ? (
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
             Connect ad platforms to unlock the Advertising workspace.{" "}
