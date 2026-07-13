@@ -15,6 +15,16 @@ describe("isGraphQLFieldAccessDenied", () => {
     expect(isGraphQLFieldAccessDenied(errors, "discountNodes")).toBe(true);
   });
 
+  it("detects production Shopify scope error wording", () => {
+    const errors = [
+      {
+        message:
+          "Access denied for discountNodes field. Required access: Apps must have `read_discounts` access scope.",
+      },
+    ];
+    expect(isGraphQLFieldAccessDenied(errors, "discountNodes")).toBe(true);
+  });
+
   it("does not flag unrelated field errors", () => {
     const errors = [
       {
