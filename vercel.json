@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/ga4-sync",
       "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/learning-measure",
+      "schedule": "0 6 * * *"
     }
   ]
 }
