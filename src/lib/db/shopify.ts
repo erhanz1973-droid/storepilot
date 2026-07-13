@@ -186,6 +186,28 @@ export async function getInstallationForStore(
   return data ? rowToInstallation(data as Record<string, unknown>) : null;
 }
 
+/** Metadata-only lookup — does not decrypt access tokens (safe for tenant routing). */
+export async function getActiveStoreIdForShopDomain(shopDomain: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    const row = [...memoryInstallations.values()].find(
+      (i) => i.shop_domain === shopDomain && i.status === "active",
+    );
+    return row?.store_id ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("shopify_installations")
+    .select("store_id")
+    .eq("shop_domain", shopDomain)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data ? (data as { store_id: string }).store_id : null;
+}
+
 export async function getActiveShopifyInstallation(): Promise<ShopifyInstallation | null> {
   const supabase = getSupabaseAdmin();
 

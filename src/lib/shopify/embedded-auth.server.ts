@@ -1,9 +1,17 @@
 import type { Session } from "@shopify/shopify-api";
 
 import { getShopifyApp } from "@/lib/shopify/shopify-app.server";
-import { getInstallationByShopDomain } from "@/lib/db/shopify";
+import {
+  getActiveStoreIdForShopDomain,
+  getInstallationByShopDomain,
+} from "@/lib/db/shopify";
 import { getShopifyConfig } from "@/lib/shopify/oauth";
-import { resolveEmbeddedShopDomain } from "@/lib/store/embedded-context";
+import { shopifyApiKeyPrefix } from "@/lib/shopify/token-diagnostics";
+import {
+  logEmbeddedBootstrap,
+  readEmbeddedBootstrapDiagnostics,
+  resolveEmbeddedShopDomain,
+} from "@/lib/store/embedded-context";
 
 export type EmbeddedAuthResult = {
   session: Session;
@@ -124,21 +132,37 @@ export async function runEmbeddedAuth(request: Request): Promise<Response> {
   });
 
   try {
-    const { session } = await getShopifyApp().authenticate.admin(request);
-    const installation = await getInstallationByShopDomain(session.shop);
+    const auth = await getShopifyApp().authenticate.admin(request);
+    const session = auth.session;
+    const storeId = await getActiveStoreIdForShopDomain(session.shop);
+    const installation = await getInstallationByShopDomain(session.shop).catch(() => null);
 
     logEmbeddedStartupDiagnostics("authenticate.admin success", pre, {
       sessionFound: true,
       authenticatedShop: session.shop,
-      installationFound: installation != null,
-      storeId: installation?.store_id ?? null,
+      installationFound: storeId != null,
+      storeId,
       sessionId: session.id,
+      isOnline: session.isOnline,
+      hasAccessToken: Boolean(session.accessToken),
+      clientIdPrefix: shopifyApiKeyPrefix(process.env.SHOPIFY_API_KEY),
+      installationClientIdPrefix: installation?.clientId
+        ? shopifyApiKeyPrefix(installation.clientId)
+        : null,
+    });
+    logEmbeddedBootstrap("authenticate.admin", {
+      shopDomain: session.shop,
+      shopSource: pre.shop ? "header" : null,
+      storeId,
+      installationFound: storeId != null,
     });
 
     return Response.json({
       ok: true,
       shop: session.shop,
-      storeId: installation?.store_id ?? null,
+      storeId,
+      sessionId: session.id,
+      installationFound: storeId != null,
     });
   } catch (errorOrResponse) {
     if (errorOrResponse instanceof Response) {
