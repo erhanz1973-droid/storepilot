@@ -2,6 +2,7 @@ import type { Session } from "@shopify/shopify-api";
 
 import { getShopifyApp } from "@/lib/shopify/shopify-app.server";
 import { getInstallationByShopDomain } from "@/lib/db/shopify";
+import { getShopifyConfig } from "@/lib/shopify/oauth";
 import { resolveEmbeddedShopDomain } from "@/lib/store/embedded-context";
 
 export type EmbeddedAuthResult = {
@@ -62,8 +63,58 @@ export function logEmbeddedStartupDiagnostics(
   );
 }
 
+/** Login path derived from the configured authPathPrefix ("/auth"). */
+export const SHOPIFY_LOGIN_PATH = "/auth/login";
+
+export function isShopifyLoginPath(request: Request): boolean {
+  const { pathname } = new URL(request.url);
+  return pathname === SHOPIFY_LOGIN_PATH || pathname.endsWith(SHOPIFY_LOGIN_PATH);
+}
+
 /**
- * Runs Shopify embedded admin authentication for /auth/* routes.
+ * Starts the Shopify OAuth flow for the login route.
+ *
+ * The login route must NEVER call authenticate.admin(). shopify.login() throws a
+ * redirect Response to Shopify's OAuth/install screen when a shop is present, and
+ * returns a LoginError when the shop is missing/invalid.
+ */
+export async function runEmbeddedLogin(request: Request): Promise<Response> {
+  const pre = await readEmbeddedStartupDiagnostics(request);
+  logEmbeddedStartupDiagnostics("before shopify.login", pre);
+
+  const shopify = getShopifyApp();
+  if (!("login" in shopify) || typeof shopify.login !== "function") {
+    console.error("[embedded-auth] shopify.login unavailable for current distribution");
+    throw new Response("Login is not available for this app distribution.", { status: 500 });
+  }
+
+  try {
+    const loginError = await shopify.login(request);
+    logEmbeddedStartupDiagnostics("shopify.login returned error", pre, {
+      loginError,
+    });
+    const config = getShopifyConfig();
+    const target = `${config?.appUrl ?? ""}/connections?tab=commerce&error=${encodeURIComponent(
+      loginError.shop ?? "missing_shop",
+    )}`;
+    return Response.redirect(target, 302);
+  } catch (errorOrResponse) {
+    if (errorOrResponse instanceof Response) {
+      logEmbeddedStartupDiagnostics("shopify.login redirect", pre, {
+        status: errorOrResponse.status,
+        location: errorOrResponse.headers.get("location"),
+      });
+      return errorOrResponse;
+    }
+    const message =
+      errorOrResponse instanceof Error ? errorOrResponse.message : String(errorOrResponse);
+    console.error("[embedded-auth] shopify.login exception", { ...pre, message });
+    throw errorOrResponse;
+  }
+}
+
+/**
+ * Runs Shopify embedded admin authentication for /auth/* routes (except /auth/login).
  * Returns thrown Response objects (redirects) for the route handler.
  */
 export async function runEmbeddedAuth(request: Request): Promise<Response> {
