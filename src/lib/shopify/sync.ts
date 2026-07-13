@@ -10,7 +10,7 @@ import { ESTIMATED_COGS_RATE } from "@/lib/profit/constants";
 import { computeDailyRevenueMetrics } from "@/lib/ads/daily-metrics";
 import { computeProductOrderStats } from "@/lib/products/enrich";
 import { mergeDailyMetrics } from "@/lib/profit/roas";
-import { paginateGraphQL, shopifyGraphQL, shopifyGraphQLResult, type ShopifyGraphQLContext } from "./graphql-client";
+import { paginateGraphQL, shopifyGraphQL, shopifyGraphQLResult, type ShopifyGraphQLContext, type ShopifyGraphQLResult } from "./graphql-client";
 import { isGraphQLFieldAccessDenied } from "./graphql-errors";
 import { handleShopifyAuthFailure } from "./handle-auth-failure";
 
@@ -429,13 +429,15 @@ async function countDiscounts(
   let count = 0;
 
   while (hasNextPage) {
-    const { data, errors } = await shopifyGraphQLResult<DiscountQueryResult>(
-      shop,
-      accessToken,
-      DISCOUNTS_COUNT_QUERY,
-      { cursor },
-      context,
-    );
+    const discountPage: ShopifyGraphQLResult<DiscountQueryResult> =
+      await shopifyGraphQLResult<DiscountQueryResult>(
+        shop,
+        accessToken,
+        DISCOUNTS_COUNT_QUERY,
+        { cursor },
+        context,
+      );
+    const { data, errors } = discountPage;
 
     if (errors.length > 0) {
       if (isGraphQLFieldAccessDenied(errors, "discountNodes")) {
