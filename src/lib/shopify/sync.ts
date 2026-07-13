@@ -10,7 +10,8 @@ import { ESTIMATED_COGS_RATE } from "@/lib/profit/constants";
 import { computeDailyRevenueMetrics } from "@/lib/ads/daily-metrics";
 import { computeProductOrderStats } from "@/lib/products/enrich";
 import { mergeDailyMetrics } from "@/lib/profit/roas";
-import { paginateGraphQL, shopifyGraphQL } from "./graphql-client";
+import { paginateGraphQL, shopifyGraphQL, type ShopifyGraphQLContext } from "./graphql-client";
+import { handleShopifyAuthFailure } from "./handle-auth-failure";
 
 export type ShopifySyncStats = {
   productCount: number;
@@ -249,11 +250,29 @@ function thirtyDayQuery(): string {
 export async function syncShopifyStore(
   shop: string,
   accessToken: string,
+  options?: { storedClientId?: string | null },
+): Promise<ShopifySyncResult> {
+  const graphqlContext: ShopifyGraphQLContext = {
+    shopDomain: shop,
+    storedClientId: options?.storedClientId,
+  };
+
+  try {
+    return await syncShopifyStoreInner(shop, accessToken, graphqlContext);
+  } catch (error) {
+    return handleShopifyAuthFailure(shop, error);
+  }
+}
+
+async function syncShopifyStoreInner(
+  shop: string,
+  accessToken: string,
+  graphqlContext: ShopifyGraphQLContext,
 ): Promise<ShopifySyncResult> {
   const shopInfo = await shopifyGraphQL<{
     shop: { name: string; myshopifyDomain: string; plan: { displayName: string }; currencyCode: string };
     customersCount: { count: number };
-  }>(shop, accessToken, SHOP_QUERY);
+  }>(shop, accessToken, SHOP_QUERY, undefined, graphqlContext);
 
   const rawProducts = await paginateGraphQL<RawProduct, RawProduct[]>(
     shop,
@@ -272,10 +291,11 @@ export async function syncShopifyStore(
     },
     (acc, nodes) => acc.concat(nodes),
     [],
+    graphqlContext,
   );
 
   const orderQuery = sixtyDayQuery();
-  const rawOrders = await fetchAllOrders(shop, accessToken, orderQuery);
+  const rawOrders = await fetchAllOrders(shop, accessToken, orderQuery, graphqlContext);
 
   const rawCollections = await paginateGraphQL<RawCollection, RawCollection[]>(
     shop,
@@ -294,9 +314,10 @@ export async function syncShopifyStore(
     },
     (acc, nodes) => acc.concat(nodes),
     [],
+    graphqlContext,
   );
 
-  const discountCount = await countDiscounts(shop, accessToken);
+  const discountCount = await countDiscounts(shop, accessToken, graphqlContext);
 
   const salesByProduct = aggregateProductSales(
     rawOrders.filter((o) => {
@@ -370,6 +391,7 @@ async function fetchAllOrders(
   shop: string,
   accessToken: string,
   query: string,
+  context?: ShopifyGraphQLContext,
 ): Promise<RawOrder[]> {
   let cursor: string | null = null;
   let hasNextPage = true;
@@ -381,6 +403,7 @@ async function fetchAllOrders(
       accessToken,
       ORDERS_QUERY,
       { cursor, query },
+      context,
     );
     orders.push(...data.orders.edges.map((e: { node: RawOrder }) => e.node));
     hasNextPage = data.orders.pageInfo.hasNextPage;
@@ -390,7 +413,11 @@ async function fetchAllOrders(
   return orders;
 }
 
-async function countDiscounts(shop: string, accessToken: string): Promise<number> {
+async function countDiscounts(
+  shop: string,
+  accessToken: string,
+  context?: ShopifyGraphQLContext,
+): Promise<number> {
   let cursor: string | null = null;
   let hasNextPage = true;
   let count = 0;
@@ -401,6 +428,7 @@ async function countDiscounts(shop: string, accessToken: string): Promise<number
       accessToken,
       DISCOUNTS_COUNT_QUERY,
       { cursor },
+      context,
     );
     count += data.discountNodes.edges.length;
     hasNextPage = data.discountNodes.pageInfo.hasNextPage;

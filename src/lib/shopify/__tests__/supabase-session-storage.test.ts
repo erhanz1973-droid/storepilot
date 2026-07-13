@@ -30,6 +30,7 @@ vi.mock("@/lib/db/shopify", () => ({
     accessToken: "shpat_offline_token",
     refreshToken: null,
     refreshTokenExpires: null,
+    clientId: null,
   })),
   upsertShopifyInstallation: vi.fn(async () => ({
     id: "inst-1",

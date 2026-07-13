@@ -1,8 +1,16 @@
 import { SHOPIFY_API_VERSION } from "./oauth";
+import { ShopifyAccessTokenInvalidError } from "./auth-errors";
+import { markAccessTokenInvalidFromHttp } from "./installation-auth";
+import { detectAppMismatch, logShopifyTokenDiagnostics } from "./token-diagnostics";
 
 type GraphQLResponse<T> = {
   data?: T;
   errors?: { message: string }[];
+};
+
+export type ShopifyGraphQLContext = {
+  shopDomain: string;
+  storedClientId?: string | null;
 };
 
 export async function shopifyGraphQL<T>(
@@ -10,7 +18,27 @@ export async function shopifyGraphQL<T>(
   accessToken: string,
   query: string,
   variables?: Record<string, unknown>,
+  context?: ShopifyGraphQLContext,
 ): Promise<T> {
+  const mismatch = detectAppMismatch(context?.storedClientId);
+  logShopifyTokenDiagnostics({
+    shopDomain: shop,
+    currentApiKeyPrefix: mismatch.currentClientIdPrefix,
+    storedClientIdPrefix: mismatch.storedClientIdPrefix,
+    tokenDecryptSucceeded: true,
+    appMatch: mismatch.appMatch,
+    reinstallRequired: mismatch.mismatch,
+    reason: mismatch.mismatch ? "blocked GraphQL — app mismatch" : "graphql request",
+  });
+
+  if (mismatch.mismatch) {
+    throw new ShopifyAccessTokenInvalidError(
+      shop,
+      401,
+      `Access token belongs to Shopify app ${mismatch.storedClientIdPrefix}… but this deployment uses ${mismatch.currentClientIdPrefix}…. Reinstall the app from Shopify Admin.`,
+    );
+  }
+
   const response = await fetch(
     `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
     {
@@ -25,6 +53,16 @@ export async function shopifyGraphQL<T>(
   );
 
   if (!response.ok) {
+    const body = await response.text();
+    if (response.status === 401) {
+      throw markAccessTokenInvalidFromHttp(
+        shop,
+        401,
+        body.trim()
+          ? `Shopify rejected the access token (HTTP 401): ${body.slice(0, 200)}`
+          : undefined,
+      );
+    }
     throw new Error(`Shopify GraphQL HTTP ${response.status}`);
   }
 
@@ -50,15 +88,20 @@ export async function paginateGraphQL<TNode, TResult>(
   },
   merge: (acc: TResult, nodes: TNode[]) => TResult,
   initial: TResult,
+  context?: ShopifyGraphQLContext,
 ): Promise<TResult> {
   let cursor: string | null = null;
   let hasNextPage = true;
   let result = initial;
 
   while (hasNextPage) {
-    const data = await shopifyGraphQL<Record<string, unknown>>(shop, accessToken, query, {
-      cursor,
-    });
+    const data = await shopifyGraphQL<Record<string, unknown>>(
+      shop,
+      accessToken,
+      query,
+      { cursor },
+      context,
+    );
     const page = extract(data);
     result = merge(result, page.nodes);
     hasNextPage = page.hasNextPage;

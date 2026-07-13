@@ -42,7 +42,15 @@ let query = supabase
   .eq("status", "active");
 if (shopDomain) query = query.eq("shop_domain", shopDomain);
 
-const { data: rows, error } = await query.limit(1);
+let { data: rows, error } = await query.limit(1);
+if (error?.message?.includes("client_id")) {
+  query = supabase
+    .from("shopify_installations")
+    .select("store_id, shop_domain, access_token_encrypted, connection_health, status")
+    .eq("status", "active");
+  if (shopDomain) query = query.eq("shop_domain", shopDomain);
+  ({ data: rows, error } = await query.limit(1));
+}
 if (error) {
   console.error("Supabase query failed:", error.message);
   process.exit(1);
@@ -61,6 +69,31 @@ try {
 } catch (err) {
   console.error("Token decrypt: FAILED");
   console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
+
+const runtimeApiKey = process.env.SHOPIFY_API_KEY?.trim() ?? "";
+const runtimeApiKeyPrefix = runtimeApiKey ? runtimeApiKey.slice(0, 6) : null;
+const storedClientId = row.client_id?.trim() || null;
+const storedClientIdPrefix = storedClientId ? storedClientId.slice(0, 6) : null;
+const appMatch =
+  storedClientId && runtimeApiKey ? storedClientId === runtimeApiKey : null;
+
+console.log(
+  JSON.stringify({
+    shopDomain: row.shop_domain,
+    runtimeApiKeyPrefix,
+    storedClientIdPrefix,
+    tokenDecryptSucceeded: true,
+    appMatch,
+    reinstallRequired: appMatch === false,
+  }),
+);
+
+if (appMatch === false) {
+  console.error(
+    `App mismatch: stored token belongs to ${storedClientIdPrefix}… but deployment uses ${runtimeApiKeyPrefix}…. Reinstall required.`,
+  );
   process.exit(1);
 }
 

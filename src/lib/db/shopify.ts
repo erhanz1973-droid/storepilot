@@ -1,4 +1,9 @@
 import { decryptToken, encryptToken } from "@/lib/shopify/crypto";
+import { SHOPIFY_REINSTALL_REQUIRED_PREFIX } from "@/lib/shopify/auth-errors";
+import {
+  resolveCurrentShopifyClientId,
+  resolveShopifyAccessToken,
+} from "@/lib/shopify/installation-auth";
 import type { ShopifySyncStats } from "@/lib/shopify/sync";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import type { StoreSnapshot } from "@/lib/connectors/types";
@@ -19,6 +24,8 @@ export type ShopifyInstallation = {
   sync_stats: ShopifySyncStats;
   refreshToken?: string | null;
   refreshTokenExpires?: Date | null;
+  /** Shopify Partner app client_id (API key) that issued the stored access token. */
+  clientId: string | null;
 };
 
 type MemoryInstallation = ShopifyInstallation & {
@@ -66,6 +73,7 @@ function rowToInstallation(row: Record<string, unknown>): ShopifyInstallation {
     },
     refreshToken,
     refreshTokenExpires: refreshExpiresRaw ? new Date(refreshExpiresRaw) : null,
+    clientId: (row.client_id as string | null | undefined) ?? null,
   };
 }
 
@@ -80,7 +88,12 @@ export async function getInstallationByShopDomain(
     );
     if (!row) return null;
     const { access_token_encrypted, ...installation } = row;
-    return { ...installation, accessToken: decryptToken(access_token_encrypted) };
+    const resolved = resolveShopifyAccessToken({
+      shopDomain: installation.shop_domain,
+      accessTokenEncrypted: access_token_encrypted,
+      storedClientId: installation.clientId,
+    });
+    return { ...installation, accessToken: resolved.accessToken };
   }
 
   const { data, error } = await supabase
@@ -92,9 +105,15 @@ export async function getInstallationByShopDomain(
 
   if (error || !data) return null;
   const row = data as Record<string, unknown>;
+  const installation = rowToInstallation(row);
+  const resolved = resolveShopifyAccessToken({
+    shopDomain: installation.shop_domain,
+    accessTokenEncrypted: row.access_token_encrypted as string,
+    storedClientId: installation.clientId,
+  });
   return {
-    ...rowToInstallation(row),
-    accessToken: decryptToken(row.access_token_encrypted as string),
+    ...installation,
+    accessToken: resolved.accessToken,
   };
 }
 
@@ -109,7 +128,12 @@ export async function getInstallationByStoreId(
     );
     if (!row) return null;
     const { access_token_encrypted, ...installation } = row;
-    return { ...installation, accessToken: decryptToken(access_token_encrypted) };
+    const resolved = resolveShopifyAccessToken({
+      shopDomain: installation.shop_domain,
+      accessTokenEncrypted: access_token_encrypted,
+      storedClientId: installation.clientId,
+    });
+    return { ...installation, accessToken: resolved.accessToken };
   }
 
   const { data, error } = await supabase
@@ -128,9 +152,15 @@ export async function getInstallationByStoreId(
     return null;
   }
   const row = data as Record<string, unknown>;
+  const installation = rowToInstallation(row);
+  const resolved = resolveShopifyAccessToken({
+    shopDomain: installation.shop_domain,
+    accessTokenEncrypted: row.access_token_encrypted as string,
+    storedClientId: installation.clientId,
+  });
   return {
-    ...rowToInstallation(row),
-    accessToken: decryptToken(row.access_token_encrypted as string),
+    ...installation,
+    accessToken: resolved.accessToken,
   };
 }
 
@@ -184,9 +214,11 @@ export async function upsertShopifyInstallation(input: {
   shopifyPlan?: string;
   refreshToken?: string;
   refreshTokenExpires?: Date;
+  clientId?: string;
 }): Promise<ShopifyInstallation> {
   const encrypted = encryptToken(input.accessToken);
   const refreshEncrypted = input.refreshToken ? encryptToken(input.refreshToken) : null;
+  const clientId = input.clientId?.trim() || resolveCurrentShopifyClientId();
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
 
@@ -221,6 +253,7 @@ export async function upsertShopifyInstallation(input: {
       },
       refreshToken: input.refreshToken ?? null,
       refreshTokenExpires: input.refreshTokenExpires ?? null,
+      clientId: clientId ?? null,
     };
     memoryInstallations.set(id, record);
     return rowToInstallation(record as unknown as Record<string, unknown>);
@@ -243,6 +276,7 @@ export async function upsertShopifyInstallation(input: {
         error_message: null,
         uninstalled_at: null,
         installed_at: now,
+        client_id: clientId,
       } as Record<string, unknown>,
       { onConflict: "shop_domain" },
     )
@@ -281,6 +315,7 @@ export async function markShopifyUninstalled(shopDomain: string): Promise<void> 
       access_token_encrypted: "",
       refresh_token_encrypted: "",
       refresh_token_expires_at: null,
+      client_id: null,
     } as Record<string, unknown>)
     .eq("shop_domain", shopDomain);
 }
@@ -405,6 +440,38 @@ export async function updateShopifySyncResult(
     { store_id: storeId, snapshot, synced_at: now } as Record<string, unknown>,
     { onConflict: "store_id" },
   );
+}
+
+export async function markShopifyReinstallRequired(
+  shopDomain: string,
+  reason: string,
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const message = `${SHOPIFY_REINSTALL_REQUIRED_PREFIX} ${reason}`;
+
+  if (!supabase) {
+    for (const [id, row] of memoryInstallations) {
+      if (row.shop_domain === shopDomain) {
+        memoryInstallations.set(id, {
+          ...row,
+          status: "error",
+          connection_health: "error",
+          error_message: message,
+        });
+      }
+    }
+    return;
+  }
+
+  await supabase
+    .from("shopify_installations")
+    .update({
+      status: "error",
+      connection_health: "error",
+      error_message: message,
+    } as Record<string, unknown>)
+    .eq("shop_domain", shopDomain)
+    .eq("status", "active");
 }
 
 export async function getCachedShopifySnapshot(

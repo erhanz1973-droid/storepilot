@@ -122,7 +122,9 @@ export async function resyncShopifyStore(storeId: string): Promise<void> {
   const installation = await getInstallationByStoreId(storeId);
   if (!installation) return;
   try {
-    const result = await syncShopifyStore(installation.shop_domain, installation.accessToken);
+    const result = await syncShopifyStore(installation.shop_domain, installation.accessToken, {
+      storedClientId: installation.clientId,
+    });
     await updateShopifySyncResult(installation.store_id, result.stats, result.snapshot, {
       shopName: result.shopName,
       shopifyPlan: result.shopifyPlan,

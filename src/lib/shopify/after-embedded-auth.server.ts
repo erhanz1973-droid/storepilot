@@ -1,8 +1,10 @@
 import type { Session } from "@shopify/shopify-api";
 import {
   findStoreByShopDomain,
+  getInstallationByShopDomain,
   updateShopifySyncResult,
 } from "@/lib/db/shopify";
+import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { registerAppWebhooks } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 
@@ -29,7 +31,10 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
   }
 
   try {
-    const syncResult = await syncShopifyStore(session.shop, session.accessToken);
+    const installation = await getInstallationByShopDomain(session.shop);
+    const syncResult = await syncShopifyStore(session.shop, session.accessToken, {
+      storedClientId: installation?.clientId,
+    });
     const storeId = await findStoreByShopDomain(session.shop);
     if (storeId) {
       await updateShopifySyncResult(storeId, syncResult.stats, syncResult.snapshot, {
@@ -43,6 +48,13 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
       orders: syncResult.stats.orderCount,
     });
   } catch (error) {
+    if (isShopifyReinstallRequiredError(error)) {
+      console.error("[embedded-auth] afterAuth reinstall required", {
+        shop: session.shop,
+        reason: error.reason,
+      });
+      return;
+    }
     console.error("[embedded-auth] afterAuth sync failed (installation still saved)", error);
   }
 }

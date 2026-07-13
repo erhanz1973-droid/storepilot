@@ -4,6 +4,7 @@ import {
   logShopifyConnectionAudit,
 } from "@/lib/db/shopify-connection-audit";
 import { getInstallationByStoreId, updateShopifySyncResult } from "@/lib/db/shopify";
+import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { resolveActiveStoreId } from "@/lib/store/context";
 
@@ -32,7 +33,9 @@ export async function POST() {
     console.log("[sync-trace] POST /api/shopify/sync calling syncShopifyStore", {
       shop: installation.shop_domain,
     });
-    const result = await syncShopifyStore(installation.shop_domain, installation.accessToken);
+    const result = await syncShopifyStore(installation.shop_domain, installation.accessToken, {
+      storedClientId: installation.clientId,
+    });
     await updateShopifySyncResult(installation.store_id, result.stats, result.snapshot, {
       shopName: result.shopName,
       shopifyPlan: result.shopifyPlan,
@@ -50,6 +53,7 @@ export async function POST() {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed";
     console.error("[sync-trace] POST /api/shopify/sync FAILED", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = isShopifyReinstallRequiredError(err) ? 401 : 500;
+    return NextResponse.json({ error: message, reinstallRequired: status === 401 }, { status });
   }
 }

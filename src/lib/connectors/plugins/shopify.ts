@@ -5,12 +5,18 @@ import {
   getCachedShopifySnapshot,
   getInstallationByStoreId,
   getInstallationForStore,
+  markShopifyReinstallRequired,
   updateShopifySyncResult,
 } from "@/lib/db/shopify";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { DEMO_STORE_ID } from "@/lib/types";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { TokenDecryptionError, logTokenDecryptionFailure } from "@/lib/crypto/decrypt-errors";
+import {
+  installationRequiresReinstall,
+  isShopifyReinstallRequiredError,
+} from "@/lib/shopify/auth-errors";
+import { detectAppMismatch } from "@/lib/shopify/token-diagnostics";
 
 function isDedicatedLiveStore(storeId: string): boolean {
   return storeId !== DEMO_STORE_ID && !isSimulationStoreId(storeId);
@@ -23,6 +29,17 @@ function tokenDecryptionHealth(
     status: "error",
     errorMessage: "Token decryption failed: invalid encryption key",
     lastSyncAt: installation.last_sync_at ?? undefined,
+  };
+}
+
+function reinstallRequiredHealth(
+  installation: NonNullable<Awaited<ReturnType<typeof getInstallationForStore>>>,
+  message: string,
+): ConnectorHealthResult {
+  return {
+    status: "error",
+    lastSyncAt: installation.last_sync_at ?? undefined,
+    errorMessage: message,
   };
 }
 
@@ -43,6 +60,10 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
         logTokenDecryptionFailure("shopify", error, "getInstallationByStoreId");
         return null;
       }
+      if (isShopifyReinstallRequiredError(error)) {
+        await markShopifyReinstallRequired(error.shopDomain, error.reason);
+        return null;
+      }
       throw error;
     }
   }
@@ -50,6 +71,21 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
   async function resolveHealthFromMetadata(
     installation: NonNullable<Awaited<ReturnType<typeof getInstallationForStore>>>,
   ): Promise<ConnectorHealthResult> {
+    if (installationRequiresReinstall(installation.error_message)) {
+      return reinstallRequiredHealth(
+        installation,
+        installation.error_message ?? "Shopify reinstall required.",
+      );
+    }
+
+    const mismatch = detectAppMismatch(installation.clientId);
+    if (mismatch.mismatch) {
+      return reinstallRequiredHealth(
+        installation,
+        `Access token belongs to Shopify app ${mismatch.storedClientIdPrefix}… but this deployment uses ${mismatch.currentClientIdPrefix}…. Reinstall the app from Shopify Admin.`,
+      );
+    }
+
     if (installation.connection_health === "error") {
       return {
         status: "error",
@@ -68,6 +104,9 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
       if (error instanceof TokenDecryptionError) {
         logTokenDecryptionFailure("shopify", error, "healthCheck");
         return tokenDecryptionHealth(installation);
+      }
+      if (isShopifyReinstallRequiredError(error)) {
+        return reinstallRequiredHealth(installation, error.reason);
       }
       throw error;
     }
@@ -93,6 +132,7 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
         const result = await syncShopifyStore(
           installation.shop_domain,
           installation.accessToken,
+          { storedClientId: installation.clientId },
         );
 
         await updateShopifySyncResult(installation.store_id, result.stats, result.snapshot, {
@@ -103,6 +143,9 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
         return result.snapshot;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Sync failed";
+        if (isShopifyReinstallRequiredError(err)) {
+          await markShopifyReinstallRequired(installation.shop_domain, err.reason);
+        }
         await updateShopifySyncResult(
           installation.store_id,
           installation.sync_stats,

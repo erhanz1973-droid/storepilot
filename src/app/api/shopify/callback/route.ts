@@ -66,12 +66,15 @@ export async function GET(request: Request) {
       shopDomain: shop,
       accessToken: tokenResult.access_token,
       scopes,
+      clientId: config.apiKey,
     });
 
     await registerAppWebhooks(shop, tokenResult.access_token);
 
     try {
-      const syncResult = await syncShopifyStore(shop, tokenResult.access_token);
+      const syncResult = await syncShopifyStore(shop, tokenResult.access_token, {
+        storedClientId: config.apiKey,
+      });
       await updateShopifySyncResult(storeId, syncResult.stats, syncResult.snapshot, {
         shopName: syncResult.shopName,
         shopifyPlan: syncResult.shopifyPlan,

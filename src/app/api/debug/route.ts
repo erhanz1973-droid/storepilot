@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { NextResponse } from "next/server";
 import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
+import { currentShopifyApiKeyPrefix } from "@/lib/shopify/token-diagnostics";
 
 function readBuildId(): string | null {
   try {
@@ -51,6 +52,7 @@ export async function GET() {
       callback: "/api/shopify/callback",
     },
     shopifyOAuthConfigured: isShopifyOAuthConfigured(),
+    shopifyApiKeyPrefix: currentShopifyApiKeyPrefix(),
     timestamp: new Date().toISOString(),
   });
 }
