@@ -133,7 +133,7 @@ export function rawFactsFromProfitDashboard(
     campaigns: [],
     products: [],
     historicalPredictionAccuracy: null,
-    dataQualityScore: dashboard.confidence?.overallScore ?? null,
+    dataQualityScore: dashboard.confidence?.scorePct ?? null,
     ...partial,
   };
 }
