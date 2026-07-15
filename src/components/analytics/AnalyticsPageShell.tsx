@@ -115,7 +115,10 @@ export function AnalyticsPageShell({
         </div>
         <div className="analytics-page-header-actions">
           {executiveAiStatus ? (
-            <ExecutiveAiStatusIndicator status={executiveAiStatus} />
+            <ExecutiveAiStatusIndicator
+              status={executiveAiStatus}
+              compact={context === "executive"}
+            />
           ) : (
             headerExtra
           )}

@@ -1,3 +1,4 @@
+import type { DecisionImpactPresentation } from "@/lib/impact/decision-impact";
 import type { ApprovalPresentation, PresentedApprovalCard } from "./presenter";
 import type { RecommendationStatus, SupportingMetric } from "@/lib/types";
 
@@ -187,7 +188,11 @@ export type DecisionDetails = {
   campaignsAffected: number | null;
   businessGoal: string;
   recommendation: string;
+  /** @deprecated Prefer businessRecoveryMonthly — kept for older callers */
   expectedImpactMonthly: number;
+  businessRecoveryMonthly: number;
+  netProfitMonthly: number;
+  advertisingSavingsMonthly: number | null;
 };
 
 export type ProfitCalculationLine = {
@@ -221,6 +226,7 @@ export type DecisionMemo = {
   measuredOutcome?: DecisionMeasuredOutcome;
   primaryRecommendationId: string | null;
   decisionDetails: DecisionDetails;
+  impactPresentation: DecisionImpactPresentation;
   profitCalculation: ProfitCalculationLine[];
   explainNarrative: ExplainNarrative;
   confidenceBreakdown: ConfidenceBreakdown;

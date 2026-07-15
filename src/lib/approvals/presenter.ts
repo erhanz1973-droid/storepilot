@@ -7,10 +7,10 @@ import {
   isActionableRecommendation,
 } from "@/lib/approvals/filters";
 import { EFFORT_SORT_RANK, effortForCategory } from "@/lib/approvals/effort";
-import { revenueToNetProfitImpact } from "@/lib/opportunities/profit-impact";
+import { calculateDecisionImpactFromRecommendation, mergeDecisionImpacts, buildDecisionImpactPresentation } from "@/lib/impact/decision-impact";
+import type { DecisionImpact, DecisionImpactPresentation } from "@/lib/impact/decision-impact";
 import type {
   ImplementationEffort,
-  OpportunityCategory,
   Recommendation,
   RecommendationCategory,
   RecommendationSeverity,
@@ -50,7 +50,13 @@ export type PresentedApprovalCard = {
   severity: RecommendationSeverity;
   confidenceScore: number;
   revenueImpact: number;
+  /** Business-scale recovery (matches Executive hero) */
+  businessRecovery: number;
   netProfitImpact: number;
+  advertisingSavings: number | null;
+  /** Canonical immutable impact — all financial UI reads from this */
+  impact: DecisionImpact;
+  impactPresentation: DecisionImpactPresentation;
   implementationEffort: ImplementationEffort;
   findingsCount: number;
   members: ApprovalEnrichedRecommendation[];
@@ -137,37 +143,53 @@ function oneMemberPerEntity(
   return [...dedupeByEntity(items).values()].map(pickPrimaryMember);
 }
 
-function recommendationToOpportunityCategory(
-  category: RecommendationCategory,
-): OpportunityCategory {
-  switch (category) {
-    case "low_inventory":
-      return "inventory";
-    case "slow_selling":
-      return "pricing";
-    case "bundle_opportunity":
-      return "bundle";
-    case "homepage_merchandising":
-      return "merchandising";
-    case "promotion_opportunity":
-      return "customer_retention";
-    case "campaign_review":
-      return "marketing";
-    default:
-      return "inventory";
+function collectCardImpact(
+  members: ApprovalEnrichedRecommendation[],
+  netMarginPct?: number,
+): DecisionImpact {
+  const parts = members.map((m) => calculateDecisionImpactFromRecommendation(m, netMarginPct));
+  const merged = mergeDecisionImpacts(parts);
+  if (members.length > 0) {
+    const avgConfidence = Math.round(
+      (members.reduce((s, m) => s + m.confidenceScore, 0) / members.length) * 100,
+    );
+    return { ...merged, confidence: avgConfidence };
   }
+  return merged;
 }
 
-function computeNetProfitImpact(
-  revenueImpact: number,
-  category: RecommendationCategory,
-  netMarginPct?: number,
-): number {
-  return revenueToNetProfitImpact(
-    revenueImpact,
-    recommendationToOpportunityCategory(category),
-    netMarginPct,
-  );
+function attachImpactFields(
+  card: Omit<
+    PresentedApprovalCard,
+    | "impact"
+    | "impactPresentation"
+    | "businessRecovery"
+    | "netProfitImpact"
+    | "advertisingSavings"
+    | "revenueImpact"
+  > & { expectedImpact?: string },
+  impact: DecisionImpact,
+): PresentedApprovalCard {
+  const impactPresentation = buildDecisionImpactPresentation(impact);
+  return {
+    ...card,
+    impact,
+    impactPresentation,
+    businessRecovery: impact.businessRecovery,
+    netProfitImpact: impact.netProfitImpact,
+    advertisingSavings: impact.advertisingSavings,
+    revenueImpact: impact.revenueRecovered ?? impact.sourceAmount,
+    expectedImpact:
+      impact.businessRecovery > 0
+        ? `${impactPresentation.heroValueFormatted}/month ${impactPresentation.heroLabel.toLowerCase()}`
+        : card.expectedImpact ?? primaryExpectedImpactFallback(card),
+  };
+}
+
+function primaryExpectedImpactFallback(
+  card: { expectedImpact?: string },
+): string {
+  return card.expectedImpact ?? "—";
 }
 
 function isPresentedCardActionable(card: PresentedApprovalCard): boolean {
@@ -183,12 +205,7 @@ function buildEntityCard(
   netMarginPct?: number,
 ): PresentedApprovalCard {
   const primary = members[0];
-  const revenueImpact = members.reduce((s, m) => s + parseRevenueImpact(m.expectedImpact), 0);
-  const netProfitImpact = computeNetProfitImpact(
-    revenueImpact,
-    primary.category,
-    netMarginPct,
-  );
+  const impact = collectCardImpact(members, netMarginPct);
   const confidenceScore =
     members.reduce((s, m) => s + m.confidenceScore, 0) / members.length;
   const entityType =
@@ -199,27 +216,25 @@ function buildEntityCard(
       ? primary.title.replace(/^[^:]+:\s*/, "") || primary.title
       : primary.title.replace(/^[^:]+:\s*/, "") || primary.title;
 
-  return {
-    key,
-    entityType,
-    entityId: primary.entityId,
-    category: primary.category,
-    title: displayTitle,
-    reason: members.length === 1 ? primary.reason : summarizeFindings(members),
-    expectedImpact:
-      netProfitImpact > 0
-        ? `+$${netProfitImpact.toLocaleString()}/month net profit`
-        : primary.expectedImpact,
-    severity: highestSeverity(members),
-    confidenceScore,
-    revenueImpact,
-    netProfitImpact,
-    implementationEffort: effortForCategory(primary.category),
-    findingsCount: members.length,
-    members,
-    isCampaignPortfolio: false,
-    insufficientData: false,
-  };
+  return attachImpactFields(
+    {
+      key,
+      entityType,
+      entityId: primary.entityId,
+      category: primary.category,
+      title: displayTitle,
+      reason: members.length === 1 ? primary.reason : summarizeFindings(members),
+      expectedImpact: primary.expectedImpact,
+      severity: highestSeverity(members),
+      confidenceScore,
+      implementationEffort: effortForCategory(primary.category),
+      findingsCount: members.length,
+      members,
+      isCampaignPortfolio: false,
+      insufficientData: false,
+    },
+    impact,
+  );
 }
 
 function summarizeFindings(members: ApprovalEnrichedRecommendation[]): string {
@@ -238,15 +253,7 @@ function buildCampaignPortfolioCard(
   netMarginPct?: number,
 ): PresentedApprovalCard {
   const stats = summarizeCampaigns(allCampaigns);
-  const revenueImpact = campaignMembers.reduce(
-    (s, m) => s + parseRevenueImpact(m.expectedImpact),
-    0,
-  );
-  const netProfitImpact = computeNetProfitImpact(
-    revenueImpact,
-    "campaign_review",
-    netMarginPct,
-  );
+  const impact = collectCardImpact(campaignMembers, netMarginPct);
   const confidenceScore =
     campaignMembers.length > 0
       ? campaignMembers.reduce((s, m) => s + m.confidenceScore, 0) / campaignMembers.length
@@ -256,34 +263,34 @@ function buildCampaignPortfolioCard(
   const needsReview = campaignMembers.length;
   const healthyOrInsufficient = Math.max(0, scanned - needsReview);
 
-  return {
-    key: "campaign-portfolio",
-    entityType: "campaign_portfolio",
-    category: "campaign_review",
-    title: "Campaign Reviews",
-    subtitle: "Meta Ads",
-    reason: `${scanned} campaigns scanned. ${needsReview} require immediate attention.`,
-    expectedImpact:
-      netProfitImpact > 0 ? `+$${netProfitImpact.toLocaleString()}/month net profit` : "—",
-    severity: needsReview > 0 ? highestSeverity(campaignMembers) : "low",
-    confidenceScore,
-    revenueImpact,
-    netProfitImpact,
-    implementationEffort: "High",
-    findingsCount: needsReview,
-    members: campaignMembers,
-    isCampaignPortfolio: true,
-    campaignBrief: {
-      platform: "Meta Ads",
-      scanned,
-      active: stats.activeCount,
-      paused: stats.pausedCount,
-      draft: stats.draftCount,
-      needsReview,
-      healthyOrInsufficient,
+  return attachImpactFields(
+    {
+      key: "campaign-portfolio",
+      entityType: "campaign_portfolio",
+      category: "campaign_review",
+      title: "Campaign Reviews",
+      subtitle: "Meta Ads",
+      reason: `${scanned} campaigns scanned. ${needsReview} require immediate attention.`,
+      expectedImpact: "—",
+      severity: needsReview > 0 ? highestSeverity(campaignMembers) : "low",
+      confidenceScore,
+      implementationEffort: "High",
+      findingsCount: needsReview,
+      members: campaignMembers,
+      isCampaignPortfolio: true,
+      campaignBrief: {
+        platform: "Meta Ads",
+        scanned,
+        active: stats.activeCount,
+        paused: stats.pausedCount,
+        draft: stats.draftCount,
+        needsReview,
+        healthyOrInsufficient,
+      },
+      insufficientData: false,
     },
-    insufficientData: false,
-  };
+    impact,
+  );
 }
 
 function buildOpportunityCards(

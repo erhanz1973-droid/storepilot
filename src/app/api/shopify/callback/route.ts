@@ -15,6 +15,7 @@ import {
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
 import { ACTIVE_STORE_COOKIE } from "@/lib/store/context";
+import { trackAlphaEvent } from "@/lib/analytics/alpha-funnel";
 
 export async function GET(request: Request) {
   const config = getShopifyConfig();
@@ -83,7 +84,10 @@ export async function GET(request: Request) {
       // Initial sync failure is non-fatal; store is still connected
     }
 
-    const response = NextResponse.redirect(`${config.appUrl}/connections?tab=commerce&installed=1`);
+    await trackAlphaEvent(storeId, "installation_completed", { shop });
+    await trackAlphaEvent(storeId, "shopify_connected", { shop, source: "oauth_callback" });
+
+    const response = NextResponse.redirect(`${config.appUrl}/first-run?installed=1`);
     response.cookies.set(ACTIVE_STORE_COOKIE, storeId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

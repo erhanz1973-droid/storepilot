@@ -1,5 +1,7 @@
 import { getShopifyConfig } from "@/lib/shopify/oauth";
 
+export type ShopifySessionType = "online" | "offline";
+
 export type ShopifyTokenDiagnostics = {
   shopDomain: string;
   currentApiKeyPrefix: string | null;
@@ -9,12 +11,25 @@ export type ShopifyTokenDiagnostics = {
   appMatch: boolean | null;
   reinstallRequired: boolean;
   reason?: string;
+  installationId?: string | null;
+  /** Prefix-only access token fingerprint (never log the full token). */
+  tokenFingerprint?: string | null;
+  sessionType?: ShopifySessionType | null;
+  graphqlEndpoint?: string | null;
+  httpStatus?: number | null;
 };
 
 export function shopifyApiKeyPrefix(apiKey?: string | null): string | null {
   const key = apiKey?.trim();
   if (!key) return null;
   return key.slice(0, 6);
+}
+
+/** Safe access-token fingerprint — first 12 chars only (e.g. shpat_xxxxxx). */
+export function accessTokenFingerprint(token?: string | null): string | null {
+  const value = token?.trim();
+  if (!value) return null;
+  return value.slice(0, 12);
 }
 
 export function currentShopifyApiKeyPrefix(): string | null {
@@ -62,7 +77,12 @@ export function logShopifyTokenDiagnostics(diagnostics: ShopifyTokenDiagnostics)
   console.log(
     "[shopify-auth]",
     JSON.stringify({
+      installationId: diagnostics.installationId ?? null,
       shopDomain: diagnostics.shopDomain,
+      tokenFingerprint: diagnostics.tokenFingerprint ?? null,
+      sessionType: diagnostics.sessionType ?? null,
+      graphqlEndpoint: diagnostics.graphqlEndpoint ?? null,
+      httpStatus: diagnostics.httpStatus ?? null,
       currentApiKeyPrefix: diagnostics.currentApiKeyPrefix,
       storedClientIdPrefix: diagnostics.storedClientIdPrefix,
       tokenDecryptSucceeded: diagnostics.tokenDecryptSucceeded,

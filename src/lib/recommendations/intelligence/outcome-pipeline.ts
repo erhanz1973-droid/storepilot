@@ -91,4 +91,38 @@ export async function finalizeRecommendationOutcome(input: {
     detail: success ? "Recommendation closed — positive outcome" : "Recommendation closed",
     stage: "closed",
   });
+
+  try {
+    const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
+    const { parseRevenueImpact } = await import("@/lib/approvals/presenter");
+    const measuredImpact =
+      outcomeRecord?.actualMonthlyImpact ??
+      (rec.actualImpact ? parseRevenueImpact(rec.actualImpact) : null);
+    await recordExecutiveMemoryEvent({
+      storeId: input.storeId,
+      eventType: "measured",
+      title: rec.title,
+      recommendationId: rec.id,
+      estimatedImpactMonthly: parseRevenueImpact(rec.expectedImpact),
+      measuredImpactMonthly: measuredImpact,
+      outcomeRating:
+        outcomeRecord?.outcomeRating ?? (success ? "successful" : "needs_improvement"),
+      contextMessage:
+        measuredImpact != null
+          ? `${success ? "Successful" : "Needs review"}: measured $${Math.round(measuredImpact).toLocaleString()}/mo impact.`
+          : success
+            ? "Recommendation produced a positive measured outcome."
+            : "Recommendation outcome needs review — AI will reduce similar confidence.",
+      occurredAt: outcomeRecord?.measuredAt ?? rec.measuredAt ?? new Date().toISOString(),
+      metadata: {
+        category: rec.category,
+        predictionAccuracy: rec.predictionAccuracy ?? outcomeRecord?.predictionAccuracy ?? null,
+      },
+    });
+  } catch (err) {
+    console.warn(
+      "[outcome-pipeline] executive memory write failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }

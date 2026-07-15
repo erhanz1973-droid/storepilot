@@ -102,18 +102,20 @@ function estimateFinancialImpact(
       estimatedMonthlyRevenueIncrease: null,
       estimatedMonthlyCostSavings: mid > 0 ? mid : null,
       confidence: evaluation.priority === "critical" ? 0.86 : 0.78,
-      summary: `If accepted, estimated cost savings ~$${savingsLow.toLocaleString()}–$${savingsHigh.toLocaleString()}/mo (~$${profitSave.toLocaleString()}/mo profit preserved).`,
+      summary: `If accepted, estimated ~$${profitSave.toLocaleString()}/mo profit preserved (cost savings ~$${savingsLow.toLocaleString()}–$${savingsHigh.toLocaleString()}/mo).`,
     };
   }
 
   const recoveryLow = Math.round(weeklySpend * 0.15 * 4.33);
   const recoveryHigh = Math.round(weeklySpend * 0.3 * 4.33);
+  const recoveryMid = Math.round((recoveryLow + recoveryHigh) / 2);
+  const recoveryProfit = Math.round(recoveryMid * margin);
   return {
-    estimatedMonthlyProfitIncrease: Math.round(((recoveryLow + recoveryHigh) / 2) * margin),
-    estimatedMonthlyRevenueIncrease: Math.round((recoveryLow + recoveryHigh) / 2),
+    estimatedMonthlyProfitIncrease: recoveryProfit > 0 ? recoveryProfit : null,
+    estimatedMonthlyRevenueIncrease: recoveryMid > 0 ? recoveryMid : null,
     estimatedMonthlyCostSavings: null,
     confidence: 0.74,
-    summary: `Optimization could recover ~$${recoveryLow.toLocaleString()}–$${recoveryHigh.toLocaleString()}/mo in ad efficiency.`,
+    summary: `Optimization could recover ~$${recoveryProfit.toLocaleString()}/mo profit (~$${recoveryLow.toLocaleString()}–$${recoveryHigh.toLocaleString()}/mo in ad efficiency).`,
   };
 }
 

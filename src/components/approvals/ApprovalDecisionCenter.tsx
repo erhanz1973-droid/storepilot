@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AiTrackRecordCard } from "@/components/approvals/AiTrackRecordCard";
 import { DecisionMemoCard } from "@/components/approvals/DecisionMemoCard";
 import { ExecutiveDecisionBriefingCard } from "@/components/approvals/ExecutiveDecisionBriefingCard";
@@ -52,11 +53,23 @@ function LifecycleSection({
 
 export function ApprovalDecisionCenter({ view }: { view: DecisionCenterViewWithPlan }) {
   const { briefing, primaryDecision, additionalDecisions, presentation, trackRecord } = view;
-  const [activeIndex, setActiveIndex] = useState(0);
+  const searchParams = useSearchParams();
+  const focusRecommendationId = searchParams.get("recommendationId");
 
   const allDecisions = primaryDecision
     ? [primaryDecision, ...additionalDecisions]
     : additionalDecisions;
+
+  const focusedIndex = focusRecommendationId
+    ? allDecisions.findIndex((d) => d.primaryRecommendationId === focusRecommendationId)
+    : -1;
+
+  const [activeIndex, setActiveIndex] = useState(focusedIndex >= 0 ? focusedIndex : 0);
+
+  useEffect(() => {
+    if (focusedIndex >= 0) setActiveIndex(focusedIndex);
+  }, [focusedIndex]);
+
   const activeDecision = allDecisions[activeIndex] ?? null;
 
   return (
@@ -120,7 +133,7 @@ export function ApprovalDecisionCenter({ view }: { view: DecisionCenterViewWithP
                     onClick={() => setActiveIndex(i)}
                   >
                     <span>{d.title}</span>
-                    <strong>+${d.card.netProfitImpact.toLocaleString()}</strong>
+                    <strong>{d.impactPresentation.heroValueFormatted}</strong>
                   </button>
                 ))}
               </div>

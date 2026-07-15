@@ -51,6 +51,7 @@ export type ExecutiveFocusSummary = {
     module: ExecutiveModuleId;
     moduleHref: string;
     approvalHref: string;
+    recommendationId?: string;
   } | null;
   topRisks: Array<{ label: string; module: ExecutiveModuleId; href: string }>;
   recoveryPotentialMonthly: number;

@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import type { ExecutiveAiLiveStatus } from "@/lib/analytics/executive-ai-behavior";
 
-export function ExecutiveAiStatusIndicator({ status }: { status: ExecutiveAiLiveStatus }) {
+export function ExecutiveAiStatusIndicator({
+  status,
+  compact = false,
+}: {
+  status: ExecutiveAiLiveStatus;
+  compact?: boolean;
+}) {
   const [stepIndex, setStepIndex] = useState(0);
   const [showSteps, setShowSteps] = useState(status.state === "analyzing");
 
@@ -22,6 +28,26 @@ export function ExecutiveAiStatusIndicator({ status }: { status: ExecutiveAiLive
       clearTimeout(hide);
     };
   }, [status.state, status.analysisSteps.length]);
+
+  if (compact) {
+    return (
+      <div className="exec-ai-status exec-ai-status-compact" role="status">
+        <span className={`exec-ai-status-dot ${status.state}`} aria-hidden>
+          {status.state === "analyzing" ? "●" : "●"}
+        </span>
+        <strong className="exec-ai-status-label">{status.statusLabel}</strong>
+        {status.domains.slice(0, 4).map((domain) => (
+          <span
+            key={domain.id}
+            className={`exec-ai-compact-chip ${domain.status}`}
+            title={domain.statusLabel}
+          >
+            {domain.label}
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="exec-ai-status" role="status">

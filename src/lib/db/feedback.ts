@@ -127,3 +127,93 @@ export async function listRecentFeedback(limit = 20): Promise<RecommendationFeed
   }
   return [...memoryFeedback].reverse().slice(0, limit);
 }
+
+export type FeedbackLearningRow = RecommendationFeedback & {
+  category: string | null;
+  entityId: string | null;
+  title: string | null;
+};
+
+/**
+ * Feedback joined with recommendation pattern fields for the learning engine.
+ */
+export async function listFeedbackForLearning(
+  storeId: string,
+  limit = 500,
+): Promise<FeedbackLearningRow[]> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("recommendation_feedback")
+      .select(
+        "id, recommendation_id, store_id, helpful, reason, created_at, recommendations(category, entity_id, title)",
+      )
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      if (isMissingTableError(error.message)) return [];
+      // Join may fail on older schemas — fall back to feedback-only + memory lookup.
+      const { data: plain, error: plainError } = await supabase
+        .from("recommendation_feedback")
+        .select("*")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (plainError) {
+        if (isMissingTableError(plainError.message)) return [];
+        throw new Error(plainError.message);
+      }
+      const rows: FeedbackLearningRow[] = [];
+      for (const r of plain ?? []) {
+        const { getRecommendationById } = await import("@/lib/db/recommendations");
+        const rec = await getRecommendationById(r.recommendation_id as string);
+        rows.push({
+          id: r.id as string,
+          recommendationId: r.recommendation_id as string,
+          storeId: r.store_id as string,
+          helpful: Boolean(r.helpful),
+          reason: (r.reason as string | null) ?? undefined,
+          createdAt: r.created_at as string,
+          category: rec?.category ?? null,
+          entityId: rec?.entityId ?? null,
+          title: rec?.title ?? null,
+        });
+      }
+      return rows;
+    }
+
+    return (data ?? []).map((r) => {
+      const rec = r.recommendations as
+        | { category?: string; entity_id?: string | null; title?: string }
+        | { category?: string; entity_id?: string | null; title?: string }[]
+        | null;
+      const joined = Array.isArray(rec) ? rec[0] : rec;
+      return {
+        id: r.id as string,
+        recommendationId: r.recommendation_id as string,
+        storeId: r.store_id as string,
+        helpful: Boolean(r.helpful),
+        reason: (r.reason as string | null) ?? undefined,
+        createdAt: r.created_at as string,
+        category: joined?.category ?? null,
+        entityId: joined?.entity_id ?? null,
+        title: joined?.title ?? null,
+      };
+    });
+  }
+
+  const rows: FeedbackLearningRow[] = [];
+  for (const f of memoryFeedback.filter((x) => x.storeId === storeId).slice(-limit)) {
+    const { getRecommendationById } = await import("@/lib/db/recommendations");
+    const rec = await getRecommendationById(f.recommendationId);
+    rows.push({
+      ...f,
+      category: rec?.category ?? null,
+      entityId: rec?.entityId ?? null,
+      title: rec?.title ?? null,
+    });
+  }
+  return rows;
+}

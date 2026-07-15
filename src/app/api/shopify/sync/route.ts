@@ -35,6 +35,8 @@ export async function POST() {
     });
     const result = await syncShopifyStore(installation.shop_domain, installation.accessToken, {
       storedClientId: installation.clientId,
+      installationId: installation.id,
+      refreshToken: installation.refreshToken,
     });
     await updateShopifySyncResult(installation.store_id, result.stats, result.snapshot, {
       shopName: result.shopName,

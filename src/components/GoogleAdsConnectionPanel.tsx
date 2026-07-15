@@ -57,14 +57,27 @@ export function GoogleAdsConnectionPanel({
   if (!googleOAuthConfigured) {
     return (
       <EmptyState
-        title="Google Ads OAuth not configured"
+        title="Google Ads isn't configured yet"
+        reason="This environment is missing Google Ads OAuth credentials."
+        nextStep="After Google Ads is configured, StorePilot will import Search and Shopping performance."
         description="Set GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_DEVELOPER_TOKEN, and GOOGLE_ADS_APP_URL."
       />
     );
   }
 
   if (!connected) {
-    return <ConnectGoogleAdsButton />;
+    return (
+      <div className="card">
+        <EmptyState
+          title="Connect Google Ads to unlock advertising recommendations"
+          reason="We're still waiting on Google Ads data for this store."
+          nextStep="After you connect, StorePilot will compare Search/Shopping efficiency against your catalog."
+        />
+        <div style={{ marginTop: 12 }}>
+          <ConnectGoogleAdsButton />
+        </div>
+      </div>
+    );
   }
 
   const latestSync = accounts

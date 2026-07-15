@@ -22,8 +22,16 @@ function NavLink({ item, nested }: { item: NavItem; nested?: boolean }) {
 }
 
 export function AppNav() {
+  const pathname = usePathname();
+  const hideNav =
+    pathname?.startsWith("/first-run") || pathname?.startsWith("/internal/alpha");
+
   return (
-    <aside className="app-sidebar">
+    <aside
+      className={`app-sidebar${hideNav ? " app-sidebar-hidden" : ""}`}
+      aria-hidden={hideNav || undefined}
+      {...(hideNav ? { inert: true } : {})}
+    >
       <div className="sidebar-brand">
         <div className="brand-mark">SP</div>
         <div>

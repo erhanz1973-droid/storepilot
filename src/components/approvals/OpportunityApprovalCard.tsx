@@ -9,6 +9,7 @@ import type {
   ApprovalEnrichedRecommendation,
   PresentedApprovalCard,
 } from "@/lib/approvals/presenter";
+import { DECISION_IMPACT_COPY } from "@/lib/impact/decision-impact";
 import type { RecommendationExplanation } from "@/lib/ai/types";
 import { resolveRecommendationStatus } from "@/lib/recommendations/lifecycle";
 import { useOptimistic, useState } from "react";
@@ -107,17 +108,25 @@ export function OpportunityApprovalCard({ card }: { card: PresentedApprovalCard 
     <article className="card opportunity-approval-card">
       <div className="opportunity-impact-header">
         <div className="opportunity-impact-metric">
-          <span className="muted opportunity-impact-label">Expected Net Profit Gain</span>
+          <span className="muted opportunity-impact-label">{card.impactPresentation.heroLabel}</span>
           <strong className="opportunity-impact-value">
-            {card.netProfitImpact > 0
-              ? `+$${card.netProfitImpact.toLocaleString()}`
+            {card.impactPresentation.heroAmount > 0
+              ? card.impactPresentation.heroValueFormatted
               : "—"}
           </strong>
         </div>
         <div className="opportunity-impact-metric">
-          <span className="muted opportunity-impact-label">Confidence</span>
+          <span className="muted opportunity-impact-label">Net Profit</span>
           <strong className="opportunity-impact-value">
-            {Math.round(card.confidenceScore * 100)}%
+            {card.impactPresentation.netProfitAmount > 0
+              ? card.impactPresentation.netProfitFormatted
+              : "—"}
+          </strong>
+        </div>
+        <div className="opportunity-impact-metric">
+          <span className="muted opportunity-impact-label">{DECISION_IMPACT_COPY.aiConfidence}</span>
+          <strong className="opportunity-impact-value">
+            {card.impactPresentation.confidencePct}%
           </strong>
         </div>
         <div className="opportunity-impact-metric">

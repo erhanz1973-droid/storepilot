@@ -1,13 +1,14 @@
-import Link from "next/link";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function CommerceEmptyState({ entity }: { entity: string }) {
   return (
     <div className="card">
-      <p className="muted" style={{ margin: 0 }}>
-        Connect a commerce platform to view {entity}. All providers normalize into the same data
-        model — Shopify, Amazon, WooCommerce, and more.{" "}
-        <Link href="/connections?tab=commerce">Connect a store</Link>
-      </p>
+      <EmptyState
+        title={`We're still setting up ${entity}`}
+        reason="Commerce data appears after Shopify (or another storefront) is connected and synced."
+        nextStep="Once connected, StorePilot analyzes products, orders, and inventory for executive recommendations."
+        cta={{ href: "/connections?tab=commerce", label: "Connect your store" }}
+      />
     </div>
   );
 }

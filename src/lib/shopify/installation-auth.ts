@@ -98,7 +98,9 @@ export function markAccessTokenInvalidFromHttp(
     tokenDecryptSucceeded: true,
     appMatch: null,
     reinstallRequired: true,
-    reason: `Shopify API HTTP ${httpStatus}`,
+    sessionType: "offline",
+    httpStatus,
+    reason: `Shopify API HTTP ${httpStatus} after refresh unavailable/failed`,
   });
   return new ShopifyAccessTokenInvalidError(shopDomain, httpStatus, detail);
 }

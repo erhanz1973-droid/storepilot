@@ -9,6 +9,7 @@ import type {
 import { CampaignMetaDetails } from "@/components/campaigns/CampaignMetaDetails";
 import { lifecycleStatusLabel } from "@/lib/recommendations/lifecycle";
 import { SeverityBadge } from "@/components/SeverityBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useTransition } from "react";
 
@@ -109,7 +110,14 @@ function formatDate(value?: string) {
 export function HistoryTable({ entries }: { entries: RecommendationHistoryEntry[] }) {
   if (entries.length === 0) {
     return (
-      <p className="empty-state">No recommendations match your filters.</p>
+      <div className="card">
+        <EmptyState
+          title="No recommendations match your filters"
+          reason="History fills in after StorePilot generates and measures recommendations for this store."
+          nextStep="Connect Shopify (and ads if available), then open first-run analysis or Approvals to generate your first decisions."
+          cta={{ href: "/first-run", label: "Run first analysis" }}
+        />
+      </div>
     );
   }
 

@@ -14,6 +14,11 @@ import type { CommerceOpportunity } from "@/lib/insights/opportunity-schema";
 import type { PriorityQueueItem } from "@/lib/insights/types";
 import type { PredictiveInsight } from "@/lib/predictions/engine";
 import type { StoreHealthScore } from "@/lib/store-health/score";
+import { calculateDecisionImpact } from "@/lib/impact/decision-impact";
+import {
+  candidatesFromOpenDecisions,
+  selectTodaysExecutiveDecision,
+} from "@/lib/analytics/executive-decision-ranking";
 import { buildExecutiveAnalytics, type ExecutiveAnalytics } from "./executive";
 
 export type ExecutiveBriefing = {
@@ -36,7 +41,10 @@ export type FeaturedRecommendation = {
   title: string;
   description: string;
   impactLabel: string;
+  /** Business-scale recovery (Executive hero) */
   impactMonthly: number;
+  /** Net profit improvement (secondary KPI) */
+  netProfitMonthly: number;
   confidencePct: number;
   suggestedAction: string;
   decisionId?: string;
@@ -52,7 +60,9 @@ export type ExecutiveOpportunity = {
   id: string;
   title: string;
   impactLabel: string;
+  /** Business-scale recovery for ranking / Executive hero */
   impactMonthly: number;
+  netProfitMonthly: number;
   confidencePct: number;
   decisionId?: string;
   recommendationId?: string;
@@ -82,10 +92,19 @@ function greetingForHour(): string {
   return "Good evening";
 }
 
-function parseImpactMonthly(label: string): number {
-  const match = label.match(/\$[\d,]+/);
-  if (!match) return 0;
-  return Number(match[0].replace(/[$,]/g, "")) || 0;
+function decisionCategoryHint(d: Pick<DecisionItem, "entityType">): string | undefined {
+  return d.entityType === "campaign" ? "campaign_review" : undefined;
+}
+
+function impactFromLabel(
+  label: string,
+  opts?: { category?: string; confidencePct?: number },
+) {
+  return calculateDecisionImpact({
+    expectedImpactLabel: label,
+    category: opts?.category,
+    confidenceScore: opts?.confidencePct,
+  });
 }
 
 function avgMetaRoas(snapshot: StoreSnapshot): number | null {
@@ -223,11 +242,16 @@ function buildForecast(input: {
 }
 
 function fromDecision(d: DecisionItem): ExecutiveOpportunity {
+  const impact = impactFromLabel(d.estimatedImpactLabel, {
+    category: decisionCategoryHint(d),
+    confidencePct: d.confidencePct,
+  });
   return {
     id: d.id,
     title: d.summary,
     impactLabel: d.estimatedImpactLabel,
-    impactMonthly: parseImpactMonthly(d.estimatedImpactLabel),
+    impactMonthly: impact.businessRecovery,
+    netProfitMonthly: impact.netProfitImpact,
     confidencePct: d.confidencePct,
     decisionId: d.id,
     recommendationId: d.recommendationId,
@@ -236,22 +260,30 @@ function fromDecision(d: DecisionItem): ExecutiveOpportunity {
 }
 
 function fromCommerceOpportunity(o: CommerceOpportunity): ExecutiveOpportunity {
+  const net = o.expectedImpact.profitMonthly || 0;
+  const recovery = o.expectedImpact.revenueMonthly || net;
   return {
     id: o.id,
     title: o.title,
     impactLabel: o.expectedImpact.label,
-    impactMonthly: o.expectedImpact.profitMonthly || o.expectedImpact.revenueMonthly,
+    impactMonthly: Math.max(recovery, net),
+    netProfitMonthly: net || recovery,
     confidencePct: o.confidence,
     opportunityKey: o.groupKey ?? o.id,
   };
 }
 
 function fromPriorityItem(p: PriorityQueueItem): ExecutiveOpportunity {
+  const impact = impactFromLabel(p.expectedImpactLabel ?? "", {
+    category: p.source === "recommendation" ? "campaign_review" : undefined,
+    confidencePct: p.confidence,
+  });
   return {
     id: p.id,
     title: p.title,
     impactLabel: p.expectedImpactLabel ?? "See impact estimate",
-    impactMonthly: parseImpactMonthly(p.expectedImpactLabel ?? ""),
+    impactMonthly: impact.businessRecovery,
+    netProfitMonthly: impact.netProfitImpact,
     confidencePct: p.confidence,
     opportunityKey: p.opportunityId,
     recommendationId: p.recommendationId,
@@ -262,6 +294,11 @@ function constrainOpportunity(
   opp: ExecutiveOpportunity,
   ctx: ReturnType<typeof buildBusinessScaleContext>,
 ): ExecutiveOpportunity {
+  // Keep recommendation-backed impacts canonical — Approvals uses the same model
+  // without scale re-capping, so never recompute dollars for shared Decision objects.
+  if (opp.recommendationId || opp.decisionId) {
+    return opp;
+  }
   const constrained = constrainRecoveryEstimate(
     opp.impactMonthly,
     opp.confidencePct,
@@ -286,6 +323,7 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
     .sort((a, b) => a.roas7d - b.roas7d)[0];
   if (worstCamp && out.length < need) {
     const savings = Math.round(worstCamp.spend7d * 4 * 0.35);
+    const net = Math.round(savings * 0.55);
     out.push(
       constrainOpportunity(
         {
@@ -293,6 +331,7 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
           title: `Pause low ROAS campaign — ${worstCamp.name}`,
           impactLabel: `+${fmtCurrency(savings)}/month savings`,
           impactMonthly: savings,
+          netProfitMonthly: net,
           confidencePct: 88,
           opportunityKey: `camp-${worstCamp.id}`,
         },
@@ -313,6 +352,7 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
           title: `Increase budget on ${bestCamp.name}`,
           impactLabel: `+${fmtCurrency(gain)}/month`,
           impactMonthly: gain,
+          netProfitMonthly: Math.round(gain * 0.38),
           confidencePct: 76,
           opportunityKey: `camp-scale-${bestCamp.id}`,
         },
@@ -323,13 +363,15 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
 
   const deadProduct = snapshot.products.find((p) => p.inventoryQuantity > 5 && p.unitsSold30d < 2);
   if (deadProduct && out.length < need) {
+    const recovery = Math.min(3400, ctx.monthlyProfit * 0.2 || 800);
     out.push(
       constrainOpportunity(
         {
           id: `syn-inv-${deadProduct.id}`,
           title: `Clear slow-moving inventory — ${deadProduct.title}`,
-          impactLabel: `+${fmtCurrency(Math.min(3400, ctx.monthlyProfit * 0.2 || 800))}/month`,
-          impactMonthly: Math.min(3400, ctx.monthlyProfit * 0.2 || 800),
+          impactLabel: `+${fmtCurrency(recovery)}/month`,
+          impactMonthly: recovery,
+          netProfitMonthly: Math.round(recovery * 0.38),
           confidencePct: 71,
           opportunityKey: `inv-${deadProduct.id}`,
         },
@@ -353,6 +395,7 @@ function synthesizeOpportunities(snapshot: StoreSnapshot, need: number): Executi
           title: f.title,
           impactLabel: `+${fmtCurrency(f.impact)}/month`,
           impactMonthly: f.impact,
+          netProfitMonthly: Math.round(f.impact * 0.4),
           confidencePct: f.confidence,
         },
         ctx,
@@ -403,51 +446,62 @@ function buildFeaturedRecommendation(input: {
   morningBrief?: MorningExecutiveBrief | null;
   summary: ExecutiveSummary | null;
 }): FeaturedRecommendation | null {
-  const topDecision = input.decisions.find((d) => d.status === "open");
-  if (topDecision) {
-    const isCampaign = topDecision.entityType === "campaign";
-    return {
-      title: topDecision.summary,
-      description: topDecision.why,
-      impactLabel: topDecision.estimatedImpactLabel,
-      impactMonthly: parseImpactMonthly(topDecision.estimatedImpactLabel),
-      confidencePct: topDecision.confidencePct,
-      suggestedAction: topDecision.recommendedAction,
-      decisionId: topDecision.id,
-      recommendationId: topDecision.recommendationId,
-      opportunityKey: topDecision.opportunityKey,
-      entityName: topDecision.entityName,
-      futureAction: topDecision.futureAction,
-      primaryActionLabel: isCampaign ? "Pause Campaign" : "Approve",
-      secondaryActionLabels: isCampaign
-        ? ["Reduce Budget", "Ignore"]
-        : ["Defer", "Ignore"],
-    };
+  const fromDecisions = candidatesFromOpenDecisions(input.decisions);
+  const fromOpps: ReturnType<typeof candidatesFromOpenDecisions> = input.opportunities.map(
+    (o) => ({
+      id: o.id,
+      title: o.title,
+      description: o.title,
+      impactLabel: o.impactLabel,
+      confidencePct: o.confidencePct,
+      priority: "high" as const,
+      risk: "medium" as const,
+      decisionId: o.decisionId,
+      recommendationId: o.recommendationId,
+      opportunityKey: o.opportunityKey,
+      knownBusinessRecovery: o.impactMonthly,
+      knownNetProfit: o.netProfitMonthly,
+      suggestedAction: "Approve",
+    }),
+  );
+
+  const selection = selectTodaysExecutiveDecision([...fromDecisions, ...fromOpps]);
+  if (selection.kind === "none") {
+    return null;
   }
 
-  const top = input.opportunities[0];
-  if (!top) return null;
-
+  const { candidate, impact } = selection.ranked;
+  const isCampaign = candidate.entityType === "campaign";
   const fromBrief = input.morningBrief?.recommendationOfTheDay;
   const fromSummary = input.summary?.topRecommendation;
 
   return {
-    title: fromBrief?.title ?? fromSummary?.title ?? top.title,
-    description:
-      fromBrief?.why ??
-      fromSummary?.recommendation ??
-      fromSummary?.description ??
-      top.title,
-    impactLabel: fromBrief?.estimatedImpactLabel ?? top.impactLabel,
-    impactMonthly: top.impactMonthly,
-    confidencePct: fromBrief?.confidencePct ?? fromSummary?.confidence ?? top.confidencePct,
+    title: candidate.title,
+    description: candidate.description || fromBrief?.why || candidate.title,
+    impactLabel:
+      candidate.impactLabel ||
+      `+$${impact.businessRecovery.toLocaleString()}/mo (~$${impact.netProfitImpact.toLocaleString()}/mo profit)`,
+    impactMonthly: impact.businessRecovery,
+    netProfitMonthly: impact.netProfitImpact,
+    confidencePct:
+      impact.confidence > 0
+        ? impact.confidence
+        : candidate.confidencePct <= 1
+          ? Math.round(candidate.confidencePct * 100)
+          : candidate.confidencePct,
     suggestedAction:
-      fromSummary?.recommendation ?? "Review in Decisions and approve the recommended action.",
-    opportunityKey: top.opportunityKey,
-    decisionId: top.decisionId,
-    recommendationId: top.recommendationId,
-    primaryActionLabel: top.title.toLowerCase().includes("pause") ? "Pause Campaign" : "Approve",
-    secondaryActionLabels: ["Reduce Budget", "Ignore"],
+      candidate.suggestedAction ??
+      fromSummary?.recommendation ??
+      "Review in Decisions and approve the recommended action.",
+    decisionId: candidate.decisionId,
+    recommendationId: candidate.recommendationId,
+    opportunityKey: candidate.opportunityKey,
+    entityName: candidate.entityName,
+    futureAction: candidate.futureAction,
+    primaryActionLabel: isCampaign ? "Pause Campaign" : "Approve",
+    secondaryActionLabels: isCampaign
+      ? ["Reduce Budget", "Ignore"]
+      : ["Defer", "Ignore"],
   };
 }
 

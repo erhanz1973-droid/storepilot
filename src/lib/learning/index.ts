@@ -29,4 +29,10 @@ export {
   applyLearningToOutputs,
   getHistoricalAccuracyNote,
 } from "./outcomes";
+export {
+  feedbackPatternKey,
+  computeFeedbackAdjustment,
+  applyFeedbackToConfidence,
+  applyFeedbackToPriority,
+} from "./feedback-learning";
 export { generateWeeklyAiReport, summarizeWeeklyReport } from "./weekly-report";

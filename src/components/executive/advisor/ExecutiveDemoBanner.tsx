@@ -7,11 +7,14 @@ export function ExecutiveDemoBanner() {
         <span className="exec-demo-banner-badge">Demo Store</span>
         <p className="exec-demo-banner-text">
           You&apos;re viewing sample business data.{" "}
-          <span className="muted">Connect your Shopify store for personalized AI recommendations.</span>
+          <span className="muted">
+            Connect your Shopify store — then StorePilot will analyze your catalog and prepare your
+            first executive recommendation.
+          </span>
         </p>
       </div>
-      <Link href="/connections" className="btn btn-ghost exec-demo-banner-cta">
-        Connect Store
+      <Link href="/first-run" className="btn btn-ghost exec-demo-banner-cta">
+        Start first-run
       </Link>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { TrafficRevenueProfitSection } from "@/components/analytics/traffic/TrafficRevenueProfitCard";
 import type {
   DeviceIntelligence,
@@ -303,11 +303,12 @@ export function TrafficOpportunitySection({ opportunities }: { opportunities: Tr
 export function TrafficGa4EmptyState() {
   return (
     <div className="card trf-v2-empty">
-      <p className="muted" style={{ margin: 0 }}>
-        Traffic intelligence requires GA4.{" "}
-        <Link href="/connections?tab=analytics">Connect GA4</Link> to unlock channel quality, landing
-        page recommendations, and profit attribution by source.
-      </p>
+      <EmptyState
+        title="We're still analyzing your traffic data"
+        reason="Traffic intelligence requires Google Analytics 4 for this store."
+        nextStep="After GA4 is connected, StorePilot will unlock channel quality, landing page recommendations, and profit attribution by source."
+        cta={{ href: "/connections?tab=analytics", label: "Connect GA4" }}
+      />
     </div>
   );
 }

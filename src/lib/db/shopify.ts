@@ -239,7 +239,6 @@ export async function upsertShopifyInstallation(input: {
   clientId?: string;
 }): Promise<ShopifyInstallation> {
   const encrypted = encryptToken(input.accessToken);
-  const refreshEncrypted = input.refreshToken ? encryptToken(input.refreshToken) : null;
   const clientId = input.clientId?.trim() || resolveCurrentShopifyClientId();
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
@@ -252,6 +251,7 @@ export async function upsertShopifyInstallation(input: {
       storeId: input.storeId,
       clientIdPrefix: clientId ? clientId.slice(0, 6) : null,
       hasSupabase: Boolean(supabase),
+      hasRefreshToken: Boolean(input.refreshToken),
     }),
   );
 
@@ -260,13 +260,18 @@ export async function upsertShopifyInstallation(input: {
       (i) => i.shop_domain === input.shopDomain,
     );
     const id = existing?.id ?? crypto.randomUUID();
+    const refreshEncrypted = input.refreshToken
+      ? encryptToken(input.refreshToken)
+      : (existing?.refresh_token_encrypted ?? null);
     const record: MemoryInstallation = {
       id,
       store_id: input.storeId,
       shop_domain: input.shopDomain,
       access_token_encrypted: encrypted,
       refresh_token_encrypted: refreshEncrypted,
-      refresh_token_expires_at: input.refreshTokenExpires?.toISOString() ?? null,
+      refresh_token_expires_at: input.refreshToken
+        ? (input.refreshTokenExpires?.toISOString() ?? null)
+        : (existing?.refresh_token_expires_at ?? null),
       shop_name: input.shopName ?? null,
       shopify_plan: input.shopifyPlan ?? null,
       scopes: input.scopes,
@@ -284,35 +289,39 @@ export async function upsertShopifyInstallation(input: {
         collectionCount: 0,
         discountCount: 0,
       },
-      refreshToken: input.refreshToken ?? null,
-      refreshTokenExpires: input.refreshTokenExpires ?? null,
+      refreshToken: input.refreshToken ?? existing?.refreshToken ?? null,
+      refreshTokenExpires: input.refreshToken
+        ? (input.refreshTokenExpires ?? null)
+        : (existing?.refreshTokenExpires ?? null),
       clientId: clientId ?? null,
     };
     memoryInstallations.set(id, record);
     return rowToInstallation(record as unknown as Record<string, unknown>);
   }
 
+  const upsertRow: Record<string, unknown> = {
+    store_id: input.storeId,
+    shop_domain: input.shopDomain,
+    access_token_encrypted: encrypted,
+    scopes: input.scopes,
+    shop_name: input.shopName ?? null,
+    shopify_plan: input.shopifyPlan ?? null,
+    status: "active",
+    connection_health: "healthy",
+    error_message: null,
+    uninstalled_at: null,
+    installed_at: now,
+    client_id: clientId,
+  };
+  // Never wipe an existing refresh_token when the session payload omits it.
+  if (input.refreshToken) {
+    upsertRow.refresh_token_encrypted = encryptToken(input.refreshToken);
+    upsertRow.refresh_token_expires_at = input.refreshTokenExpires?.toISOString() ?? null;
+  }
+
   const { data, error } = await supabase
     .from("shopify_installations")
-    .upsert(
-      {
-        store_id: input.storeId,
-        shop_domain: input.shopDomain,
-        access_token_encrypted: encrypted,
-        refresh_token_encrypted: refreshEncrypted,
-        refresh_token_expires_at: input.refreshTokenExpires?.toISOString() ?? null,
-        scopes: input.scopes,
-        shop_name: input.shopName ?? null,
-        shopify_plan: input.shopifyPlan ?? null,
-        status: "active",
-        connection_health: "healthy",
-        error_message: null,
-        uninstalled_at: null,
-        installed_at: now,
-        client_id: clientId,
-      } as Record<string, unknown>,
-      { onConflict: "shop_domain" },
-    )
+    .upsert(upsertRow, { onConflict: "shop_domain" })
     .select()
     .single();
 

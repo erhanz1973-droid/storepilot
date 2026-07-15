@@ -298,7 +298,13 @@ function parseImpactMonthly(label: string): number {
 export function buildExecutiveMemory(input: {
   decisions: DecisionItem[];
   recommendationRows: RecommendationRow[];
+  /** Prefer persisted measured events over derived heuristics. */
+  persistedMemory?: ExecutiveMemoryItem[];
 }): ExecutiveMemoryItem[] {
+  if (input.persistedMemory && input.persistedMemory.length > 0) {
+    return input.persistedMemory.slice(0, 4);
+  }
+
   const items: ExecutiveMemoryItem[] = [];
   const now = Date.now();
   const dayMs = 86400000;
@@ -788,12 +794,14 @@ export function buildExecutiveAiBehavior(input: {
   profitUnavailable?: boolean;
   moneyLeaks?: { items: { label: string; amountMonthly: number }[]; totalLostMonthly: number };
   priorityAction?: { title: string; impactMonthly: number } | null;
+  persistedMemory?: ExecutiveMemoryItem[];
 }): ExecutiveAiBehavior {
   const opportunityHistory = normalizeOpportunityHistorySummary(input.opportunityHistory);
   const decisionMap = new Map(input.decisions.map((d) => [d.id, d]));
   const memory = buildExecutiveMemory({
     decisions: input.decisions,
     recommendationRows: input.recommendationRows,
+    persistedMemory: input.persistedMemory,
   });
 
   const openDecisionsCount =

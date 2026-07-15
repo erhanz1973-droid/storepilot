@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getActionCapability } from "@/lib/insights/actions";
 import { MetricPills } from "@/components/MetricPills";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { DecisionItem } from "@/lib/decisions/center";
 
 const PRIORITY_BADGE: Record<DecisionItem["priority"], string> = {
@@ -13,9 +14,12 @@ const PRIORITY_BADGE: Record<DecisionItem["priority"], string> = {
 export function DecisionCenterList({ items }: { items: DecisionItem[] }) {
   if (items.length === 0) {
     return (
-      <p className="muted" style={{ fontSize: "0.9rem" }}>
-        No open decisions — your store looks healthy.
-      </p>
+      <EmptyState
+        title="No open decisions right now"
+        reason="Decisions appear after StorePilot analyzes your catalog and advertising data."
+        nextStep="If you just connected Shopify, finish first-run analysis to surface today's #1 executive decision."
+        cta={{ href: "/first-run", label: "Open first-run briefing" }}
+      />
     );
   }
 

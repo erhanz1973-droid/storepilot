@@ -1,4 +1,5 @@
 import type { DecisionItem, DecisionStatus } from "@/lib/decisions/center";
+import { calculateDecisionImpact } from "@/lib/impact/decision-impact";
 
 export type RecommendationLifecycle =
   | "new"
@@ -74,10 +75,15 @@ const URGENCY_SCORE: Record<DecisionItem["priority"], number> = {
   low: 6,
 };
 
-export function parseImpactMonthly(label: string): number {
-  const match = label.match(/\$[\d,]+/);
-  if (!match) return 0;
-  return Number(match[0].replace(/[$,]/g, "")) || 0;
+export function parseImpactMonthly(
+  label: string,
+  opts?: { category?: string; confidencePct?: number },
+): number {
+  return calculateDecisionImpact({
+    expectedImpactLabel: label,
+    category: opts?.category,
+    confidenceScore: opts?.confidencePct,
+  }).businessRecovery;
 }
 
 export function humanizeRecommendationTitle(title: string): string {
@@ -188,7 +194,10 @@ function buildReasoning(item: DecisionItem): string[] {
 }
 
 function toExecutiveRecommendation(item: DecisionItem): ExecutiveRecommendation {
-  const impactMonthly = parseImpactMonthly(item.estimatedImpactLabel);
+  const impactMonthly = parseImpactMonthly(item.estimatedImpactLabel, {
+    category: item.entityType === "campaign" ? "campaign_review" : undefined,
+    confidencePct: item.confidencePct,
+  });
   const lifecycle = mapLifecycle(item);
 
   return {

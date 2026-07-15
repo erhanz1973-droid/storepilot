@@ -1,0 +1,8 @@
+campaign_id,campaign_name,spend,impressions,clicks,purchases,attributed_revenue
+m01,Prospecting Broad,3200,95000,2800,28,6200
+m02,Prospecting Lookalike,2100,72000,2100,34,7800
+m03,Retargeting ATC,1800,48000,1900,42,9100
+m04,Retargeting View,1500,55000,1600,25,5400
+m05,Brand Search Mirror,900,22000,980,18,4100
+m06,Catalog Sales,1400,60000,1700,22,3800
+m07,Seasonal Promo,1200,58000,1720,21,3700

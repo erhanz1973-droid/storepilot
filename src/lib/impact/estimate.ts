@@ -1,6 +1,5 @@
-import { parseRevenueImpact } from "@/lib/approvals/revenue";
-import { revenueToNetProfitImpact } from "@/lib/opportunities/profit-impact";
-import type { Opportunity, OpportunityCategory, Recommendation } from "@/lib/types";
+import { calculateDecisionImpactFromRecommendation } from "@/lib/impact/decision-impact";
+import type { Opportunity, Recommendation } from "@/lib/types";
 
 export type RevenueImpactEstimate = {
   monthlyRevenue: number;
@@ -26,16 +25,13 @@ export function estimateFromRecommendation(
   rec: Recommendation,
   netMarginPct?: number,
 ): RevenueImpactEstimate {
-  const monthlyRevenue = parseRevenueImpact(rec.expectedImpact);
-  const monthlyProfit = revenueToNetProfitImpact(
-    monthlyRevenue,
-    rec.category as unknown as OpportunityCategory,
-    netMarginPct,
-  );
+  const impact = calculateDecisionImpactFromRecommendation(rec, netMarginPct);
+  const monthlyRevenue = impact.revenueRecovered ?? impact.advertisingSavings ?? impact.sourceAmount;
+  const monthlyProfit = impact.netProfitImpact;
   return {
     monthlyRevenue,
     monthlyProfit,
-    confidencePct: Math.round(rec.confidenceScore * 100),
+    confidencePct: impact.confidence,
     label: formatImpactLabel(monthlyRevenue, monthlyProfit),
   };
 }

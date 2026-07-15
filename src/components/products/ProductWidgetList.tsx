@@ -18,7 +18,7 @@ export function ProductWidgetList({
   title,
   rows,
   href = "/products",
-  emptyMessage = "No data yet.",
+  emptyMessage = "We're still analyzing product performance for this store.",
 }: {
   title: string;
   rows: ProductWidgetRow[];

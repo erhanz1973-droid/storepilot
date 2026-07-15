@@ -1,4 +1,15 @@
+/**
+ * @deprecated Import formulaRevenueToNetProfit from `@/lib/calculations/formulas`
+ */
 import type { OpportunityCategory } from "@/lib/types";
+import { formulaRevenueToNetProfit } from "@/lib/calculations/formulas";
+
+const MARKETING_CATEGORIES = new Set<OpportunityCategory>([
+  "marketing",
+  "advertising_efficiency",
+  "product_growth",
+  "marketing_attribution",
+]);
 
 /** Convert expected revenue lift to expected net profit lift */
 export function revenueToNetProfitImpact(
@@ -6,19 +17,10 @@ export function revenueToNetProfitImpact(
   category: OpportunityCategory,
   storeNetMarginPct?: number,
 ): number {
-  if (revenueImpact <= 0) return 0;
-
-  if (category === "marketing" || category === "advertising_efficiency" || category === "product_growth" || category === "marketing_attribution") {
-    // Marketing opps are often efficiency gains (saved spend) or incremental ROAS profit
-    return Math.round(revenueImpact * 0.55);
-  }
-
-  const marginRate =
-    storeNetMarginPct != null && storeNetMarginPct > 0
-      ? storeNetMarginPct / 100
-      : 0.38;
-
-  return Math.round(revenueImpact * marginRate);
+  return formulaRevenueToNetProfit(revenueImpact, {
+    isMarketingEfficiency: MARKETING_CATEGORIES.has(category),
+    storeNetMarginPct,
+  });
 }
 
 export function formatNetProfitImpact(amount: number): string {

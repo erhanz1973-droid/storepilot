@@ -520,23 +520,128 @@ function buildFinancialImpact(
   dashboard: DashboardSnapshot,
   snapshot: StoreSnapshot,
   intelligence?: IntelligenceDashboard,
+  outcomeRecords?: OutcomeRecord[],
 ): FinancialImpact {
   const opps = dashboard.topOpportunities ?? [];
   const est = opps.reduce((s, o) => s + o.estimatedMonthlyNetProfitImpact, 0);
-  const measured = dashboard.aiPerformance?.revenueInfluenced ?? intelligence?.revenueGenerated ?? 0;
+
+  const completed = (outcomeRecords ?? []).filter(
+    (r) => r.measureStatus === "completed" && r.actualMonthlyImpact != null,
+  );
+  const measuredTotal = completed.reduce(
+    (s, r) => s + (r.actualMonthlyImpact ?? 0),
+    0,
+  );
+  const successful = completed.filter((r) => r.outcomeRating === "successful");
+  const successfulTotal = successful.reduce(
+    (s, r) => s + Math.max(0, r.actualMonthlyImpact ?? 0),
+    0,
+  );
+  const needsImprovement = completed.filter(
+    (r) => r.outcomeRating === "needs_improvement",
+  );
+
+  // Prefer measured outcome rollups; fall back to estimates only when no measured data.
+  const hasMeasured = completed.length > 0;
+  const performanceFallback =
+    !hasMeasured && (dashboard.aiPerformance?.revenueInfluenced ?? 0) > 0
+      ? dashboard.aiPerformance!.revenueInfluenced
+      : null;
 
   const worstCamp = activeCampaigns(snapshot).sort((a, b) => a.roas7d - b.roas7d)[0];
   const adWasteEst =
     worstCamp && worstCamp.roas7d < 1 ? Math.round(worstCamp.spend7d * 4) : Math.round(est * 0.15);
 
+  const measuredProfit = hasMeasured
+    ? Math.round(measuredTotal)
+    : performanceFallback != null
+      ? Math.round(performanceFallback)
+      : null;
+
+  const measuredSaved = hasMeasured
+    ? Math.round(
+        completed
+          .filter((r) =>
+            /campaign|ad|waste|cost|inventory|slow/i.test(
+              `${r.category} ${r.actionType ?? ""} ${r.title}`,
+            ),
+          )
+          .reduce((s, r) => s + Math.max(0, r.actualMonthlyImpact ?? 0), 0),
+      )
+    : null;
+
+  const measuredRevenue = hasMeasured
+    ? Math.round(
+        completed
+          .filter((r) =>
+            /pricing|bundle|promotion|homepage|revenue/i.test(
+              `${r.category} ${r.actionType ?? ""} ${r.title}`,
+            ),
+          )
+          .reduce((s, r) => s + Math.max(0, r.actualMonthlyImpact ?? 0), 0),
+      )
+    : null;
+
+  const measuredAdWaste = hasMeasured
+    ? Math.round(
+        completed
+          .filter((r) => /campaign|ad/i.test(`${r.category} ${r.title}`))
+          .reduce((s, r) => s + Math.max(0, r.actualMonthlyImpact ?? 0), 0),
+      )
+    : null;
+
+  const measuredInventory = hasMeasured
+    ? Math.round(
+        completed
+          .filter((r) => /inventory|slow|stock/i.test(`${r.category} ${r.title}`))
+          .reduce((s, r) => s + Math.max(0, r.actualMonthlyImpact ?? 0), 0),
+      )
+    : null;
+
   const lines = [
-    { label: "Money saved", estimatedMonthly: Math.round(est * 0.35 + adWasteEst * 0.5), measuredMonthly: measured > 0 ? Math.round(measured * 0.6) : null },
-    { label: "Additional revenue", estimatedMonthly: Math.round(est * 0.45), measuredMonthly: measured > 0 ? Math.round(measured * 0.4) : null },
-    { label: "Profit recovered", estimatedMonthly: Math.round(est * 0.55), measuredMonthly: measured > 0 ? measured : null },
-    { label: "Advertising waste reduced", estimatedMonthly: adWasteEst, measuredMonthly: null },
-    { label: "Inventory value recovered", estimatedMonthly: Math.round(est * 0.2), measuredMonthly: null },
+    {
+      label: "Money saved",
+      estimatedMonthly: Math.round(est * 0.35 + adWasteEst * 0.5),
+      measuredMonthly:
+        measuredSaved != null && measuredSaved > 0
+          ? measuredSaved
+          : hasMeasured
+            ? Math.round(successfulTotal * 0.4)
+            : null,
+    },
+    {
+      label: "Additional revenue",
+      estimatedMonthly: Math.round(est * 0.45),
+      measuredMonthly:
+        measuredRevenue != null && measuredRevenue > 0
+          ? measuredRevenue
+          : hasMeasured
+            ? Math.round(successfulTotal * 0.35)
+            : null,
+    },
+    {
+      label: "Profit recovered",
+      estimatedMonthly: Math.round(est * 0.55),
+      measuredMonthly: measuredProfit,
+    },
+    {
+      label: "Advertising waste reduced",
+      estimatedMonthly: adWasteEst,
+      measuredMonthly: measuredAdWaste != null && measuredAdWaste > 0 ? measuredAdWaste : null,
+    },
+    {
+      label: "Inventory value recovered",
+      estimatedMonthly: Math.round(est * 0.2),
+      measuredMonthly: measuredInventory != null && measuredInventory > 0 ? measuredInventory : null,
+    },
   ];
 
+  // Surface failed outcomes explicitly as zero measured profit contribution (not estimates).
+  if (hasMeasured && needsImprovement.length > 0 && measuredProfit == null) {
+    lines[2]!.measuredMonthly = 0;
+  }
+
+  void intelligence;
   return { lines };
 }
 
@@ -724,7 +829,7 @@ export function buildWeeklyBriefingReport(input: {
       completedProgressLabel: `${completed} / ${minimumRequired}`,
       accuracyEta: "Estimated accuracy available after approximately 14 days of measured outcomes.",
     },
-    financialImpact: buildFinancialImpact(dashboard, snapshot, intelligence),
+    financialImpact: buildFinancialImpact(dashboard, snapshot, intelligence, outcomeRecords),
     timeline: buildTimeline(
       dashboard.activityFeed,
       outcomeRecords ?? [],

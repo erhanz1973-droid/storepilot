@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { captureBaselineOnImplement } from "@/lib/learning/measurement-engine";
 import { updateRecommendationStatus } from "@/lib/db/recommendations";
+import { resolveActiveStoreId } from "@/lib/store/context";
 import type { RecommendationStatus } from "@/lib/types";
 
 export async function submitApprovalAction(input: {
@@ -11,8 +12,24 @@ export async function submitApprovalAction(input: {
   note?: string;
   snoozeDays?: number;
 }) {
+  const storeId = await resolveActiveStoreId();
+
   if (input.status === "implemented") {
-    const rec = await captureBaselineOnImplement(input.recommendationId);
+    const rec = await captureBaselineOnImplement(input.recommendationId, storeId);
+    try {
+      const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
+      const { parseRevenueImpact } = await import("@/lib/approvals/presenter");
+      await recordExecutiveMemoryEvent({
+        storeId,
+        eventType: "executed",
+        title: rec?.title ?? "Recommendation executed",
+        recommendationId: input.recommendationId,
+        estimatedImpactMonthly: rec ? parseRevenueImpact(rec.expectedImpact) : null,
+        contextMessage: "Recommendation implemented — measurement window started.",
+      });
+    } catch {
+      // non-fatal
+    }
     revalidatePath("/");
     revalidatePath("/decisions");
     revalidatePath("/ask-ai");

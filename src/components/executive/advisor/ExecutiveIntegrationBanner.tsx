@@ -24,14 +24,17 @@ export function ExecutiveIntegrationBanner({ readiness }: { readiness: Integrati
       ))}
       {showConnect && (
         <p style={{ margin: "12px 0 0" }}>
+          <Link href="/first-run" className="btn btn-primary">
+            Continue first-run briefing
+          </Link>{" "}
           <Link href="/connections" className="btn btn-secondary">
             Open Connections
           </Link>
           {readiness.phase === "fresh_store" || readiness.phase === "shopify_only" ? (
             <>
               {" "}
-              <Link href="/onboarding" className="btn btn-primary">
-                Setup guide
+              <Link href="/onboarding" className="btn btn-ghost">
+                Full setup guide
               </Link>
             </>
           ) : null}

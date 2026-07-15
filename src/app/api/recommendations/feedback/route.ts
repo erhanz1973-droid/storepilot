@@ -45,6 +45,29 @@ export async function POST(request: Request) {
       }),
     }).catch(() => undefined);
 
+    // Persist learning signal into Executive Memory (feedback is consumed by applyLearningToOutputs).
+    try {
+      const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
+      const { getRecommendationById } = await import("@/lib/db/recommendations");
+      const rec = await getRecommendationById(parsed.data.recommendationId);
+      await recordExecutiveMemoryEvent({
+        storeId: feedback.storeId,
+        eventType: "learned",
+        title: rec?.title ?? "Recommendation feedback",
+        recommendationId: parsed.data.recommendationId,
+        contextMessage: parsed.data.helpful
+          ? "Merchant marked this recommendation helpful — similar patterns will rank higher."
+          : "Merchant marked this recommendation not helpful — similar patterns will get lower confidence.",
+        metadata: {
+          helpful: parsed.data.helpful,
+          category: rec?.category ?? null,
+          entityId: rec?.entityId ?? null,
+        },
+      });
+    } catch {
+      // non-fatal
+    }
+
     return NextResponse.json({ ok: true, feedback });
   } catch (err) {
     return NextResponse.json(

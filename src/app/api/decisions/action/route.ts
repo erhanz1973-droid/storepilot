@@ -63,6 +63,7 @@ const bodySchema = z.object({
     ])
     .optional(),
   recommendationCategory: z.string().optional(),
+  source: z.enum(["first_run", "app"]).optional(),
 });
 
 function toExecutionEntityType(entityType?: string): ExecutionEntityType | null {
@@ -116,6 +117,33 @@ export async function POST(request: Request) {
       eventType: lifecycleEvent,
       stage: lifecycleStage,
       detail: body.title,
+    });
+
+    const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
+    const { parseRevenueImpact } = await import("@/lib/approvals/presenter");
+    await recordExecutiveMemoryEvent({
+      storeId,
+      eventType:
+        body.action === "approve"
+          ? "approved"
+          : body.action === "reject"
+            ? "rejected"
+            : "milestone",
+      title: body.title,
+      recommendationId: body.recommendationId,
+      estimatedImpactMonthly: body.expectedImpactLabel
+        ? parseRevenueImpact(body.expectedImpactLabel)
+        : null,
+      contextMessage:
+        body.action === "approve"
+          ? "You approved this recommendation — AI will track the outcome."
+          : body.action === "reject"
+            ? "You rejected this recommendation — similar patterns may get lower confidence."
+            : "You postponed this recommendation.",
+      metadata: {
+        action: body.action,
+        rejectionReason: body.rejectionReason ?? null,
+      },
     });
 
     const audit = await getLatestAuditByRecommendationId(storeId, body.recommendationId);
@@ -223,6 +251,29 @@ export async function POST(request: Request) {
   revalidatePath("/ask-ai");
   revalidatePath("/approvals");
   revalidatePath("/history");
+
+  if (body.action === "approve" || body.action === "reject") {
+    try {
+      const {
+        trackAlphaEvent,
+        trackTtvApproval,
+      } = await import("@/lib/analytics/alpha-funnel");
+      await trackAlphaEvent(
+        storeId,
+        body.action === "approve" ? "recommendation_approved" : "recommendation_rejected",
+        {
+          source: body.source ?? "app",
+          recommendationId: body.recommendationId ?? null,
+          title: body.title,
+        },
+      );
+      if (body.action === "approve") {
+        await trackTtvApproval(storeId);
+      }
+    } catch {
+      // analytics must not break decisions
+    }
+  }
 
   return NextResponse.json({
     ok: true,

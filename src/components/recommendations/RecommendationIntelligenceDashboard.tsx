@@ -1,4 +1,5 @@
 import type { IntelligenceDashboard } from "@/lib/recommendations/intelligence/types";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type Props = {
   dashboard: IntelligenceDashboard;
@@ -65,7 +66,11 @@ export function RecommendationIntelligenceDashboard({ dashboard }: Props) {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Needs Improvement</h3>
           {dashboard.worstPerforming.length === 0 ? (
-            <p className="muted">No data yet.</p>
+            <EmptyState
+              title="We're still learning which recommendations need improvement"
+              reason="Needs-improvement patterns appear after recommendations are measured against real outcomes."
+              nextStep="Approve a recommendation and let StorePilot measure results — learning compounds over time."
+            />
           ) : (
             <div className="stack">
               {dashboard.worstPerforming.map((t) => (

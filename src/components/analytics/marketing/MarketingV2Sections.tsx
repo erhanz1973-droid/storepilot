@@ -179,7 +179,9 @@ export function MarketingPlatformHealthCard({
                   {p.score != null ? ` · ${p.score}/100` : ""}
                 </strong>
               ) : (
-                <span className="muted mkt-v2-no-data">No data available</span>
+                <span className="muted mkt-v2-no-data">
+                  Connect this channel to unlock advertising health
+                </span>
               )}
             </div>
             {p.connected && p.metrics.length > 0 && (

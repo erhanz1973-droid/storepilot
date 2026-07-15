@@ -58,14 +58,27 @@ export function MetaAdsConnectionPanel({
   if (!metaOAuthConfigured) {
     return (
       <EmptyState
-        title="Meta OAuth not configured"
+        title="Meta Ads isn't configured yet"
+        reason="This environment is missing Meta OAuth credentials."
+        nextStep="After Meta is configured, StorePilot will import campaigns and surface advertising recommendations."
         description="Set META_APP_ID, META_APP_SECRET, META_APP_URL, and META_TOKEN_ENCRYPTION_KEY in your environment."
       />
     );
   }
 
   if (!connected) {
-    return <ConnectMetaAdsButton />;
+    return (
+      <div className="card">
+        <EmptyState
+          title="Connect Meta Ads to unlock advertising recommendations"
+          reason="We're not analyzing Facebook/Instagram campaigns yet because Meta isn't connected."
+          nextStep="After you connect, StorePilot will review spend, ROAS, and campaign health for executive decisions."
+        />
+        <div style={{ marginTop: 12 }}>
+          <ConnectMetaAdsButton />
+        </div>
+      </div>
+    );
   }
 
   const businessNames = [...new Set(accounts.map((a) => a.businessName).filter(Boolean))] as string[];

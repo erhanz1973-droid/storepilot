@@ -249,15 +249,32 @@ function thirtyDayQuery(): string {
 export async function syncShopifyStore(
   shop: string,
   accessToken: string,
-  options?: { storedClientId?: string | null },
+  options?: {
+    storedClientId?: string | null;
+    installationId?: string | null;
+    refreshToken?: string | null;
+  },
 ): Promise<ShopifySyncResult> {
+  const tokenState = {
+    accessToken,
+    refreshToken: options?.refreshToken ?? null,
+  };
+
   const graphqlContext: ShopifyGraphQLContext = {
     shopDomain: shop,
     storedClientId: options?.storedClientId,
+    installationId: options?.installationId,
+    refreshToken: tokenState.refreshToken,
+    sessionType: "offline",
+    onAccessTokenRefreshed: (nextAccess, nextRefresh) => {
+      tokenState.accessToken = nextAccess;
+      tokenState.refreshToken = nextRefresh;
+      graphqlContext.refreshToken = nextRefresh;
+    },
   };
 
   try {
-    return await syncShopifyStoreInner(shop, accessToken, graphqlContext);
+    return await syncShopifyStoreInner(shop, tokenState, graphqlContext);
   } catch (error) {
     return handleShopifyAuthFailure(shop, error);
   }
@@ -265,17 +282,17 @@ export async function syncShopifyStore(
 
 async function syncShopifyStoreInner(
   shop: string,
-  accessToken: string,
+  tokenState: { accessToken: string },
   graphqlContext: ShopifyGraphQLContext,
 ): Promise<ShopifySyncResult> {
   const shopInfo = await shopifyGraphQL<{
     shop: { name: string; myshopifyDomain: string; plan: { displayName: string }; currencyCode: string };
     customersCount: { count: number };
-  }>(shop, accessToken, SHOP_QUERY, undefined, graphqlContext);
+  }>(shop, tokenState.accessToken, SHOP_QUERY, undefined, graphqlContext);
 
   const rawProducts = await paginateGraphQL<RawProduct, RawProduct[]>(
     shop,
-    accessToken,
+    tokenState,
     PRODUCTS_QUERY,
     (data) => {
       const conn = data.products as {
@@ -294,11 +311,11 @@ async function syncShopifyStoreInner(
   );
 
   const orderQuery = sixtyDayQuery();
-  const rawOrders = await fetchAllOrders(shop, accessToken, orderQuery, graphqlContext);
+  const rawOrders = await fetchAllOrders(shop, tokenState, orderQuery, graphqlContext);
 
   const rawCollections = await paginateGraphQL<RawCollection, RawCollection[]>(
     shop,
-    accessToken,
+    tokenState,
     COLLECTIONS_QUERY,
     (data) => {
       const conn = data.collections as {
@@ -316,7 +333,7 @@ async function syncShopifyStoreInner(
     graphqlContext,
   );
 
-  const discountResult = await countDiscounts(shop, accessToken, graphqlContext);
+  const discountResult = await countDiscounts(shop, tokenState, graphqlContext);
   const discountCount = discountResult.count;
 
   const salesByProduct = aggregateProductSales(
@@ -390,7 +407,7 @@ type DiscountQueryResult = {
 
 async function fetchAllOrders(
   shop: string,
-  accessToken: string,
+  tokenState: { accessToken: string },
   query: string,
   context?: ShopifyGraphQLContext,
 ): Promise<RawOrder[]> {
@@ -401,7 +418,7 @@ async function fetchAllOrders(
   while (hasNextPage) {
     const data: OrdersQueryResult = await shopifyGraphQL<OrdersQueryResult>(
       shop,
-      accessToken,
+      tokenState.accessToken,
       ORDERS_QUERY,
       { cursor, query },
       context,
@@ -421,7 +438,7 @@ type DiscountCountResult = {
 
 async function countDiscounts(
   shop: string,
-  accessToken: string,
+  tokenState: { accessToken: string },
   context?: ShopifyGraphQLContext,
 ): Promise<DiscountCountResult> {
   let cursor: string | null = null;
@@ -432,7 +449,7 @@ async function countDiscounts(
     const discountPage: ShopifyGraphQLResult<DiscountQueryResult> =
       await shopifyGraphQLResult<DiscountQueryResult>(
         shop,
-        accessToken,
+        tokenState.accessToken,
         DISCOUNTS_COUNT_QUERY,
         { cursor },
         context,

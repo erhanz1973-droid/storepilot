@@ -58,7 +58,11 @@ export function DecisionMemoCard({ memo, featured = false }: { memo: DecisionMem
         <h4>{memo.title}</h4>
       </header>
 
-      <DecisionDetailsSection details={memo.decisionDetails} profitCalculation={memo.profitCalculation} />
+      <DecisionDetailsSection
+        details={memo.decisionDetails}
+        impactPresentation={memo.impactPresentation}
+        supportingFactors={memo.profitCalculation}
+      />
 
       <ExpectedKpiCards kpis={memo.expectedKpis} />
 

@@ -737,12 +737,12 @@ function buildAiReasoning(card: PresentedApprovalCard, signalCount: number): AiR
 
 function buildDecisionDetails(
   card: PresentedApprovalCard,
-  forecast: DecisionForecastScenario,
 ): DecisionDetails {
   const isCampaign = card.category === "campaign_review";
   const campaignsAffected = isCampaign
     ? card.campaignBrief?.needsReview ?? card.members.length
     : null;
+  const p = card.impactPresentation;
 
   return {
     platform: card.campaignBrief?.platform ?? (isCampaign ? "Meta Ads" : "Shopify"),
@@ -751,43 +751,36 @@ function buildDecisionDetails(
     recommendation: isCampaign
       ? "Review and optimize underperforming campaigns"
       : card.title,
-    expectedImpactMonthly: forecast.estimatedProfit,
+    expectedImpactMonthly: p.heroAmount,
+    businessRecoveryMonthly: p.heroAmount,
+    netProfitMonthly: p.netProfitAmount,
+    advertisingSavingsMonthly: card.impact.advertisingSavings,
   };
 }
 
-function buildProfitCalculation(
+function buildSupportingFactors(
   card: PresentedApprovalCard,
   forecast: DecisionForecastScenario,
   profitDashboard: ProfitDashboard | null,
 ): ProfitCalculationLine[] {
-  if (forecast.estimatedProfit <= 0) return [];
-
   const lines: ProfitCalculationLine[] = [];
-
-  if (forecast.estimatedAdSpend !== 0) {
-    lines.push({
-      label: "Advertising savings",
-      value: `$${Math.abs(forecast.estimatedAdSpend).toLocaleString()}`,
-    });
-  }
   if (forecast.roasBefore && forecast.roasAfter) {
     lines.push({
       label: "ROAS improvement",
       value: `${forecast.roasBefore} → ${forecast.roasAfter}`,
     });
   }
-  if (card.category === "campaign_review") {
-    lines.push({ label: "Estimated conversion improvement", value: "+5–8%" });
-  }
   const marginPct = profitDashboard?.primary.profitMarginPct;
   if (marginPct != null) {
     lines.push({
-      label: "Estimated gross margin",
+      label: "Store net margin applied",
       value: `${Math.round(marginPct)}%`,
     });
   }
+  if (card.impact.expectedROAS) {
+    lines.push({ label: "Current ROAS", value: card.impact.expectedROAS });
+  }
   lines.push({ label: "Historical performance window", value: "Last 14 days" });
-
   return lines;
 }
 
@@ -984,8 +977,9 @@ function buildMemo(
     forecast,
     measuredOutcome: primary ? buildMeasuredOutcome(primary) : undefined,
     primaryRecommendationId: primary?.id ?? null,
-    decisionDetails: buildDecisionDetails(card, forecast),
-    profitCalculation: buildProfitCalculation(card, forecast, profitDashboard),
+    decisionDetails: buildDecisionDetails(card),
+    impactPresentation: card.impactPresentation,
+    profitCalculation: buildSupportingFactors(card, forecast, profitDashboard),
     explainNarrative: buildExplainNarrative(card, forecast, signalCount),
     confidenceBreakdown: buildConfidenceBreakdown(card, dataSources),
     riskAnalysis: buildRiskAnalysis(card, forecast),

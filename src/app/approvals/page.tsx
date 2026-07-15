@@ -32,8 +32,9 @@ export default async function ApprovalsPage() {
         />
       )}
 
-      <ApprovalDecisionCenter view={decisionCenter} />
-
+      <Suspense fallback={null}>
+        <ApprovalDecisionCenter view={decisionCenter} />
+      </Suspense>
       <IntegrationIntelligenceGrid connectors={disconnectedConnectors} />
 
       <p className="muted" style={{ marginTop: 20, fontSize: "0.9rem" }}>

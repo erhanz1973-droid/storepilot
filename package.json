@@ -10,12 +10,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:reality": "vitest run src/lib/calculations/reality/__tests__",
+    "test:decision": "vitest run src/lib/decision-validation/__tests__",
+    "test:financial": "vitest run src/lib/calculations/__tests__ src/lib/calculations/integrity/__tests__ src/lib/calculations/reality/__tests__ src/lib/decision-validation/__tests__",
+    "verify:financial": "npm run test:financial",
     "validate": "vitest run src/lib/validation/__tests__",
     "test:quality": "vitest run src/lib/decision-quality-lab/__tests__ src/lib/simulation-lab/__tests__",
     "quality:gate": "vitest run src/lib/decision-quality-lab/__tests__/release-gate.test.ts",
     "verify:google": "vitest run src/lib/google-ads/__tests__/live-api.test.ts",
     "shopify:purge": "node scripts/purge-shopify-installation.mjs",
-    "shopify:verify": "node scripts/verify-shopify-connection.mjs"
+    "shopify:verify": "node scripts/verify-shopify-connection.mjs",
+    "smoke": "node scripts/smoke/run.mjs",
+    "smoke:production": "SMOKE_MODE=production node scripts/smoke/run.mjs"
   },
   "dependencies": {
     "@shopify/shopify-api": "^13.1.0",

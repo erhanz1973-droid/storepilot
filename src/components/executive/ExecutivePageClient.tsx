@@ -26,7 +26,6 @@ import { ExecutiveDailyDigestCard } from "@/components/executive/advisor/Executi
 import { ExecutiveAdoptionScoreCard } from "@/components/executive/advisor/ExecutiveAdoptionScoreCard";
 import { ExecutiveKpiRow } from "@/components/executive/advisor/ExecutiveKpiRow";
 import { ExecutiveFinancialContextCard } from "@/components/executive/advisor/ExecutiveFinancialContextCard";
-import { PlanScaleBanner } from "@/components/billing/PlanScaleBanner";
 import type { CampaignEntitlements } from "@/lib/billing/types";
 
 function FullAnalysis({ view }: { view: ExecutivePageData }) {
@@ -128,9 +127,13 @@ export function ExecutivePageClient({
   }, []);
 
   return (
-    <div className="exec-dashboard exec-advisor-dashboard">
+    <div className="exec-dashboard exec-advisor-dashboard exec-ceo-focus">
       {isDemo && <ExecutiveDemoBanner />}
-      {!isDemo && <ExecutiveIntegrationBanner readiness={view.integrationReadiness} />}
+      {!isDemo && (
+        <div className="exec-ceo-connection-slot">
+          <ExecutiveIntegrationBanner readiness={view.integrationReadiness} />
+        </div>
+      )}
 
       <div className="exec-advisor-mode-toggle">
         <button
@@ -156,13 +159,11 @@ export function ExecutivePageClient({
         <>
           {!showFull && (
             <>
-              <ExecutiveCeoOperatingPanel view={view} onShowFull={() => setShowFull(true)} />
-              {planUsage && !planUsage.isUnlimited && (
-                <PlanScaleBanner
-                  entitlements={planUsage}
-                  unlockedCampaignName={planUsage.unlockedCampaignName}
-                />
-              )}
+              <ExecutiveCeoOperatingPanel
+                view={view}
+                onShowFull={() => setShowFull(true)}
+                planUsage={planUsage}
+              />
             </>
           )}
           {showFull && (

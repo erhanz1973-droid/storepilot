@@ -804,15 +804,16 @@ function enrichRecommendation(input: {
   businessContext?: BusinessScaleContext;
 }): Omit<RecommendationRow, "opportunity"> & { opportunity: string } {
   const { title, impactMonthly, confidencePct, decision, snapshot, businessContext } = input;
-  const constrained = businessContext
-    ? constrainRecoveryEstimate(
-        impactMonthly,
-        confidencePct,
-        businessContext,
-        undefined,
-        title,
-      )
-    : null;
+  const constrained =
+    businessContext && !input.recommendationId
+      ? constrainRecoveryEstimate(
+          impactMonthly,
+          confidencePct,
+          businessContext,
+          undefined,
+          title,
+        )
+      : null;
   const resolvedImpact = constrained?.amount ?? impactMonthly;
   const resolvedConfidence = constrained?.confidencePct ?? confidencePct;
   const risk = buildRiskAssessment(title, resolvedConfidence, snapshot);
@@ -1312,6 +1313,7 @@ export function buildExecutiveAdvisorView(input: {
   opportunityHistory?: import("@/lib/opportunities/history").OpportunityHistorySummary | import("@/lib/opportunities/history").OpportunityHistoryRecord[];
   experienceInput: Parameters<typeof buildExecutiveExperience>[0];
   businessProfile?: MerchantBusinessProfile | null;
+  persistedMemory?: import("@/lib/analytics/executive-ai-behavior").ExecutiveMemoryItem[];
 }): ExecutiveAdvisorView {
   const experience = buildExecutiveExperience(input.experienceInput);
   const profitDashboard = input.profitDashboard ?? null;
@@ -1485,6 +1487,7 @@ export function buildExecutiveAdvisorView(input: {
     priorityAction: priorityAction
       ? { title: priorityAction.title, impactMonthly: priorityAction.impactMonthly }
       : null,
+    persistedMemory: input.persistedMemory,
   });
 
   return {

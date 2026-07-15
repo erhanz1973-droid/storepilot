@@ -1,39 +1,42 @@
 import type { ExecutiveSinceLastVisit } from "@/lib/analytics/build-executive-ceo-os";
 
-const DIRECTION_ICON = { up: "↑", down: "↓", neutral: "•", alert: "⚠" } as const;
-const DIRECTION_CLASS = {
-  up: "exec-briefing-up",
-  down: "exec-briefing-down",
-  neutral: "exec-briefing-neutral",
-  alert: "exec-briefing-alert",
+const DIRECTION_ICON = { up: "↑", down: "↓", neutral: "•", alert: "!" } as const;
+const DIRECTION_CHIP = {
+  up: "exec-ceo-chip-ok",
+  down: "exec-ceo-chip-warn",
+  neutral: "exec-ceo-chip-muted",
+  alert: "exec-ceo-chip-warn",
 } as const;
 
 export function ExecutiveSinceLastVisitCard({ briefing }: { briefing: ExecutiveSinceLastVisit }) {
-  if (briefing.isFirstVisit) return null;
-
   return (
-    <section className="card exec-since-last-visit">
-      <h2 style={{ marginTop: 0 }}>Since your last visit</h2>
-      {briefing.lastVisitedAt && (
-        <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
-          Last opened {new Date(briefing.lastVisitedAt).toLocaleString()}
-        </p>
+    <section className="card exec-ceo-secondary-card exec-since-last-visit">
+      <div className="exec-ceo-secondary-head">
+        <h3>Since last visit</h3>
+        {briefing.lastVisitedAt ? (
+          <span className="muted exec-ceo-secondary-meta">
+            {new Date(briefing.lastVisitedAt).toLocaleDateString()}
+          </span>
+        ) : (
+          <span className="exec-ceo-chip exec-ceo-chip-muted">New</span>
+        )}
+      </div>
+      {briefing.isFirstVisit || briefing.items.length === 0 ? (
+        <p className="muted exec-ceo-card-fill">First visit — baselines will appear after your next session.</p>
+      ) : (
+        <ul className="exec-ceo-compact-list">
+          {briefing.items.slice(0, 4).map((item) => (
+            <li key={item.label} className="exec-ceo-compact-row">
+              <span className={`exec-ceo-chip ${DIRECTION_CHIP[item.direction]}`}>
+                {DIRECTION_ICON[item.direction]} {item.label}
+              </span>
+              {item.detail ? (
+                <span className="muted exec-ceo-compact-detail">{item.detail}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       )}
-      <ul className="exec-briefing-list">
-        {briefing.items.map((item) => (
-          <li key={item.label} className={DIRECTION_CLASS[item.direction]}>
-            <span className="exec-briefing-icon">{DIRECTION_ICON[item.direction]}</span>
-            <div>
-              <span>{item.label}</span>
-              {item.detail && (
-                <span className="muted" style={{ display: "block", fontSize: "0.8rem" }}>
-                  {item.detail}
-                </span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

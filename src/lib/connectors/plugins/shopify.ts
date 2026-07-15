@@ -132,7 +132,11 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
         const result = await syncShopifyStore(
           installation.shop_domain,
           installation.accessToken,
-          { storedClientId: installation.clientId },
+          {
+            storedClientId: installation.clientId,
+            installationId: installation.id,
+            refreshToken: installation.refreshToken,
+          },
         );
 
         await updateShopifySyncResult(installation.store_id, result.stats, result.snapshot, {

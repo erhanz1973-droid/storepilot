@@ -1,5 +1,6 @@
 import { captureBaselineOnImplement } from "@/lib/learning/measurement-engine";
 import { getAllApprovals, updateRecommendationStatus } from "@/lib/db/recommendations";
+import { resolveActiveStoreId } from "@/lib/store/context";
 import type { RecommendationStatus } from "@/lib/types";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -24,9 +25,24 @@ export async function POST(request: Request) {
   }
 
   const { recommendationId, status, note, snoozeDays } = parsed.data;
+  const storeId = await resolveActiveStoreId();
 
   if (status === "implemented") {
-    await captureBaselineOnImplement(recommendationId);
+    const rec = await captureBaselineOnImplement(recommendationId, storeId);
+    try {
+      const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
+      const { parseRevenueImpact } = await import("@/lib/approvals/presenter");
+      await recordExecutiveMemoryEvent({
+        storeId,
+        eventType: "executed",
+        title: rec?.title ?? "Recommendation executed",
+        recommendationId,
+        estimatedImpactMonthly: rec ? parseRevenueImpact(rec.expectedImpact) : null,
+        contextMessage: "Recommendation implemented — measurement window started.",
+      });
+    } catch {
+      // non-fatal
+    }
     const approvals = await getAllApprovals();
     const record = approvals.find((a) => a.recommendationId === recommendationId);
     return NextResponse.json({

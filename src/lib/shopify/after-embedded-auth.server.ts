@@ -1,4 +1,5 @@
 import type { Session } from "@shopify/shopify-api";
+import { trackAlphaEvent } from "@/lib/analytics/alpha-funnel";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
 import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { persistInstallationFromSession } from "@/lib/shopify/persist-installation.server";
@@ -32,6 +33,17 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
     throw error;
   }
 
+  if (persisted?.storeId) {
+    await trackAlphaEvent(persisted.storeId, "installation_completed", {
+      shop: session.shop,
+      source: "embedded_afterAuth",
+    });
+    await trackAlphaEvent(persisted.storeId, "shopify_connected", {
+      shop: session.shop,
+      source: "embedded_afterAuth",
+    });
+  }
+
   try {
     await registerAppWebhooks(session.shop, session.accessToken);
   } catch (error) {
@@ -41,6 +53,8 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
   try {
     const syncResult = await syncShopifyStore(session.shop, session.accessToken, {
       storedClientId: persisted?.clientId,
+      installationId: null,
+      refreshToken: session.refreshToken ?? null,
     });
     if (persisted?.storeId) {
       await updateShopifySyncResult(persisted.storeId, syncResult.stats, syncResult.snapshot, {

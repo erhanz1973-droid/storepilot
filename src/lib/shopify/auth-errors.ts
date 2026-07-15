@@ -4,12 +4,14 @@ export const SHOPIFY_REINSTALL_REQUIRED_PREFIX = "REINSTALL_REQUIRED:";
 export class ShopifyReinstallRequiredError extends Error {
   readonly shopDomain: string;
   readonly reason: string;
+  readonly merchantReauthorizationRequired: boolean;
 
-  constructor(shopDomain: string, reason: string) {
+  constructor(shopDomain: string, reason: string, merchantReauthorizationRequired = true) {
     super(`${SHOPIFY_REINSTALL_REQUIRED_PREFIX} ${reason}`);
     this.name = "ShopifyReinstallRequiredError";
     this.shopDomain = shopDomain;
     this.reason = reason;
+    this.merchantReauthorizationRequired = merchantReauthorizationRequired;
   }
 }
 
@@ -47,6 +49,30 @@ export class ShopifyAccessTokenInvalidError extends ShopifyReinstallRequiredErro
     );
     this.name = "ShopifyAccessTokenInvalidError";
     this.httpStatus = httpStatus;
+  }
+}
+
+/**
+ * Offline refresh cannot recover (missing / expired / invalid_grant refresh token).
+ * Callers must return immediately — do not retry GraphQL.
+ */
+export class ShopifyMerchantReauthorizationRequiredError extends ShopifyReinstallRequiredError {
+  readonly failureReason:
+    | "missing_refresh_token"
+    | "invalid_grant"
+    | "expired_refresh_token"
+    | "refresh_http_error"
+    | "incomplete_token_pair"
+    | "oauth_not_configured";
+
+  constructor(
+    shopDomain: string,
+    failureReason: ShopifyMerchantReauthorizationRequiredError["failureReason"],
+    detail: string,
+  ) {
+    super(shopDomain, detail, true);
+    this.name = "ShopifyMerchantReauthorizationRequiredError";
+    this.failureReason = failureReason;
   }
 }
 

@@ -1,4 +1,5 @@
 import { parseRevenueImpact } from "@/lib/approvals/presenter";
+import { listFeedbackForLearning } from "@/lib/db/feedback";
 import { listOutcomeHistory } from "@/lib/db/learning";
 import { listOutcomeRecords } from "@/lib/db/outcome-records";
 import { listStoredRecommendations } from "@/lib/db/recommendations";
@@ -7,6 +8,15 @@ import {
   computeFatigueAdjustment,
   type FatigueRecord,
 } from "@/lib/learning/fatigue";
+import {
+  applyFeedbackToConfidence,
+  applyFeedbackToPriority,
+  computeFeedbackAdjustment,
+  feedbackPatternKey,
+  findFeedbackStatsForOutput,
+  mergeFatigueWithFeedback,
+  type FeedbackPatternStats,
+} from "@/lib/learning/feedback-learning";
 import { CATEGORY_LABELS } from "./metrics";
 import type {
   AiPerformanceSummary,
@@ -250,6 +260,29 @@ export async function applyLearningToOutputs(
     });
   }
 
+  // Merchant thumbs → pattern-scoped learning (same pipeline as outcome learning).
+  const feedbackRows = await listFeedbackForLearning(storeId);
+  const feedbackByPattern = new Map<string, FeedbackPatternStats>();
+  for (const row of feedbackRows) {
+    if (!row.category) continue;
+    const key = feedbackPatternKey({
+      category: row.category,
+      entityId: row.entityId,
+      title: row.title,
+    });
+    const existing = feedbackByPattern.get(key) ?? {
+      patternKey: key,
+      category: row.category as RecommendationCategory,
+      helpfulCount: 0,
+      notHelpfulCount: 0,
+      lastFeedbackAt: row.createdAt,
+    };
+    if (row.helpful) existing.helpfulCount += 1;
+    else existing.notHelpfulCount += 1;
+    if (row.createdAt > existing.lastFeedbackAt) existing.lastFeedbackAt = row.createdAt;
+    feedbackByPattern.set(key, existing);
+  }
+
   const adjusted = [];
   for (const output of outputs) {
     const { confidence, historicalNote } = await adjustConfidenceWithLearning(
@@ -266,18 +299,33 @@ export async function applyLearningToOutputs(
       positiveOutcomes: 0,
     };
     const fatigue = computeFatigueAdjustment(fatigueRecord);
+    const feedbackStats = findFeedbackStatsForOutput(output, feedbackByPattern);
+    const feedbackAdj = computeFeedbackAdjustment(feedbackStats);
+    const combined = mergeFatigueWithFeedback(fatigue, feedbackAdj);
 
-    if (fatigue.suppress) continue;
+    if (combined.suppress) continue;
 
-    const finalConfidence = applyFatigueToConfidence(confidence, fatigue);
-    const notes = [historicalNote, fatigue.reason].filter(Boolean).join(" ");
+    const afterFatigue = applyFatigueToConfidence(confidence, fatigue);
+    const finalConfidence = applyFeedbackToConfidence(afterFatigue, feedbackAdj);
+    const finalPriority = applyFeedbackToPriority(output.priority, feedbackAdj);
+    const notes = [historicalNote, combined.reason].filter(Boolean).join(" ");
 
     adjusted.push({
       ...output,
+      priority: finalPriority,
       confidence: finalConfidence,
       description: notes ? `${output.description} ${notes}` : output.description,
     });
   }
+
+  // Ranking: severity then confidence (matches sortRecommendations).
+  adjusted.sort((a, b) => {
+    const order = { critical: 0, high: 1, medium: 2, low: 3 };
+    const sev = (order[a.priority] ?? 9) - (order[b.priority] ?? 9);
+    if (sev !== 0) return sev;
+    return b.confidence - a.confidence;
+  });
+
   return adjusted;
 }
 

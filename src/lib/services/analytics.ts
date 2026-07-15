@@ -101,6 +101,7 @@ function attachCeoOsLayer(
   decisions: import("@/lib/decisions/center").DecisionItem[],
   previousVisit: import("@/lib/analytics/executive-visit").ExecutiveVisitSnapshot | null,
 ): ExecutivePageData {
+  const ir = page.integrationReadiness;
   const ceoOs = buildExecutiveCeoOsLayer({
     priorityAction: page.priorityAction,
     executiveFocus: page.executiveFocus,
@@ -109,6 +110,14 @@ function attachCeoOsLayer(
     decisions,
     executiveMode: page.executiveMode,
     previousVisit,
+    connectedSources: {
+      shopify: ir.shopifyConnected,
+      metaAds: ir.metaConnected,
+      googleAds: ir.googleConnected,
+      ga4: ir.googleConnected,
+      inventory: true,
+      customers: true,
+    },
   });
   return { ...page, ceoOs };
 }
@@ -222,6 +231,13 @@ export async function buildExecutivePageData(): Promise<ExecutivePageData> {
         timings.dashboard = Math.round(performance.now() - dashStart);
 
         const advisorStart = performance.now();
+        const {
+          listExecutiveMemoryEvents,
+          executiveMemoryEventsToItems,
+        } = await import("@/lib/db/executive-memory");
+        const persistedEvents = await listExecutiveMemoryEvents(bundle.storeId, 12);
+        const persistedMemory = executiveMemoryEventsToItems(persistedEvents);
+
         const view = buildExecutiveAdvisorView({
           snapshot: bundle.snapshot,
           profitDashboard: bundle.profitDashboard,
@@ -246,6 +262,7 @@ export async function buildExecutivePageData(): Promise<ExecutivePageData> {
             metricSourceLabels: useLiveExtras ? live.dataSources.metricLabels : undefined,
           },
           businessProfile: dashboard.businessProfile,
+          persistedMemory,
         });
         timings["executive-advisor"] = Math.round(performance.now() - advisorStart);
 
