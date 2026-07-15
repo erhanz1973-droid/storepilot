@@ -13,12 +13,12 @@ export function validationReportsFromDecisionItems(
   for (const d of decisions) {
     const outcome = d.outcome;
     if (!outcome) continue;
-    if (outcome.measureStatus !== "measured" && outcome.predictionAccuracy == null) continue;
+    if (outcome.measureStatus !== "completed" && outcome.predictionAccuracy == null) continue;
 
     const accepted =
       d.status === "accepted" ||
       d.status === "resolved" ||
-      (d.outcome?.measureStatus === "measured" && d.status !== "ignored");
+      (d.outcome?.measureStatus === "completed" && d.status !== "ignored");
 
     // Prefer parsed profit from display metrics when available
     const profitMetric = outcome.displayMetrics.find((m) =>
