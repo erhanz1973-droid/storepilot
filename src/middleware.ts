@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import {
   EMBEDDED_SHOP_COOKIE,
   isEmbeddedShopifyRequest,
+  normalizeShopDomain,
   resolveShopFromEmbeddedRequest,
 } from "@/lib/store/embedded-shop";
 
@@ -33,16 +34,28 @@ function logEmbeddedRequest(request: NextRequest, phase: string, shop: string | 
   );
 }
 
+function buildFrameAncestorsCsp(shop: string | null): string {
+  if (shop) {
+    return `frame-ancestors https://${shop} https://admin.shopify.com;`;
+  }
+  // Standalone / unknown shop: disallow framing (Shopify iframe-protection guidance).
+  return "frame-ancestors 'none';";
+}
+
 export function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
-  const shop = resolveShopFromEmbeddedRequest({
+  const shopFromQuery = resolveShopFromEmbeddedRequest({
     shopParam: searchParams.get("shop"),
     hostParam: searchParams.get("host"),
   });
+  const shopFromCookie = normalizeShopDomain(
+    request.cookies.get(EMBEDDED_SHOP_COOKIE)?.value,
+  );
+  const shop = shopFromQuery ?? shopFromCookie;
   const embedded = isEmbeddedShopifyRequest({
     embeddedParam: searchParams.get("embedded"),
     hostParam: searchParams.get("host"),
-    shopParam: searchParams.get("shop"),
+    shopParam: searchParams.get("shop") ?? shopFromCookie,
   });
 
   if (pathname === "/app") {
@@ -79,12 +92,8 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  if (shop) {
-    response.headers.set(
-      "Content-Security-Policy",
-      `frame-ancestors https://${shop} https://admin.shopify.com;`,
-    );
-  }
+  // Always set frame-ancestors on HTML-capable routes (Shopify App Store requirement).
+  response.headers.set("Content-Security-Policy", buildFrameAncestorsCsp(shop));
 
   return response;
 }

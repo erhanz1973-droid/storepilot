@@ -2,20 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-
-function isEmbeddedPageContext(): boolean {
-  if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("shop") || params.get("host") || params.get("embedded") === "1") {
-    return true;
-  }
-  try {
-    return window.self !== window.top;
-  } catch {
-    // Cross-origin iframe access throws — treat as embedded.
-    return true;
-  }
-}
+import {
+  isShopifyEmbeddedContext,
+  redirectTop,
+} from "@/lib/shopify/embedded-navigation";
 
 /**
  * Triggers Shopify authenticate.admin via Route Handler (cookie-safe).
@@ -27,7 +17,7 @@ export function EmbeddedShopifyBootstrap() {
 
   useEffect(() => {
     if (started.current) return;
-    if (!isEmbeddedPageContext()) return;
+    if (!isShopifyEmbeddedContext()) return;
     started.current = true;
 
     const search = window.location.search || "";
@@ -53,7 +43,8 @@ export function EmbeddedShopifyBootstrap() {
             location,
           });
           if (location) {
-            window.location.assign(location);
+            // Exit iframe when Shopify sends a remote/OAuth bounce URL.
+            redirectTop(location);
             return;
           }
         }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { CampaignDetailPageData } from "@/lib/advertising/types";
 import { HEALTH_TIER_LABELS } from "@/lib/advertising/types";
 import { formatRoas } from "@/lib/attribution/format-roas";
@@ -36,6 +37,7 @@ const SECTIONS = [
 type Props = CampaignDetailPageData;
 
 export function CampaignDetailClient(data: Props) {
+  const router = useRouter();
   const { setCampaignName } = useAdvertisingCopilotCampaign();
   const { campaign, locked, planUsage } = data;
 
@@ -58,7 +60,7 @@ export function CampaignDetailClient(data: Props) {
         <CampaignUpgradeModal
           entitlements={planUsage}
           campaignName={campaign.campaign}
-          onClose={() => { window.location.href = "/advertising"; }}
+          onClose={() => { router.push("/advertising"); }}
         />
       </>
     );

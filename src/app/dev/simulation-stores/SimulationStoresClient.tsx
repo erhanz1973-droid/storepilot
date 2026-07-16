@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { SimulationStoreRow } from "@/lib/simulation-stores/types";
 import type { SimulationAuditReport } from "@/lib/simulation-stores/audit-types";
 import type { SimulationExecutiveSummary } from "@/lib/simulation-stores/executive-summary-types";
@@ -20,6 +21,7 @@ function scrollToSummary(ref: React.RefObject<HTMLDivElement | null>) {
 }
 
 export function SimulationStoresClient({ initialStores, showDeveloperTools }: Props) {
+  const router = useRouter();
   const [stores, setStores] = useState<SimulationStoreRow[]>(initialStores);
   const [loading, setLoading] = useState(false);
   const [loadingStoreId, setLoadingStoreId] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function SimulationStoresClient({ initialStores, showDeveloperTools }: Pr
 
   async function openDashboard(storeId: string) {
     await post("switch", { storeId });
-    window.location.href = "/";
+    router.push("/");
   }
 
   async function exportStore(storeId: string) {

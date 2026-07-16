@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { redirectTop } from "@/lib/shopify/embedded-navigation";
 
 export function ConnectShopifyForm() {
   const [shop, setShop] = useState("");
@@ -9,7 +10,8 @@ export function ConnectShopifyForm() {
     e.preventDefault();
     if (!shop.trim()) return;
     const domain = shop.includes(".") ? shop : `${shop}.myshopify.com`;
-    window.location.href = `/api/shopify/auth?shop=${encodeURIComponent(domain)}`;
+    // OAuth must leave the Admin iframe (App Bridge Navigation API).
+    redirectTop(`/api/shopify/auth?shop=${encodeURIComponent(domain)}`);
   }
 
   return (

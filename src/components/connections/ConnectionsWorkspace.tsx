@@ -22,6 +22,7 @@ import type { ConnectionHealthBreakdown } from "@/lib/connections/connection-sta
 import type { ConnectionCategory } from "@/lib/connections/catalog";
 import { presentationShowsAsConnected } from "@/lib/connections/connection-state";
 import { runIntegrationSync, type SyncFeedback } from "@/lib/connections/sync-feedback";
+import { redirectTop } from "@/lib/shopify/embedded-navigation";
 
 const STATUS_DOT: Record<IntegrationConnectionStatus, string> = {
   connected: "var(--low)",
@@ -370,7 +371,7 @@ function IntegrationDetailPanel({
           showReconnect={d.connected && !d.isDemo}
           onReconnect={() => {
             if (d.storeDomain) {
-              window.location.href = `/api/shopify/auth?shop=${encodeURIComponent(d.storeDomain)}`;
+              redirectTop(`/api/shopify/auth?shop=${encodeURIComponent(d.storeDomain)}`);
             }
           }}
         />
@@ -449,7 +450,7 @@ function IntegrationDetailPanel({
           canSync={item.canSync}
           showReconnect
           onReconnect={() => {
-            window.location.href = "/api/meta/auth";
+            redirectTop("/api/meta/auth");
           }}
         />
         {d.accounts.length > 0 && (
@@ -546,7 +547,7 @@ function IntegrationDetailPanel({
           canSync={item.canSync}
           showReconnect
           onReconnect={() => {
-            window.location.href = "/api/google/auth";
+            redirectTop("/api/google/auth");
           }}
         />
         {d.accounts.length > 0 && (
@@ -683,7 +684,7 @@ function IntegrationDetailPanel({
           canSync={item.canSync}
           showReconnect
           onReconnect={() => {
-            window.location.href = "/api/ga4/auth";
+            redirectTop("/api/ga4/auth");
           }}
         />
         {d.installationId && (
