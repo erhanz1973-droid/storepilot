@@ -1,5 +1,6 @@
 import { captureBaselineOnImplement } from "@/lib/learning/measurement-engine";
 import { getAllApprovals, updateRecommendationStatus } from "@/lib/db/recommendations";
+import { recommendationService } from "@/lib/recommendations/service";
 import { resolveActiveStoreId } from "@/lib/store/context";
 import type { RecommendationStatus } from "@/lib/types";
 import { NextResponse } from "next/server";
@@ -13,8 +14,16 @@ const bodySchema = z.object({
 });
 
 export async function GET() {
-  const approvals = await getAllApprovals();
-  return NextResponse.json({ approvals });
+  // Scope approvals to the authenticated merchant's own recommendations only.
+  const storeId = await resolveActiveStoreId();
+  const [approvals, ownedRecs] = await Promise.all([
+    getAllApprovals(),
+    recommendationService.list(storeId),
+  ]);
+  const ownedIds = new Set(ownedRecs.map((rec) => rec.id));
+  return NextResponse.json({
+    approvals: approvals.filter((approval) => ownedIds.has(approval.recommendationId)),
+  });
 }
 
 export async function POST(request: Request) {
@@ -26,6 +35,12 @@ export async function POST(request: Request) {
 
   const { recommendationId, status, note, snoozeDays } = parsed.data;
   const storeId = await resolveActiveStoreId();
+
+  // Ownership check: a merchant may only change status of its own recommendations.
+  const existing = await recommendationService.getById(recommendationId);
+  if (!existing || existing.storeId !== storeId) {
+    return NextResponse.json({ error: "Recommendation not found" }, { status: 404 });
+  }
 
   if (status === "implemented") {
     const rec = await captureBaselineOnImplement(recommendationId, storeId);
@@ -58,6 +73,7 @@ export async function POST(request: Request) {
     recommendationId,
     status as RecommendationStatus,
     { note, snoozeDays },
+    storeId,
   );
 
   return NextResponse.json({ approval: record });

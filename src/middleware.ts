@@ -6,6 +6,18 @@ import {
   normalizeShopDomain,
   resolveShopFromEmbeddedRequest,
 } from "@/lib/store/embedded-shop";
+import {
+  AUTHENTICATED_FLAG_HEADER,
+  AUTHENTICATED_SHOP_HEADER,
+  hasServiceSecret,
+  isApiPath,
+  isPublicApiPath,
+} from "@/lib/api/route-auth";
+import {
+  getBearerToken,
+  InvalidSessionTokenError,
+  verifyShopifySessionToken,
+} from "@/lib/shopify/session-token";
 
 function logEmbeddedRequest(request: NextRequest, phase: string, shop: string | null): void {
   const shopParam = request.nextUrl.searchParams.get("shop");
@@ -42,8 +54,62 @@ function buildFrameAncestorsCsp(shop: string | null): string {
   return "frame-ancestors 'none';";
 }
 
-export function middleware(request: NextRequest) {
+function unauthorized(reason: string): NextResponse {
+  return NextResponse.json(
+    { error: "Unauthorized", reason },
+    {
+      status: 401,
+      headers: {
+        "Content-Security-Policy": "frame-ancestors 'none';",
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
+/**
+ * Enforce an embedded Shopify session token on protected API routes.
+ * Tenant identity is derived ONLY from the verified token (or a trusted service
+ * secret) — never from attacker-controllable `?shop=` / `?host=` query params.
+ */
+async function guardProtectedApi(request: NextRequest): Promise<NextResponse> {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-storepilot-request-url", request.url);
+  // Never trust a client-supplied identity header on protected routes.
+  requestHeaders.delete(AUTHENTICATED_SHOP_HEADER);
+  requestHeaders.delete(AUTHENTICATED_FLAG_HEADER);
+  requestHeaders.delete("x-storepilot-embedded");
+
+  if (hasServiceSecret(request)) {
+    requestHeaders.set(AUTHENTICATED_FLAG_HEADER, "service");
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  const token = getBearerToken(request);
+  if (!token) {
+    return unauthorized("missing_session_token");
+  }
+
+  try {
+    const { shop } = await verifyShopifySessionToken(token);
+    requestHeaders.set(AUTHENTICATED_SHOP_HEADER, shop);
+    requestHeaders.set(AUTHENTICATED_FLAG_HEADER, "1");
+    requestHeaders.set("x-storepilot-embedded", "1");
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  } catch (error) {
+    const reason =
+      error instanceof InvalidSessionTokenError ? "invalid_session_token" : "auth_error";
+    return unauthorized(reason);
+  }
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
+
+  if (isApiPath(pathname) && !isPublicApiPath(pathname)) {
+    return guardProtectedApi(request);
+  }
+
   const shopFromQuery = resolveShopFromEmbeddedRequest({
     shopParam: searchParams.get("shop"),
     hostParam: searchParams.get("host"),

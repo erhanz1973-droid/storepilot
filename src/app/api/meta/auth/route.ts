@@ -1,30 +1,16 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMetaOAuthUrl, isMetaOAuthConfigured } from "@/lib/meta/oauth";
-import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { ACTIVE_STORE_COOKIE, resolveActiveStoreId } from "@/lib/store/context";
 
-async function resolveStoreIdFromRequest(request: Request): Promise<string> {
-  const url = new URL(request.url);
-  const fromQuery = url.searchParams.get("store_id")?.trim();
-  if (fromQuery) {
-    const supabase = getSupabaseAdmin();
-    if (supabase) {
-      const { data } = await supabase.from("stores").select("id").eq("id", fromQuery).maybeSingle();
-      if (data?.id) return fromQuery;
-    } else {
-      return fromQuery;
-    }
-  }
-  return resolveActiveStoreId();
-}
-
-export async function GET(request: Request) {
+export async function GET() {
   if (!isMetaOAuthConfigured()) {
     return NextResponse.json({ error: "Meta OAuth is not configured" }, { status: 503 });
   }
 
-  const storeId = await resolveStoreIdFromRequest(request);
+  // Store is resolved from the server-side (bootstrap-bound) context only —
+  // never from a client-supplied ?store_id= to prevent cross-tenant binding.
+  const storeId = await resolveActiveStoreId();
   const state = randomBytes(16).toString("hex");
 
   const response = NextResponse.redirect(buildMetaOAuthUrl(state));

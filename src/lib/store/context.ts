@@ -49,7 +49,6 @@ export type StoreResolutionDiagnostics = {
     | "cookie_live"
     | "cookie_simulation"
     | "cookie_demo"
-    | "active_installation"
     | "demo_fallback";
   embedded: Awaited<ReturnType<typeof readEmbeddedBootstrapDiagnostics>>;
   cookieValue: string | null;
@@ -111,17 +110,9 @@ export async function resolveActiveStoreId(): Promise<string> {
     }
   }
 
-  const active = await getActiveShopifyInstallation();
-  if (active) {
-    logStoreResolution({
-      chosenStoreId: active.store_id,
-      source: "active_installation",
-      embedded,
-      cookieValue: fromCookie ?? null,
-    });
-    return active.store_id;
-  }
-
+  // Deliberately no global "most recent installation" fallback here: selecting a
+  // real merchant store without a verified shop context would allow one tenant's
+  // request to resolve to another tenant's data. Unresolved context = demo only.
   logEmbeddedBootstrap("falling back to demo", embedded);
   logStoreResolution({
     chosenStoreId: DEMO_STORE_ID,

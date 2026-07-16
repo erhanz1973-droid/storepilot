@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { NextResponse } from "next/server";
+import { hasServiceSecret } from "@/lib/api/route-auth";
 import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 import { currentShopifyApiKeyPrefix } from "@/lib/shopify/token-diagnostics";
 
@@ -21,8 +22,12 @@ function readAppPathsManifest(): Record<string, string> | null {
   }
 }
 
-/** Temporary deploy verification — remove after confirming Railway routing. */
-export async function GET() {
+/** Deploy verification — requires a trusted service secret in all environments. */
+export async function GET(request: Request) {
+  if (!hasServiceSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const manifestPath = join(process.cwd(), ".next/server/app-paths-manifest.json");
   const manifest = readAppPathsManifest();
   const shopifyKeys = manifest

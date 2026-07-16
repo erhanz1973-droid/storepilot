@@ -753,13 +753,20 @@ async function checkGa4(storeId: string | null): Promise<SmokeCheckResult> {
   });
 }
 
+/** Shared secret so smoke checks can reach session-token-protected API routes. */
+function smokeAuthHeaders(): Record<string, string> {
+  const secret =
+    process.env.SMOKE_SECRET?.trim() || process.env.STOREPILOT_INTERNAL_SECRET?.trim();
+  return secret ? { Authorization: `Bearer ${secret}`, "x-smoke-secret": secret } : {};
+}
+
 async function httpGetJson(
   baseUrl: string,
   path: string,
 ): Promise<{ status: number; json: unknown; text: string }> {
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
     method: "GET",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...smokeAuthHeaders() },
     cache: "no-store",
   });
   const text = await response.text();
@@ -778,7 +785,7 @@ async function httpGetHtml(
 ): Promise<{ status: number; text: string }> {
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
     method: "GET",
-    headers: { Accept: "text/html" },
+    headers: { Accept: "text/html", ...smokeAuthHeaders() },
     cache: "no-store",
   });
   return { status: response.status, text: await response.text() };
