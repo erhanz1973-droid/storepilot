@@ -492,10 +492,11 @@ export async function markGa4InstallationSyncHealthy(
 export async function markGa4InstallationSyncError(
   installationId: string,
   message: string,
+  health: "error" | "degraded" = "error",
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
   const patch = {
-    connection_health: "error",
+    connection_health: health,
     error_message: message.slice(0, 500),
   };
   if (supabase) {
@@ -504,7 +505,7 @@ export async function markGa4InstallationSyncError(
   }
   for (const install of memoryInstalls.values()) {
     if (install.id === installationId) {
-      install.connection_health = "error";
+      install.connection_health = health;
       install.error_message = message.slice(0, 500);
     }
   }

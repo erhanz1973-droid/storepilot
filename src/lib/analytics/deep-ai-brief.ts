@@ -98,17 +98,9 @@ export function buildDeepAiExecutiveBrief(input: {
         : `${scanned} campaigns scanned. No material issues detected. No executive action required.`;
   }
 
-  const upgrade =
-    !input.isUnlimited && input.upgradePlanLabel
-      ? {
-          planLabel: input.upgradePlanLabel,
-          ctaLabel: `Upgrade to ${input.upgradePlanLabel}`,
-          footnote: `Unlock Deep AI reasoning for all ${scanned || ""} campaigns.`.replace(
-            /\s+/g,
-            " ",
-          ).trim(),
-        }
-      : null;
+  // The field remains in the model for future entitlement strategies.
+  // Version 1 is free and never emits a paid-plan call to action.
+  const upgrade: DeepAiExecutiveBrief["upgrade"] = null;
 
   return {
     mode: input.mode,

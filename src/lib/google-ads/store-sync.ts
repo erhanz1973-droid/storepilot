@@ -6,6 +6,10 @@ import {
 import { setGoogleSyncCache } from "@/lib/db/google-sync-cache";
 import { buildAdSpendSnapshot } from "@/lib/ads/spend";
 import {
+  classifyOAuthFailure,
+  formatClassifiedErrorMessage,
+} from "@/lib/integrations/oauth-failure";
+import {
   summarizeGoogleCampaigns,
   type GoogleCampaignSyncStats,
 } from "@/lib/google-ads/campaign-stats";
@@ -63,10 +67,14 @@ export async function syncGoogleAdsForStore(storeId: string): Promise<GoogleSync
         statsByInstallation.set(installation.id, stats);
         await updateGoogleAdsSyncResult(installation.id, stats);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Sync failed";
+        const failure = classifyOAuthFailure("google_ads", err);
+        const message = formatClassifiedErrorMessage(failure);
         const empty = summarizeGoogleCampaigns([]);
         statsByInstallation.set(installation.id, empty);
-        await updateGoogleAdsSyncResult(installation.id, empty, { error: message });
+        await updateGoogleAdsSyncResult(installation.id, empty, {
+          error: message,
+          connectionHealth: failure.health,
+        });
       }
     }),
   );

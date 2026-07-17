@@ -27,7 +27,9 @@ All must be true before tagging `v0.1.0-rc1`:
 ### App Store (Phase 9)
 - [ ] OAuth on production domain
 - [ ] `app/uninstalled` webhook
-- [ ] Privacy Policy + Terms URLs live
+- [x] Privacy Policy + Terms URLs live
+  - https://storepilot-production-d591.up.railway.app/privacy
+  - https://storepilot-production-d591.up.railway.app/terms
 - [ ] Support contact page/email
 - [ ] Responsive UI, no console errors on core flows
 - [ ] `npm run build` succeeds

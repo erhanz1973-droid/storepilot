@@ -1,5 +1,5 @@
 import { Ga4PropertySelector } from "@/components/Ga4PropertySelector";
-import Link from "next/link";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function Ga4PropertySelectPage({
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
             Missing OAuth session.{" "}
-            <Link href="/api/ga4/auth">Restart GA4 connection</Link>
+            <TopLevelOAuthLink href="/api/ga4/auth">Restart GA4 connection</TopLevelOAuthLink>
           </p>
         </div>
       </>

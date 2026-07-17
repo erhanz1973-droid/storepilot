@@ -366,7 +366,10 @@ export async function ensureGoogleAccessToken(
 export async function updateGoogleAdsSyncResult(
   installationId: string,
   stats: GoogleCampaignSyncStats,
-  options?: { error?: string },
+  options?: {
+    error?: string;
+    connectionHealth?: GoogleAdsInstallation["connection_health"];
+  },
 ): Promise<void> {
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
@@ -374,7 +377,7 @@ export async function updateGoogleAdsSyncResult(
   const patch = failed
     ? {
         sync_stats: stats,
-        connection_health: "degraded" as const,
+        connection_health: options?.connectionHealth ?? ("degraded" as const),
         error_message: options!.error!.trim(),
       }
     : {
@@ -436,4 +439,25 @@ export async function disconnectGoogleAdsInstallation(
 export async function hasActiveGoogleAdsInstallations(storeId: string): Promise<boolean> {
   const list = await listGoogleAdsInstallationsForStore(storeId);
   return list.length > 0;
+}
+
+/** Distinct store IDs with at least one active Google Ads installation (for cron). */
+export async function listStoresWithActiveGoogleAds(): Promise<{ storeId: string }[]> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data } = await supabase
+      .from("google_ads_installations")
+      .select("store_id")
+      .eq("status", "active");
+    const seen = new Set<string>();
+    for (const row of data ?? []) {
+      seen.add(row.store_id as string);
+    }
+    return [...seen].map((storeId) => ({ storeId }));
+  }
+  const seen = new Set<string>();
+  for (const row of memoryInstallations.values()) {
+    if (row.status === "active") seen.add(row.store_id);
+  }
+  return [...seen].map((storeId) => ({ storeId }));
 }

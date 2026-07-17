@@ -1,5 +1,6 @@
 import { MetaAccountSelector } from "@/components/MetaAccountSelector";
 import Link from "next/link";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 import { isMetaOAuthConfigured } from "@/lib/meta/oauth";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function MetaAccountSelectPage({
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
             Oturum bulunamadı.{" "}
-            <Link href="/api/meta/auth">Meta bağlantısını yeniden başlatın</Link> veya{" "}
+            <TopLevelOAuthLink href="/api/meta/auth">Meta bağlantısını yeniden başlatın</TopLevelOAuthLink> veya{" "}
             <Link href="/connections?tab=advertising">Connections</Link> sayfasına dönün.
           </p>
         </div>

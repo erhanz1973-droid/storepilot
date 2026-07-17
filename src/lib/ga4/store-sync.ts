@@ -9,6 +9,10 @@ import {
 } from "@/lib/db/ga4";
 import { getCachedShopifySnapshot } from "@/lib/db/shopify";
 import { fetchGa4Snapshot } from "@/lib/ga4/sync";
+import {
+  classifyOAuthFailure,
+  formatClassifiedErrorMessage,
+} from "@/lib/integrations/oauth-failure";
 import type { GA4Snapshot } from "@/lib/integrations/types";
 
 /** Re-sync when cache is older than this (default: 4 hours). */
@@ -54,9 +58,10 @@ export async function syncGa4ForStore(
 
     return { ga4Snapshot };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "GA4 sync failed";
-    await markGa4InstallationSyncError(install.id, message);
-    throw err;
+    const failure = classifyOAuthFailure("ga4", err);
+    const message = formatClassifiedErrorMessage(failure);
+    await markGa4InstallationSyncError(install.id, message, failure.health);
+    throw new Error(message);
   }
 }
 

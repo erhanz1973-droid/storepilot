@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ConnectorCapability } from "@/lib/connectors/capabilities";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 function ConnectButton({ connector }: { connector: ConnectorCapability }) {
   const href = connector.connectHref ?? "/connected-store";
@@ -7,9 +8,9 @@ function ConnectButton({ connector }: { connector: ConnectorCapability }) {
 
   if (isOAuthRoute) {
     return (
-      <a href={href} className="btn btn-primary btn-sm">
+      <TopLevelOAuthLink href={href} className="btn btn-primary btn-sm">
         Connect
-      </a>
+      </TopLevelOAuthLink>
     );
   }
 

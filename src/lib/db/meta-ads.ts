@@ -393,10 +393,16 @@ export async function disconnectMetaAdsInstallation(
 export async function updateMetaAdsSyncResult(
   installationId: string,
   stats: MetaCampaignSyncStats,
-  meta?: { error?: string },
+  meta?: {
+    error?: string;
+    connectionHealth?: MetaAdsInstallation["connection_health"];
+  },
 ): Promise<void> {
   const now = new Date().toISOString();
   const supabase = getSupabaseAdmin();
+  const health: MetaAdsInstallation["connection_health"] = meta?.error
+    ? (meta.connectionHealth ?? "error")
+    : "healthy";
 
   if (!supabase) {
     const row = memoryInstallations.get(installationId);
@@ -405,7 +411,7 @@ export async function updateMetaAdsSyncResult(
         ...row,
         last_sync_at: now,
         sync_stats: stats,
-        connection_health: meta?.error ? "error" : "healthy",
+        connection_health: health,
         error_message: meta?.error ?? null,
       });
     }
@@ -417,8 +423,74 @@ export async function updateMetaAdsSyncResult(
     .update({
       last_sync_at: now,
       sync_stats: stats,
-      connection_health: meta?.error ? "error" : "healthy",
+      connection_health: health,
       error_message: meta?.error ?? null,
+    } as Record<string, unknown>)
+    .eq("id", installationId);
+}
+
+/** Persist a rotated long-lived Meta access token after successful fb_exchange_token. */
+export async function rotateMetaAccessToken(
+  installationId: string,
+  accessToken: string,
+  tokenExpiresAt: string | null,
+): Promise<void> {
+  const encrypted = encryptMetaToken(accessToken);
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    const row = memoryInstallations.get(installationId);
+    if (row) {
+      memoryInstallations.set(installationId, {
+        ...row,
+        access_token_encrypted: encrypted,
+        token_expires_at: tokenExpiresAt,
+        connection_health: "healthy",
+        error_message: null,
+      });
+    }
+    return;
+  }
+
+  const { error } = await supabase
+    .from("meta_ads_installations")
+    .update({
+      access_token_encrypted: encrypted,
+      token_expires_at: tokenExpiresAt,
+      connection_health: "healthy",
+      error_message: null,
+    } as Record<string, unknown>)
+    .eq("id", installationId);
+
+  if (error) throw new Error(`Meta token rotation failed: ${error.message}`);
+}
+
+/** Mark installation as needing merchant reconnect (expired/revoked token). */
+export async function markMetaAdsReconnectRequired(
+  installationId: string,
+  errorMessage: string,
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    const row = memoryInstallations.get(installationId);
+    if (row) {
+      memoryInstallations.set(installationId, {
+        ...row,
+        connection_health: "error",
+        error_message: errorMessage,
+        status: "error",
+      });
+    }
+    return;
+  }
+
+  await supabase
+    .from("meta_ads_installations")
+    .update({
+      connection_health: "error",
+      error_message: errorMessage,
+      status: "error",
     } as Record<string, unknown>)
     .eq("id", installationId);
 }
@@ -426,4 +498,25 @@ export async function updateMetaAdsSyncResult(
 export async function hasActiveMetaAdsInstallations(storeId: string): Promise<boolean> {
   const installations = await listMetaAdsInstallationsForStore(storeId);
   return installations.length > 0;
+}
+
+/** Distinct store IDs with at least one active Meta Ads installation (for cron). */
+export async function listStoresWithActiveMetaAds(): Promise<{ storeId: string }[]> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data } = await supabase
+      .from("meta_ads_installations")
+      .select("store_id")
+      .eq("status", "active");
+    const seen = new Set<string>();
+    for (const row of data ?? []) {
+      seen.add(row.store_id as string);
+    }
+    return [...seen].map((storeId) => ({ storeId }));
+  }
+  const seen = new Set<string>();
+  for (const row of memoryInstallations.values()) {
+    if (row.status === "active") seen.add(row.store_id);
+  }
+  return [...seen].map((storeId) => ({ storeId }));
 }

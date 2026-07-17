@@ -6,6 +6,7 @@ import { validateMetricRegistry } from "@/lib/validation/metric-validation";
 import { METRIC_REGISTRY } from "@/lib/validation/metric-registry";
 import { validateProfitEngine, validateRoasEngine } from "@/lib/validation/performance";
 import { profitRollupsForOrders } from "@/lib/validation/fixtures/orders";
+import { validateAppStoreReadiness } from "@/lib/validation/app-store-readiness";
 
 describe("profit engine validation", () => {
   it("manual gross profit is revenue minus COGS", () => {
@@ -71,5 +72,18 @@ describe("attribution confidence validation", () => {
     const checks = validateAttributionConfidence();
     const failures = checks.filter((c) => c.status === "fail");
     expect(failures.map((f) => f.name)).toEqual([]);
+  });
+});
+
+describe("App Store commercial model validation", () => {
+  it("reports the Free Early Access billing status", () => {
+    const check = validateAppStoreReadiness().find(
+      (candidate) => candidate.id === "appstore-free-commercial-model",
+    );
+
+    expect(check?.status).toBe("pass");
+    expect(check?.name).toBe("Billing Status: FREE RELEASE");
+    expect(check?.actual).toBe("FREE RELEASE");
+    expect(check?.message).toBe("Free Early Access — no Billing API required");
   });
 });

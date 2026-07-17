@@ -4,9 +4,8 @@ import type { CampaignEntitlements, CampaignAccessStatus, StorePlanId } from "./
 import { FREE_DEEP_ANALYSIS_CAMPAIGNS, PLAN_LABELS, PLAN_LIMITS, getUpgradePlan } from "./plans";
 
 export function resolveStorePlan(): StorePlanId {
-  const fromEnv = process.env.STOREPILOT_PLAN?.toLowerCase();
-  if (fromEnv === "starter" || fromEnv === "pro") return "starter";
-  if (fromEnv === "free") return "free";
+  // Version 1 always resolves to Free Early Access. Legacy tiers remain available
+  // to the entitlement builders for future monetization work.
   return "free";
 }
 
@@ -68,15 +67,13 @@ export function isCampaignUnlocked(
 }
 
 export function buildScaleUpgradeMessage(entitlements: CampaignEntitlements): string {
-  if (entitlements.isUnlimited || entitlements.lockedCampaignCount === 0) {
-    return "";
-  }
-  return `We scanned all ${entitlements.scannedCampaignCount} campaigns. Deep AI analysis is currently available for ${entitlements.unlockedCampaignName || "one campaign"}. Upgrade to ${entitlements.upgradePlanLabel} to unlock detailed AI reasoning, simulations, and optimization packages for every campaign.`;
+  if (entitlements.isUnlimited || entitlements.lockedCampaignCount === 0) return "";
+  return "Full campaign analysis is included in StorePilot Version 1. Refresh entitlements to restore access.";
 }
 
 export function buildAnalysisScopeNotice(entitlements: CampaignEntitlements): string {
   if (entitlements.isUnlimited) return "";
-  return `We scanned all ${entitlements.scannedCampaignCount} campaigns and generated an account-wide health assessment. Deep AI analysis is currently available for ${entitlements.unlockedCampaignName || "one campaign"}. Upgrade to unlock detailed AI reasoning for every campaign.`;
+  return "Full campaign analysis is included in StorePilot Version 1. Refresh entitlements to restore access.";
 }
 
 export function buildLockedCampaignMessage(entitlements: CampaignEntitlements): {
@@ -86,8 +83,8 @@ export function buildLockedCampaignMessage(entitlements: CampaignEntitlements): 
   upgradeLabel: string;
 } {
   return {
-    headline: "Deep AI analysis available in Starter",
-    body: `Overview metrics are included for every campaign on ${entitlements.planLabel}. Upgrade to ${entitlements.upgradePlanLabel} to unlock:`,
+    headline: "Full analysis is included",
+    body: "StorePilot Version 1 includes these features for every campaign:",
     features: [
       "Root cause analysis",
       "Creative intelligence",
@@ -95,7 +92,7 @@ export function buildLockedCampaignMessage(entitlements: CampaignEntitlements): 
       "AI timelines & simulations",
       "Optimization packages",
     ],
-    upgradeLabel: `Unlock deep analysis in ${entitlements.upgradePlanLabel}`,
+    upgradeLabel: "Full access included",
   };
 }
 
@@ -169,7 +166,7 @@ export function applyAdvertisingPlanLimits(
       scale: buildScaleUpgradeMessage(entitlements),
       lockedRecommendationCount,
       additionalRecommendationsLabel: lockedRecommendationCount > 0
-        ? `${lockedRecommendationCount} additional deep optimization package${lockedRecommendationCount === 1 ? "" : "s"} available in ${entitlements.upgradePlanLabel}.`
+        ? `${lockedRecommendationCount} deep optimization package${lockedRecommendationCount === 1 ? "" : "s"} awaiting an entitlement refresh.`
         : undefined,
     },
   };

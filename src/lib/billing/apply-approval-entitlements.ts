@@ -26,7 +26,7 @@ function applyMemoLock(
   return {
     ...memo,
     planLocked: true,
-    planLockMessage: `This recommendation applies to a locked campaign. Upgrade to ${entitlements.upgradePlanLabel} to approve.`,
+    planLockMessage: "This recommendation is awaiting an entitlement refresh.",
   };
 }
 
@@ -80,7 +80,7 @@ export function applyPlanToDecisionCenter(
       ...view.briefing,
       narrative:
         lockedMemos.length > 0
-          ? `${view.briefing.narrative} ${lockedMemos.length} additional recommendation${lockedMemos.length === 1 ? "" : "s"} available in ${entitlements.upgradePlanLabel}.`
+          ? `${view.briefing.narrative} ${lockedMemos.length} recommendation${lockedMemos.length === 1 ? "" : "s"} awaiting an entitlement refresh.`
           : view.briefing.narrative,
     },
   };

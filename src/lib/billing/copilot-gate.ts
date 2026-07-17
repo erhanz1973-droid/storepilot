@@ -32,7 +32,7 @@ export function checkCopilotCampaignAccess(
     campaignName: match.campaign,
     upgradePlanLabel: entitlements.upgradePlanLabel,
     unlockedCampaignName: entitlements.unlockedCampaignName,
-    message: `Deep AI analysis for ${match.campaign} is available in ${entitlements.upgradePlanLabel}. Every campaign is scanned on Free — upgrade for root cause analysis, simulations, and optimization packages.`,
+    message: `Deep AI analysis for ${match.campaign} is included in StorePilot Version 1. Refresh entitlements to restore access.`,
   };
 }
 
@@ -46,12 +46,12 @@ export function buildCopilotPlanBlockedResponse(
     confidencePct: 90,
     recommendations: [],
     businessImpact: {
-      label: "Upgrade to unlock campaign analysis",
+      label: "Campaign analysis access",
       calculable: false,
-      reasonIfNot: `${gate.campaignName} requires ${gate.upgradePlanLabel}.`,
+      reasonIfNot: `${gate.campaignName} is awaiting an entitlement refresh.`,
     },
     relatedInsights: [],
     dataSourcesUsed: ["meta_ads", "google_ads"],
-    whyItHappened: `${gate.campaignName} is visible in your account scan. The Free plan includes deep AI for ${gate.unlockedCampaignName} only. Upgrade to ${gate.upgradePlanLabel} for deep analysis on every campaign.`,
+    whyItHappened: "Version 1 includes deep analysis for every campaign; this access state is stale.",
   };
 }

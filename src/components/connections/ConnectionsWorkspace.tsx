@@ -23,6 +23,7 @@ import type { ConnectionCategory } from "@/lib/connections/catalog";
 import { presentationShowsAsConnected } from "@/lib/connections/connection-state";
 import { runIntegrationSync, type SyncFeedback } from "@/lib/connections/sync-feedback";
 import { redirectTop } from "@/lib/shopify/embedded-navigation";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 const STATUS_DOT: Record<IntegrationConnectionStatus, string> = {
   connected: "var(--low)",
@@ -469,9 +470,13 @@ function IntegrationDetailPanel({
           </div>
         )}
         <div style={{ marginTop: 12 }}>
-          <a href="/api/meta/auth" className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+          <TopLevelOAuthLink
+            href="/api/meta/auth"
+            className="btn btn-ghost"
+            style={{ alignSelf: "flex-start" }}
+          >
             Farklı ad account seç
-          </a>
+          </TopLevelOAuthLink>
         </div>
         <MetaValidationPanel />
       </div>

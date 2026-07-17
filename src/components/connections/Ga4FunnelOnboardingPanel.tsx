@@ -1,5 +1,5 @@
 import type { Ga4FunnelOnboardingStep } from "@/lib/ga4/onboarding";
-import Link from "next/link";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 export function Ga4FunnelOnboardingPanel({
   steps,
@@ -23,9 +23,9 @@ export function Ga4FunnelOnboardingPanel({
           </p>
         </div>
         {!allComplete && (
-          <Link href="/api/ga4/auth" className="btn btn-secondary btn-sm">
+          <TopLevelOAuthLink href="/api/ga4/auth" className="btn btn-secondary btn-sm">
             Continue setup
-          </Link>
+          </TopLevelOAuthLink>
         )}
       </div>
       <div className="funnel-wizard-steps">

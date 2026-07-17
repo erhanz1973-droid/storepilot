@@ -9,7 +9,6 @@ import { SimilarDecisionsCard } from "@/components/approvals/SimilarDecisionsCar
 import { RecommendationCard } from "@/components/RecommendationCard";
 import { StoreStatusCard } from "@/components/store-status/StoreStatusCard";
 import type { DecisionCenterView } from "@/lib/approvals/decision-center-types";
-import Link from "next/link";
 
 type DecisionCenterViewWithPlan = DecisionCenterView & {
   planUsage?: import("@/lib/billing/types").CampaignEntitlements;
@@ -141,29 +140,6 @@ export function ApprovalDecisionCenter({ view }: { view: DecisionCenterViewWithP
           )}
         </section>
       ) : null}
-
-      {(view.lockedDecisionCount ?? 0) > 0 && view.lockedDecisions && view.planUsage && (
-        <section className="card plan-locked-decisions" style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>
-            Locked Recommendations ({view.lockedDecisionCount})
-          </h3>
-          <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.9rem" }}>
-            Visible but locked on Free — approval workflow available for{" "}
-            <strong>{view.planUsage.unlockedCampaignName}</strong> only.
-          </p>
-          <ul className="plan-locked-decision-list">
-            {view.lockedDecisions.map((d) => (
-              <li key={d!.card.key} className="plan-locked-decision-item">
-                <span className="adv-lock-label">🔒 {d!.title}</span>
-                <span className="muted">{d!.planLockMessage}</span>
-              </li>
-            ))}
-          </ul>
-          <Link href="/settings#plan" className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>
-            Upgrade to {view.planUsage.upgradePlanLabel}
-          </Link>
-        </section>
-      )}
 
       <LifecycleSection
         title={`Ready to Implement (${presentation.awaitingImplementation.length})`}

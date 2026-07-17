@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ConnectorCapability } from "@/lib/connectors/capabilities";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 type Props = {
   connector: ConnectorCapability;
@@ -10,9 +11,9 @@ export function ConnectConnectorCard({ connector }: Props) {
   const isOAuthRoute = href.startsWith("/api/");
 
   const connectButton = isOAuthRoute ? (
-    <a href={href} className="btn btn-primary" style={{ flexShrink: 0 }}>
+    <TopLevelOAuthLink href={href} className="btn btn-primary" style={{ flexShrink: 0 }}>
       Connect
-    </a>
+    </TopLevelOAuthLink>
   ) : (
     <Link href={href} className="btn btn-primary" style={{ flexShrink: 0 }}>
       Connect

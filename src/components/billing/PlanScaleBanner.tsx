@@ -1,7 +1,4 @@
 import type { CampaignEntitlements } from "@/lib/billing/types";
-import { STARTER_DEEP_FEATURES } from "@/lib/billing/types";
-import Link from "next/link";
-import { buildScaleUpgradeMessage } from "@/lib/billing/entitlements";
 import type { DeepAiExecutiveBrief } from "@/lib/analytics/deep-ai-brief";
 import type { DeepAiAlignedMode } from "@/lib/analytics/deep-ai-brief";
 
@@ -24,33 +21,11 @@ export function PlanScaleBanner({
     return null;
   }
 
-  const message = buildScaleUpgradeMessage(entitlements);
   const deepName = unlockedCampaignName ?? entitlements.unlockedCampaignName;
   const isExecutive = variant === "executive";
 
   if (!isExecutive) {
-    if (entitlements.isUnlimited) return null;
-    return (
-      <div className="card plan-scale-banner" role="status">
-        <div className="plan-scale-banner-body">
-          <p style={{ margin: 0, fontWeight: 600 }}>
-            Scanned all {entitlements.scannedCampaignCount} campaigns
-            {deepName ? (
-              <>
-                {" "}
-                — deep AI active for <span className="positive">{deepName}</span>
-              </>
-            ) : null}
-          </p>
-          <p className="muted" style={{ margin: "8px 0 0", fontSize: "0.9rem" }}>
-            {message}
-          </p>
-        </div>
-        <Link href="/settings#plan" className="btn btn-primary btn-sm plan-scale-cta">
-          Upgrade to {entitlements.upgradePlanLabel}
-        </Link>
-      </div>
-    );
+    return null;
   }
 
   const brief = mergeBrief(deepAiBrief, entitlements, deepName);
@@ -122,22 +97,6 @@ export function PlanScaleBanner({
         </div>
       ) : null}
 
-      {brief.upgrade && !entitlements.isUnlimited ? (
-        <div className="plan-scale-exec-upgrade">
-          <p className="muted plan-scale-exec-message">{brief.upgrade.footnote}</p>
-          <Link href="/settings#plan" className="btn btn-primary plan-scale-cta">
-            {brief.upgrade.ctaLabel}
-          </Link>
-          <div className="plan-scale-exec-features">
-            <span className="plan-scale-exec-features-label">Included on upgrade</span>
-            <ul>
-              {STARTER_DEEP_FEATURES.slice(0, 6).map((feature) => (
-                <li key={feature}>{feature}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -152,15 +111,7 @@ function mergeBrief(
       ...brief,
       campaignsScanned: Math.max(brief.campaignsScanned, entitlements.scannedCampaignCount),
       observingCampaignName: (brief.observingCampaignName ?? deepName) || null,
-      upgrade:
-        brief.upgrade ??
-        (!entitlements.isUnlimited
-          ? {
-              planLabel: entitlements.upgradePlanLabel,
-              ctaLabel: `Upgrade to ${entitlements.upgradePlanLabel}`,
-              footnote: `Unlock Deep AI reasoning for all ${entitlements.scannedCampaignCount} campaigns.`,
-            }
-          : null),
+      upgrade: null,
     };
   }
 
@@ -175,12 +126,6 @@ function mergeBrief(
     summary: `Scanned all ${entitlements.scannedCampaignCount} campaigns.`,
     whyNoAction: null,
     threshold: null,
-    upgrade: !entitlements.isUnlimited
-      ? {
-          planLabel: entitlements.upgradePlanLabel,
-          ctaLabel: `Upgrade to ${entitlements.upgradePlanLabel}`,
-          footnote: `Unlock Deep AI reasoning for all ${entitlements.scannedCampaignCount} campaigns.`,
-        }
-      : null,
+    upgrade: null,
   };
 }

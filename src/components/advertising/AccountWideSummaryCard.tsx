@@ -8,7 +8,7 @@ function fmt(n: number) {
 
 export function AccountWideSummaryCard({
   summary,
-  planUsage,
+  planUsage: _planUsage,
   scopeNotice,
 }: {
   summary: AccountWideSummary;
@@ -51,17 +51,6 @@ export function AccountWideSummaryCard({
           </p>
         )}
       </div>
-
-      {planUsage && !planUsage.isUnlimited && (
-        <p className="adv-deep-upgrade-note">
-          Deep AI analysis is available for{" "}
-          <strong>{planUsage.unlockedCampaignName}</strong>.
-          {" "}
-          <Link href="/settings#plan">Upgrade to {planUsage.upgradePlanLabel}</Link>
-          {" "}
-          for root cause analysis, simulations, and optimization packages on every campaign.
-        </p>
-      )}
     </div>
   );
 }

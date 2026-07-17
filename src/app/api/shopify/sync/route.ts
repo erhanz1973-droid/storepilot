@@ -4,6 +4,10 @@ import {
   logShopifyConnectionAudit,
 } from "@/lib/db/shopify-connection-audit";
 import { getInstallationByStoreId, updateShopifySyncResult } from "@/lib/db/shopify";
+import {
+  classifyOAuthFailure,
+  formatClassifiedErrorMessage,
+} from "@/lib/integrations/oauth-failure";
 import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { resolveActiveStoreId } from "@/lib/store/context";
@@ -53,9 +57,20 @@ export async function POST() {
       orders30d: result.snapshot.storeMetrics?.orders30d ?? 0,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sync failed";
+    const failure = classifyOAuthFailure("shopify", err);
+    const message = formatClassifiedErrorMessage(failure);
     console.error("[sync-trace] POST /api/shopify/sync FAILED", message);
-    const status = isShopifyReinstallRequiredError(err) ? 401 : 500;
-    return NextResponse.json({ error: message, reinstallRequired: status === 401 }, { status });
+    const reinstallRequired =
+      isShopifyReinstallRequiredError(err) || failure.requiresReauthorization;
+    const status = reinstallRequired ? 401 : 500;
+    return NextResponse.json(
+      {
+        error: message,
+        reinstallRequired,
+        failureKind: failure.kind,
+        action: failure.action,
+      },
+      { status },
+    );
   }
 }

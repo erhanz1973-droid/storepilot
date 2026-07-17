@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 type AdAccount = { id: string; name: string; accountStatus?: number };
 type Business = { id: string; name: string; adAccounts: AdAccount[] };
@@ -107,9 +108,13 @@ export function MetaAccountSelector({ sessionId }: { sessionId: string }) {
     return (
       <div className="stack">
         <p className="empty-state">{error}</p>
-        <Link href="/api/meta/auth" className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
+        <TopLevelOAuthLink
+          href="/api/meta/auth"
+          className="btn btn-secondary"
+          style={{ alignSelf: "flex-start" }}
+        >
           Tekrar bağlan
-        </Link>
+        </TopLevelOAuthLink>
       </div>
     );
   }

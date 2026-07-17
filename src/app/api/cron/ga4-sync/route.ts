@@ -12,7 +12,7 @@ function authorizeCron(request: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-/** Scheduled GA4 sync — call every 4 hours from Vercel Cron or external scheduler. */
+/** Scheduled GA4 sync — call every 4 hours from Railway Cron (see docs/RAILWAY_SCHEDULER.md). */
 export async function GET(request: Request) {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

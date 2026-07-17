@@ -1,6 +1,10 @@
 import type { Ga4Installation } from "@/lib/db/ga4";
 import type { GoogleAdsInstallation } from "@/lib/db/google-ads";
 import type { GA4Snapshot } from "@/lib/integrations/types";
+import {
+  classifyOAuthFailure,
+  parseStoredFailureCode,
+} from "@/lib/integrations/oauth-failure";
 import type { DataSourceStatus } from "@/lib/types";
 
 export type UnifiedConnectionState =
@@ -50,25 +54,29 @@ type InstallHealth = Pick<
 export function humanizeSyncError(raw: string | null | undefined, provider: string): string | null {
   if (!raw?.trim()) return null;
   const msg = raw.trim();
-  const lower = msg.toLowerCase();
 
-  if (lower.includes("no ga4 property")) {
-    return "Google Analytics is connected, but no GA4 property has been selected. Select a property to begin syncing analytics data.";
-  }
-  if (lower.includes("property not found") || lower.includes("property access")) {
-    return "StorePilot lost access to your selected GA4 property. Reconnect your account to resume synchronization.";
-  }
-  if (lower.includes("permission_denied") || lower.includes("permission denied")) {
-    return "Permission denied — the connected account no longer has access. Reconnect and grant the required permissions.";
-  }
-  if (lower.includes("quota") || lower.includes("rate limit")) {
-    return "API quota exceeded. Wait a few minutes and retry sync, or reconnect if the issue persists.";
-  }
-  if (lower.includes("invalid_grant") || lower.includes("token")) {
-    return `${provider} authentication expired. Reconnect your account to restore access.`;
+  // Prefer already-classified messages (CODE: text).
+  if (/^OAUTH_[A-Z_]+:/.test(msg)) {
+    return msg.replace(/^OAUTH_[A-Z_]+:\s*/, "");
   }
 
-  return msg;
+  const failure = classifyOAuthFailure(provider, msg);
+  return failure.message;
+}
+
+/** True when stored error means the merchant must reconnect (not just retry). */
+export function errorRequiresReconnect(errorMessage: string | null | undefined): boolean {
+  const code = parseStoredFailureCode(errorMessage);
+  if (
+    code === "OAUTH_EXPIRED_TOKEN" ||
+    code === "OAUTH_INVALID_CREDENTIALS" ||
+    code === "OAUTH_REVOKED_ACCESS" ||
+    code === "OAUTH_MISSING_PERMISSIONS"
+  ) {
+    return true;
+  }
+  if (!errorMessage) return false;
+  return classifyOAuthFailure("unknown", errorMessage).requiresReauthorization;
 }
 
 function healthRow(
@@ -259,16 +267,24 @@ export function resolveGa4ConnectionPresentation(input: {
   }
 
   if (errorReason) {
+    const rawError =
+      activeInstall?.error_message ??
+      (connectorSource?.status === "error" ? connectorSource.errorMessage : null);
+    const needsReconnect = errorRequiresReconnect(rawError);
     const health: ConnectionHealthBreakdown = {
-      authentication: healthRow("Authentication", "pass"),
-      permissions: healthRow("Permissions", "warn", "May need review"),
+      authentication: healthRow(
+        "Authentication",
+        needsReconnect ? "fail" : "pass",
+        needsReconnect ? errorReason : undefined,
+      ),
+      permissions: healthRow("Permissions", needsReconnect ? "fail" : "warn", "May need review"),
       accountOrProperty: healthRow("Property Selected", "pass", activeInstall?.property_name ?? activeInstall?.property_id),
       dataSync: healthRow("Data Sync", "fail", errorReason),
       lastSuccessfulSync: lastSync,
       overallHealth: "failed",
-      overallLabel: "Sync Failed",
+      overallLabel: needsReconnect ? "Authorization Required" : "Sync Failed",
     };
-    return buildPresentation("sync_failed", {
+    return buildPresentation(needsReconnect ? "authorization_required" : "sync_failed", {
       health,
       errorReason,
       guidanceMessage: errorReason,
@@ -278,7 +294,7 @@ export function resolveGa4ConnectionPresentation(input: {
           ? `Source: Last successful sync on ${new Date(lastSync).toLocaleDateString()}`
           : null,
       primaryAction: "reconnect",
-      canSync: true,
+      canSync: !needsReconnect,
     });
   }
 
@@ -371,21 +387,29 @@ export function resolveGoogleAdsConnectionPresentationV2(input: {
   const hasAccount = installations.some((i) => i.status === "active");
 
   if (errorReason) {
+    const rawError =
+      installError?.error_message ??
+      (connectorSource?.status === "error" ? connectorSource.errorMessage : null);
+    const needsReconnect = errorRequiresReconnect(rawError);
     const health: ConnectionHealthBreakdown = {
-      authentication: healthRow("Authentication", "pass"),
-      permissions: healthRow("Permissions", "warn"),
+      authentication: healthRow(
+        "Authentication",
+        needsReconnect ? "fail" : "pass",
+        needsReconnect ? errorReason : undefined,
+      ),
+      permissions: healthRow("Permissions", needsReconnect ? "fail" : "warn"),
       accountOrProperty: healthRow("Account Selected", hasAccount ? "pass" : "fail"),
       dataSync: healthRow("Data Sync", "fail", errorReason),
       lastSuccessfulSync: lastSync,
       overallHealth: "failed",
-      overallLabel: "Sync Failed",
+      overallLabel: needsReconnect ? "Authorization Required" : "Sync Failed",
     };
-    return buildPresentation("sync_failed", {
+    return buildPresentation(needsReconnect ? "authorization_required" : "sync_failed", {
       health,
       errorReason,
       guidanceMessage: errorReason,
       primaryAction: "reconnect",
-      canSync: true,
+      canSync: !needsReconnect,
     });
   }
 
@@ -581,21 +605,26 @@ export function resolveMetaConnectionPresentation(input: {
 
   if (syncFailed && errorMessage) {
     const reason = humanizeSyncError(errorMessage, "Meta Ads");
+    const needsReconnect = errorRequiresReconnect(errorMessage);
     const health: ConnectionHealthBreakdown = {
-      authentication: healthRow("Authentication", "pass"),
-      permissions: healthRow("Permissions", "warn"),
+      authentication: healthRow(
+        "Authentication",
+        needsReconnect ? "fail" : "pass",
+        needsReconnect ? reason ?? undefined : undefined,
+      ),
+      permissions: healthRow("Permissions", needsReconnect ? "fail" : "warn"),
       accountOrProperty: healthRow("Ad Account Selected", "pass"),
       dataSync: healthRow("Data Sync", "fail", reason ?? undefined),
       lastSuccessfulSync: lastSyncAt,
       overallHealth: "failed",
-      overallLabel: "Sync Failed",
+      overallLabel: needsReconnect ? "Authorization Required" : "Sync Failed",
     };
-    return buildPresentation("sync_failed", {
+    return buildPresentation(needsReconnect ? "authorization_required" : "sync_failed", {
       health,
       errorReason: reason,
       guidanceMessage: reason ?? undefined,
       primaryAction: "reconnect",
-      canSync: true,
+      canSync: !needsReconnect,
     });
   }
 

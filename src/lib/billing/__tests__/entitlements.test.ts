@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getPeakOutfittersSnapshot } from "@/lib/demo/peak-outfitters";
 import { computeProfitDashboard } from "@/lib/profit/engine";
 import { buildMarketingManagerView } from "@/lib/analytics/marketing-manager";
@@ -11,6 +11,7 @@ import {
   campaignAnalysisStatus,
   buildAnalysisScopeNotice,
   buildScaleUpgradeMessage,
+  resolveStorePlan,
 } from "@/lib/billing/entitlements";
 import { campaignMatchesName, selectDefaultUnlockedCampaign } from "@/lib/billing/campaign-selection";
 import { checkCopilotCampaignAccess } from "@/lib/billing/copilot-gate";
@@ -36,6 +37,12 @@ function buildFixtureWorkspace() {
 }
 
 describe("billing entitlements", () => {
+  it("always resolves production runtime access to Free Early Access", () => {
+    vi.stubEnv("STOREPILOT_PLAN", "pro");
+    expect(resolveStorePlan()).toBe("free");
+    vi.unstubAllEnvs();
+  });
+
   it("selects highest-opportunity campaign as default deep analysis target", () => {
     const ws = buildFixtureWorkspace();
     const selected = selectDefaultUnlockedCampaign(ws.campaigns);
@@ -43,7 +50,7 @@ describe("billing entitlements", () => {
     expect(ws.campaigns.some((c) => c.id === selected!.id)).toBe(true);
   });
 
-  it("free plan scans all campaigns but limits deep analysis to one", () => {
+  it("free plan enables deep analysis for every campaign", () => {
     const ws = buildFixtureWorkspace();
     if (ws.campaigns.length < 2) return;
 
@@ -51,15 +58,12 @@ describe("billing entitlements", () => {
     const entitlements = buildCampaignEntitlements(ws.campaigns, deepId, "free");
     const limited = applyAdvertisingPlanLimits(ws, entitlements);
 
-    const deep = limited.campaigns.filter((c) => c.analysisStatus === "deep");
-    const overview = limited.campaigns.filter((c) => c.analysisStatus === "overview");
-
-    expect(deep).toHaveLength(1);
-    expect(overview.length).toBe(ws.campaigns.length - 1);
+    expect(limited.campaigns.every((c) => c.analysisStatus === "deep")).toBe(true);
+    expect(entitlements.isUnlimited).toBe(true);
+    expect(entitlements.lockedCampaignCount).toBe(0);
     expect(limited.campaigns.every((c) => c.spend > 0 || c.spend === 0)).toBe(true);
-    expect(limited.overview.analysisScopeNotice).toMatch(/scanned all/i);
+    expect(limited.overview.analysisScopeNotice).toBeUndefined();
     expect(limited.accountSummary.totalCampaigns).toBe(ws.campaigns.length);
-    expect(limited.overview.spend30d).toBeGreaterThan(deep[0]!.spend);
   });
 
   it("starter plan enables deep analysis for all campaigns", () => {
@@ -71,16 +75,15 @@ describe("billing entitlements", () => {
     expect(limited.overview.analysisScopeNotice).toBeUndefined();
   });
 
-  it("builds coverage-first upgrade message", () => {
+  it("does not emit paid-plan messaging for free access", () => {
     const ws = buildFixtureWorkspace();
     const entitlements = buildCampaignEntitlements(ws.campaigns, ws.campaigns[0]?.id ?? null, "free");
     const msg = buildScaleUpgradeMessage(entitlements);
-    expect(msg).toContain("scanned all");
-    expect(msg).toContain("Deep AI");
-    expect(buildAnalysisScopeNotice(entitlements)).toMatch(/account-wide health assessment/i);
+    expect(msg).toBe("");
+    expect(buildAnalysisScopeNotice(entitlements)).toBe("");
   });
 
-  it("blocks copilot deep analysis for overview-only campaigns", () => {
+  it("allows copilot deep analysis for every campaign on free", () => {
     const ws = buildFixtureWorkspace();
     const deep = ws.campaigns[0]!;
     const overview = ws.campaigns.find((c) => c.id !== deep.id);
@@ -92,10 +95,7 @@ describe("billing entitlements", () => {
       ws.campaigns.map((c) => ({ id: c.id, campaign: c.campaign })),
       entitlements,
     );
-    expect(gate.blocked).toBe(true);
-    if (gate.blocked) {
-      expect(gate.message).toContain("Deep AI");
-    }
+    expect(gate.blocked).toBe(false);
   });
 
   it("matches campaign names in copilot queries", () => {
@@ -115,6 +115,6 @@ describe("billing entitlements", () => {
       "free",
     );
     expect(campaignAnalysisStatus("a", entitlements)).toBe("deep");
-    expect(campaignAnalysisStatus("b", entitlements)).toBe("overview");
+    expect(campaignAnalysisStatus("b", entitlements)).toBe("deep");
   });
 });

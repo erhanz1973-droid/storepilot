@@ -1,11 +1,17 @@
 "use client";
 
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
+
 export function ConnectMetaAdsButton({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
-      <a href="/api/meta/auth" className="btn btn-ghost" style={{ alignSelf: "flex-start" }}>
+      <TopLevelOAuthLink
+        href="/api/meta/auth"
+        className="btn btn-ghost"
+        style={{ alignSelf: "flex-start" }}
+      >
         Connect Meta Ads
-      </a>
+      </TopLevelOAuthLink>
     );
   }
 
@@ -16,9 +22,13 @@ export function ConnectMetaAdsButton({ compact = false }: { compact?: boolean })
         frequency from the Marketing API. You will authorize with Facebook, then choose your
         Business Manager and ad account(s).
       </p>
-      <a href="/api/meta/auth" className="btn btn-primary" style={{ alignSelf: "flex-start" }}>
+      <TopLevelOAuthLink
+        href="/api/meta/auth"
+        className="btn btn-primary"
+        style={{ alignSelf: "flex-start" }}
+      >
         Connect Meta Ads
-      </a>
+      </TopLevelOAuthLink>
     </div>
   );
 }

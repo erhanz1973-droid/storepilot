@@ -1,9 +1,12 @@
-import Link from "next/link";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 export function ConnectGoogleAdsButton({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/api/google/auth" className={`btn ${compact ? "btn-secondary" : "btn-primary"}`}>
+    <TopLevelOAuthLink
+      href="/api/google/auth"
+      className={`btn ${compact ? "btn-secondary" : "btn-primary"}`}
+    >
       Connect Google Ads
-    </Link>
+    </TopLevelOAuthLink>
   );
 }

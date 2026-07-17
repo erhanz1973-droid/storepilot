@@ -1,7 +1,7 @@
 import type { IntegrationHealthCard } from "@/lib/integrations/health";
 import type { SyncMonitoringRow } from "./types";
 
-const CRON_GA4_INTERVAL = "Every 4 hours";
+const CRON_ADS_INTERVAL = "Every 4 hours (Railway Cron)";
 
 export function buildSyncMonitoring(cards: IntegrationHealthCard[]): SyncMonitoringRow[] {
   return cards
@@ -10,7 +10,12 @@ export function buildSyncMonitoring(cards: IntegrationHealthCard[]): SyncMonitor
       provider: card.label,
       lastSync: card.lastSyncAt,
       nextScheduledSync:
-        card.id === "ga4" && card.status === "connected" ? CRON_GA4_INTERVAL : card.syncEndpoint ? "Manual / on connect" : null,
+        card.status === "connected" &&
+        (card.id === "ga4" || card.id === "meta_ads" || card.id === "google_ads")
+          ? CRON_ADS_INTERVAL
+          : card.syncEndpoint
+            ? "Manual / on connect"
+            : null,
       avgDurationMs: null,
       failedSyncCount: card.syncFailed ? 1 : 0,
       queueStatus: card.syncFailed ? "Attention" : card.status === "connected" ? "Idle" : "—",

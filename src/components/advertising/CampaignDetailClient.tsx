@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { CampaignDetailPageData } from "@/lib/advertising/types";
 import { HEALTH_TIER_LABELS } from "@/lib/advertising/types";
 import { formatRoas } from "@/lib/attribution/format-roas";
@@ -11,7 +10,6 @@ import { AdSetAnalysisTable } from "./AdSetAnalysisTable";
 import { IndividualAdsTable } from "./IndividualAdsTable";
 import { CreativeIntelligenceSection } from "./CreativeIntelligenceSection";
 import { AudienceAnalysisSection } from "./AudienceAnalysisSection";
-import { CampaignUpgradeModal } from "@/components/billing/CampaignUpgradeModal";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -37,34 +35,13 @@ const SECTIONS = [
 type Props = CampaignDetailPageData;
 
 export function CampaignDetailClient(data: Props) {
-  const router = useRouter();
   const { setCampaignName } = useAdvertisingCopilotCampaign();
-  const { campaign, locked, planUsage } = data;
+  const { campaign } = data;
 
   useEffect(() => {
     setCampaignName(campaign.campaign);
     return () => setCampaignName(undefined);
   }, [campaign.campaign, setCampaignName]);
-
-  if (locked && planUsage) {
-    return (
-      <>
-        <div className="card adv-detail-locked">
-          <Link href="/advertising" className="muted adv-back-link">← Back to Advertising</Link>
-          <h2 style={{ marginTop: 12 }}>{campaign.campaign}</h2>
-          <p className="muted">
-            Overview metrics are available for every campaign on {planUsage.planLabel}.
-            Deep AI workspace (creatives, timeline, simulations) requires {planUsage.upgradePlanLabel} for this campaign.
-          </p>
-        </div>
-        <CampaignUpgradeModal
-          entitlements={planUsage}
-          campaignName={campaign.campaign}
-          onClose={() => { router.push("/advertising"); }}
-        />
-      </>
-    );
-  }
 
   return (
     <div className="adv-campaign-detail">

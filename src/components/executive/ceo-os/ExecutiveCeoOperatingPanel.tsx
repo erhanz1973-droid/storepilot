@@ -53,9 +53,9 @@ export function ExecutiveCeoOperatingPanel({ view, onShowFull, planUsage }: Prop
           <PlanScaleBanner
             entitlements={
               planUsage ?? {
-                planId: "starter",
-                planLabel: "Starter",
-                upgradePlanLabel: "Starter",
+                planId: "free",
+                planLabel: "Free",
+                upgradePlanLabel: "Free",
                 maxAnalyzedCampaigns: 999,
                 maxDeepAnalysisCampaigns: 999,
                 totalCampaigns: ceo.deepAiBrief.campaignsScanned,

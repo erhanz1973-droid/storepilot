@@ -124,6 +124,14 @@ export async function exchangeCodeForToken(
   return response.json() as Promise<{ access_token: string; scope: string }>;
 }
 
+/**
+ * Registers operational webhooks (app/uninstalled) via Admin API after install.
+ *
+ * Mandatory GDPR compliance webhooks (customers/data_request, customers/redact,
+ * shop/redact) cannot be created through the Admin API — they are subscribed in
+ * `shopify.app.toml` under `compliance_topics` and deployed with Shopify CLI.
+ * Both paths deliver to `${appUrl}/api/shopify/webhooks`.
+ */
 export async function registerAppWebhooks(shop: string, accessToken: string): Promise<void> {
   const config = getShopifyConfig();
   if (!config) return;
@@ -131,16 +139,45 @@ export async function registerAppWebhooks(shop: string, accessToken: string): Pr
   const address = `${config.appUrl}/api/shopify/webhooks`;
   const topics = ["app/uninstalled"];
 
+  console.log(
+    "[shopify-webhook]",
+    JSON.stringify({
+      event: "register_operational_webhooks",
+      shop,
+      address,
+      topics,
+      complianceTopicsNote:
+        "GDPR compliance topics are registered via shopify.app.toml compliance_topics",
+    }),
+  );
+
   for (const topic of topics) {
-    await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": accessToken,
+    const response = await fetch(
+      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        },
+        body: JSON.stringify({
+          webhook: { topic, address, format: "json" },
+        }),
       },
-      body: JSON.stringify({
-        webhook: { topic, address, format: "json" },
-      }),
-    });
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn(
+        "[shopify-webhook]",
+        JSON.stringify({
+          event: "register_webhook_failed",
+          shop,
+          topic,
+          status: response.status,
+          body: text.slice(0, 500),
+        }),
+      );
+    }
   }
 }

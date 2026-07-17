@@ -5,6 +5,10 @@
       "schedule": "0 */4 * * *"
     },
     {
+      "path": "/api/cron/connectors-sync",
+      "schedule": "0 */4 * * *"
+    },
+    {
       "path": "/api/cron/learning-measure",
       "schedule": "0 6 * * *"
     }

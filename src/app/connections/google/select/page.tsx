@@ -1,5 +1,5 @@
 import { GoogleAccountSelector } from "@/components/GoogleAccountSelector";
-import Link from "next/link";
+import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function GoogleAccountSelectPage({
         <div className="card">
           <p className="muted" style={{ margin: 0 }}>
             Missing OAuth session.{" "}
-            <Link href="/api/google/auth">Restart Google Ads connection</Link>
+            <TopLevelOAuthLink href="/api/google/auth">Restart Google Ads connection</TopLevelOAuthLink>
           </p>
         </div>
       </>

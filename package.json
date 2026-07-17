@@ -21,7 +21,8 @@
     "shopify:purge": "node scripts/purge-shopify-installation.mjs",
     "shopify:verify": "node scripts/verify-shopify-connection.mjs",
     "smoke": "node scripts/smoke/run.mjs",
-    "smoke:production": "SMOKE_MODE=production node scripts/smoke/run.mjs"
+    "smoke:production": "SMOKE_MODE=production node scripts/smoke/run.mjs",
+    "cron:railway": "node scripts/railway-cron.mjs"
   },
   "dependencies": {
     "@shopify/app-bridge-react": "^4.2.11",

@@ -11,7 +11,6 @@ import type { CampaignEntitlements } from "@/lib/billing/types";
 import { HEALTH_TIER_LABELS } from "@/lib/advertising/types";
 import { filterCampaigns, sortCampaigns } from "@/lib/advertising/build-workspace";
 import { formatRoas } from "@/lib/attribution/format-roas";
-import { CampaignUpgradeModal } from "@/components/billing/CampaignUpgradeModal";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -35,14 +34,13 @@ type Props = {
   planUsage?: CampaignEntitlements;
 };
 
-export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planUsage }: Props) {
+export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planUsage: _planUsage }: Props) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<AdvertisingSortKey>("profit");
   const [search, setSearch] = useState("");
   const [platform, setPlatform] = useState("all");
   const [healthTier, setHealthTier] = useState("all");
   const [profitability, setProfitability] = useState("all");
-  const [upgradeCampaign, setUpgradeCampaign] = useState<AdvertisingCampaignRow | null>(null);
 
   const filtered = useMemo(() => {
     const f = filterCampaigns(campaigns, { platform, healthTier, profitability, search });
@@ -50,10 +48,6 @@ export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planU
   }, [campaigns, sortKey, platform, healthTier, profitability, search]);
 
   function handleRowClick(c: AdvertisingCampaignRow) {
-    if (c.analysisStatus === "overview" && planUsage && !planUsage.isUnlimited) {
-      setUpgradeCampaign(c);
-      return;
-    }
     router.push(`/advertising/campaigns/${c.id}`);
   }
 
@@ -61,7 +55,7 @@ export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planU
     <div className="card">
       <h2 style={{ marginTop: 0 }}>All campaigns — account scan</h2>
       <p className="muted" style={{ marginTop: 0, fontSize: "0.875rem" }}>
-        Every campaign includes health, profitability, and a recommended action. Deep workspace (creatives, timelines, simulations) requires Starter.
+        Every campaign includes health, profitability, recommendations, creatives, timelines, and simulations.
       </p>
 
       <div className="adv-filters">
@@ -131,7 +125,7 @@ export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planU
                     {c.platformLabel}
                   </span>
                   {overviewOnly ? (
-                    <span className="adv-overview-label">Overview · upgrade for deep analysis</span>
+                    <span className="adv-overview-label">Overview · open workspace →</span>
                   ) : (
                     <span className="adv-unlock-label">Deep analysis · open workspace →</span>
                   )}
@@ -151,9 +145,6 @@ export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planU
                 <td><span className={`adv-trend adv-trend-${c.trend}`}>{TREND_ICON[c.trend]}</span></td>
                 <td>
                   <span className="adv-brief-rec">{c.briefRecommendation}</span>
-                  {overviewOnly && (
-                    <span className="adv-see-why muted">To see why, upgrade.</span>
-                  )}
                 </td>
               </tr>
             );
@@ -164,14 +155,6 @@ export function CampaignWorkspaceTable({ campaigns, timelines: _timelines, planU
           <p className="muted" style={{ padding: "16px", margin: 0 }}>No campaigns match your filters.</p>
         )}
       </div>
-
-      {upgradeCampaign && planUsage && (
-        <CampaignUpgradeModal
-          entitlements={planUsage}
-          campaignName={upgradeCampaign.campaign}
-          onClose={() => setUpgradeCampaign(null)}
-        />
-      )}
     </div>
   );
 }

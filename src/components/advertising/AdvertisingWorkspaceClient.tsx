@@ -25,7 +25,6 @@ import { AudienceAnalysisSection } from "./AudienceAnalysisSection";
 import { BudgetAllocationPanel } from "./BudgetAllocationPanel";
 import { AIOptimizationCenter } from "./AIOptimizationCenter";
 import { AdvertisingSectionNav } from "./AdvertisingSectionNav";
-import { PlanScaleHint } from "./PlanScaleHint";
 
 type Props = AdvertisingWorkspaceView;
 
@@ -137,8 +136,6 @@ export function AdvertisingWorkspaceClient(props: Props) {
       <section id="budget" className="adv-section">
         <BudgetAllocationPanel allocation={props.budgetAllocation} />
       </section>
-
-      {props.planUsage && <PlanScaleHint entitlements={props.planUsage} />}
     </div>
   );
 }

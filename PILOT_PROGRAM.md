@@ -21,7 +21,7 @@ Target **5–10 merchants** across industries:
 | Home goods | Furniture / decor |
 | Jewelry | Fine / fashion jewelry |
 
-**Offer:** Free or heavily discounted access for 8–12 weeks.
+**Offer:** Free Early Access to every StorePilot feature.
 
 **Requirements:**
 
@@ -41,7 +41,7 @@ Target **5–10 merchants** across industries:
 2. What decision did you make (or consider)?
 3. Which feature was most useful? (Profit / ROAS / Products / Attribution / Autopilot / Ask AI)
 4. What was confusing or missing?
-5. Would you pay for this after the pilot? (yes / maybe / no)
+5. Would you continue using StorePilot after the pilot? (yes / maybe / no)
 6. Industry category
 
 ---
@@ -105,12 +105,12 @@ Proceed to public launch only when:
 ## Contact template
 
 ```
-Subject: StorePilot AI — free pilot for [Store Name]
+Subject: StorePilot AI — merchant pilot for [Store Name]
 
 We're inviting a small group of Shopify merchants to validate StorePilot AI —
 profit intelligence + AI recommendations (no automatic store changes).
 
-You'd get free access for 8 weeks in exchange for 15 min/week feedback.
+Every feature is free. Pilot participants provide 15 min/week of feedback.
 
 Interested? Reply with your Shopify domain and primary ad channel.
 ```

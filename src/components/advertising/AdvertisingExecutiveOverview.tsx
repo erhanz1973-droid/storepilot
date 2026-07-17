@@ -10,7 +10,7 @@ function fmt(n: number) {
 
 export function AdvertisingExecutiveOverview({
   overview,
-  planUsage,
+  planUsage: _planUsage,
 }: {
   overview: OverviewType;
   planUsage?: CampaignEntitlements;
@@ -21,11 +21,6 @@ export function AdvertisingExecutiveOverview({
         <div className="card adv-scope-notice">
           <span className="muted adv-hero-label">Analysis Scope</span>
           <strong>{overview.analysisScopeNotice}</strong>
-          {planUsage && !planUsage.isUnlimited && (
-            <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.85rem" }}>
-              Upgrade to {planUsage.upgradePlanLabel} for complete advertising intelligence.
-            </p>
-          )}
         </div>
       )}
       <div className="card adv-health-hero">

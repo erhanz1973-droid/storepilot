@@ -1,14 +1,14 @@
 import type { PlanLimits, StorePlanId } from "./types";
 
 export const PLAN_LABELS: Record<StorePlanId, string> = {
-  free: "Free",
-  starter: "Starter",
+  free: "Free Early Access",
+  starter: "Free (legacy internal tier)",
 };
 
 export const PLAN_LIMITS: Record<StorePlanId, PlanLimits> = {
   free: {
-    maxAnalyzedCampaigns: 1,
-    unlimitedCampaigns: false,
+    maxAnalyzedCampaigns: Number.POSITIVE_INFINITY,
+    unlimitedCampaigns: true,
   },
   starter: {
     maxAnalyzedCampaigns: Number.POSITIVE_INFINITY,
@@ -16,10 +16,11 @@ export const PLAN_LIMITS: Record<StorePlanId, PlanLimits> = {
   },
 };
 
-/** Free scans every campaign; Starter unlocks deep analysis for all. */
-export const FREE_DEEP_ANALYSIS_CAMPAIGNS = 1;
+/** Version 1 is completely free: every campaign receives deep analysis. */
+export const FREE_DEEP_ANALYSIS_CAMPAIGNS = Number.POSITIVE_INFINITY;
 
 export function getUpgradePlan(current: StorePlanId): StorePlanId | null {
-  if (current === "free") return "starter";
+  // Retained for future entitlement architecture; Version 1 has no paid upgrade.
+  if (current === "free") return null;
   return null;
 }

@@ -44,6 +44,11 @@ api_version = "2026-10"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
+  # Mandatory App Store compliance webhooks (GDPR). Delivered to the Next.js handler.
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/api/shopify/webhooks"
+
 [auth]
 redirect_urls = [
   "https://storepilot-production-d591.up.railway.app/auth/callback",

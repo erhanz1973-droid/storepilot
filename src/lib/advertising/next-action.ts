@@ -13,7 +13,7 @@ export function deriveBriefRecommendation(
       return "Continue running.";
     case "scale":
     case "increase_budget":
-      return "Scale cautiously — detailed optimization in Starter.";
+      return "Scale cautiously using the detailed optimization workspace.";
     case "improve_creative":
       return "Refresh creatives.";
     case "review_audience":

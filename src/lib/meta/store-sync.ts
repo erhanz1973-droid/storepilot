@@ -1,11 +1,21 @@
 import { buildAdSpendSnapshot, emptyAdSpendRollups } from "@/lib/ads/spend";
 import {
   getSelectedMetaAdsInstallationWithToken,
+  markMetaAdsReconnectRequired,
+  rotateMetaAccessToken,
   updateMetaAdsSyncResult,
 } from "@/lib/db/meta-ads";
 import { setMetaSyncCache } from "@/lib/db/meta-sync-cache";
+import {
+  classifyOAuthFailure,
+  formatClassifiedErrorMessage,
+} from "@/lib/integrations/oauth-failure";
 import { summarizeCampaigns } from "@/lib/meta/campaign-stats";
 import type { MetaCampaignSyncStats } from "@/lib/meta/campaign-stats";
+import {
+  ensureMetaAccessToken,
+  metaReconnectErrorMessage,
+} from "@/lib/meta/token-lifecycle";
 import {
   fetchMetaAdSnapshot,
   mergeMetaAccountRollups,
@@ -67,19 +77,52 @@ export async function syncMetaAdsForStore(
   }
 
   try {
-    const snapshot = await fetchMetaAdSnapshot(
-      installation.accessToken,
-      installation.ad_account_id,
-      { adAccountName: installation.ad_account_name ?? undefined },
-    );
-    const stats = summarizeCampaigns(snapshot.campaigns);
-    campaigns.push(...snapshot.campaigns);
-    accountRollupsList.push(snapshot.accountRollups);
-    dailySpendSeries.push(snapshot.dailySpend);
-    statsByInstallation.set(installation.id, stats);
-    await updateMetaAdsSyncResult(installation.id, stats);
+    const lifecycle = await ensureMetaAccessToken({
+      accessToken: installation.accessToken,
+      tokenExpiresAt: installation.token_expires_at,
+    });
+
+    if (lifecycle.status === "reconnect_required") {
+      const message = metaReconnectErrorMessage(lifecycle.failure);
+      const empty = summarizeCampaigns([]);
+      statsByInstallation.set(installation.id, empty);
+      errors.push({
+        installationId: installation.id,
+        adAccountId: installation.ad_account_id,
+        adAccountName: installation.ad_account_name,
+        message,
+      });
+      await markMetaAdsReconnectRequired(installation.id, message);
+      await updateMetaAdsSyncResult(installation.id, empty, {
+        error: message,
+        connectionHealth: "error",
+      });
+    } else {
+      let accessToken = lifecycle.accessToken;
+      if (lifecycle.status === "refreshed") {
+        await rotateMetaAccessToken(
+          installation.id,
+          lifecycle.accessToken,
+          lifecycle.tokenExpiresAt,
+        );
+        accessToken = lifecycle.accessToken;
+      }
+
+      const snapshot = await fetchMetaAdSnapshot(
+        accessToken,
+        installation.ad_account_id,
+        { adAccountName: installation.ad_account_name ?? undefined },
+      );
+      const stats = summarizeCampaigns(snapshot.campaigns);
+      campaigns.push(...snapshot.campaigns);
+      accountRollupsList.push(snapshot.accountRollups);
+      dailySpendSeries.push(snapshot.dailySpend);
+      statsByInstallation.set(installation.id, stats);
+      await updateMetaAdsSyncResult(installation.id, stats);
+    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sync failed";
+    const failure = classifyOAuthFailure("meta", err);
+    const message = formatClassifiedErrorMessage(failure);
     const empty = summarizeCampaigns([]);
     statsByInstallation.set(installation.id, empty);
     errors.push({
@@ -88,7 +131,13 @@ export async function syncMetaAdsForStore(
       adAccountName: installation.ad_account_name,
       message,
     });
-    await updateMetaAdsSyncResult(installation.id, empty, { error: message });
+    if (failure.requiresReauthorization) {
+      await markMetaAdsReconnectRequired(installation.id, message);
+    }
+    await updateMetaAdsSyncResult(installation.id, empty, {
+      error: message,
+      connectionHealth: failure.health,
+    });
   }
 
   const accountRollups = mergeMetaAccountRollups(accountRollupsList);
