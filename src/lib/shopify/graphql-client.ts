@@ -44,6 +44,18 @@ export type ShopifyGraphQLResult<T> = {
 };
 
 /**
+ * Shopify rejects expired expiring-offline access tokens with HTTP 403 and a
+ * body like "[API] Non-expiring access tokens are no longer accepted…" (plain
+ * invalid tokens get 401). Genuine authorization failures (e.g. protected
+ * customer data: "not approved to access…") must NOT trigger a token refresh,
+ * so 403 only counts as a token rejection when the body mentions access tokens.
+ */
+export function isTokenRejectionStatus(status: number, body: string): boolean {
+  if (status === 401) return true;
+  return status === 403 && /access token/i.test(body);
+}
+
+/**
  * attempt=1: initial request (refresh allowed on 401)
  * attempt=2: single retry after successful refresh (refresh NEVER attempted again)
  */
@@ -115,8 +127,10 @@ async function postShopifyGraphQL<T>(
       reason: `Shopify GraphQL HTTP ${response.status}`,
     });
 
+    const tokenRejected = isTokenRejectionStatus(response.status, body);
+
     // Attempt 2 = already retried once after successful refresh — never refresh again.
-    if (response.status === 401 && attempt === 2) {
+    if (tokenRejected && attempt === 2) {
       metrics.retryFailed = true;
       metrics.retrySucceeded = false;
       logShopifyRefreshMetrics(shop, metrics, {
@@ -125,14 +139,14 @@ async function postShopifyGraphQL<T>(
       });
       throw markAccessTokenInvalidFromHttp(
         shop,
-        401,
+        response.status,
         body.trim()
-          ? `Shopify rejected the access token on retry (HTTP 401): ${body.slice(0, 200)}`
-          : "Shopify rejected the access token on retry (HTTP 401)",
+          ? `Shopify rejected the access token on retry (HTTP ${response.status}): ${body.slice(0, 200)}`
+          : `Shopify rejected the access token on retry (HTTP ${response.status})`,
       );
     }
 
-    if (response.status === 401 && attempt === 1) {
+    if (tokenRejected && attempt === 1) {
       const recovery = await refreshOfflineAccessTokenAfter401({
         shopDomain: shop,
         installationId: context?.installationId,
@@ -191,7 +205,11 @@ async function postShopifyGraphQL<T>(
       }
     }
 
-    throw new Error(`Shopify GraphQL HTTP ${response.status}`);
+    throw new Error(
+      body.trim()
+        ? `Shopify GraphQL HTTP ${response.status}: ${body.slice(0, 200)}`
+        : `Shopify GraphQL HTTP ${response.status}`,
+    );
   }
 
   if (attempt === 2) {
