@@ -58,6 +58,17 @@ export async function syncGa4ForStore(
 
     return { ga4Snapshot };
   } catch (err) {
+    // TEMPORARY DIAGNOSTICS: capture the raw provider error before it is
+    // classified (the classified message discards the Google response body).
+    console.error("[GA4 SYNC RAW ERROR]", err);
+    if (err && typeof err === "object") {
+      const maybe = err as { response?: { status?: unknown; data?: unknown; body?: unknown } };
+      if (maybe.response) {
+        console.error("[GA4 SYNC RAW ERROR] response.status:", maybe.response.status);
+        console.error("[GA4 SYNC RAW ERROR] response.data:", maybe.response.data);
+        console.error("[GA4 SYNC RAW ERROR] response.body:", maybe.response.body);
+      }
+    }
     const failure = classifyOAuthFailure("ga4", err);
     const message = formatClassifiedErrorMessage(failure);
     await markGa4InstallationSyncError(install.id, message, failure.health);
