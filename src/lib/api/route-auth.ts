@@ -35,6 +35,17 @@ const PUBLIC_API_PREFIXES: readonly string[] = [
   "/api/dev",
   "/api/demo",
   "/api/debug",
+  // Post-OAuth account/property selection runs top-level (outside the Shopify
+  // Admin iframe), so no embedded session token exists. These routes
+  // self-authenticate with the short-lived random pending-OAuth session UUID.
+  // Only options/connect are public — the parent /api/*/accounts prefixes
+  // (e.g. DELETE disconnect) stay session-token protected.
+  "/api/meta/accounts/options",
+  "/api/meta/accounts/connect",
+  "/api/google/accounts/options",
+  "/api/google/accounts/connect",
+  "/api/ga4/accounts/options",
+  "/api/ga4/accounts/connect",
 ];
 
 export function isApiPath(pathname: string): boolean {
