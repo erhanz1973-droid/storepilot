@@ -34,14 +34,15 @@ name = "Description"
 type = "multi_line_text_field"
 
 [webhooks]
-api_version = "2026-10"
+api_version = "2025-10"
 
+  # All webhook topics deliver to the single implemented handler.
   [[webhooks.subscriptions]]
-  uri = "/webhooks/app/uninstalled"
+  uri = "/api/shopify/webhooks"
   topics = [ "app/uninstalled" ]
 
   [[webhooks.subscriptions]]
-  uri = "/webhooks/app/scopes_update"
+  uri = "/api/shopify/webhooks"
   topics = [ "app/scopes_update" ]
 
   # Mandatory App Store compliance webhooks (GDPR). Delivered to the Next.js handler.

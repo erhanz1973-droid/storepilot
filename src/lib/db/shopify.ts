@@ -381,6 +381,29 @@ export async function markShopifyUninstalled(shopDomain: string): Promise<void> 
     .eq("shop_domain", shopDomain);
 }
 
+/** Sync stored scopes after an app/scopes_update webhook. */
+export async function updateShopifyInstallationScopes(
+  shopDomain: string,
+  scopes: string[],
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    for (const [id, row] of memoryInstallations) {
+      if (row.shop_domain === shopDomain && row.status === "active") {
+        memoryInstallations.set(id, { ...row, scopes });
+      }
+    }
+    return;
+  }
+
+  await supabase
+    .from("shopify_installations")
+    .update({ scopes } as Record<string, unknown>)
+    .eq("shop_domain", shopDomain)
+    .eq("status", "active");
+}
+
 function clearMemoryShopifyCaches(storeId?: string): void {
   if (storeId) {
     memorySyncCache.delete(storeId);

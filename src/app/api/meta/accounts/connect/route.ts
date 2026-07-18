@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/meta-ads";
 import { syncMetaAdsForStore } from "@/lib/meta/store-sync";
 import { getMetaConfig } from "@/lib/meta/oauth";
+import { buildEmbeddedAdminReturnUrl } from "@/lib/shopify/embedded-return-url";
 
 type ConnectBody = {
   sessionId: string;
@@ -72,10 +73,16 @@ export async function POST(request: Request) {
     }
 
     const saved = installations[0];
+    const fallbackUrl = `${config.appUrl}/connections?tab=advertising&meta_connected=1`;
+    const redirectUrl =
+      (await buildEmbeddedAdminReturnUrl(
+        pending.store_id,
+        "/connections?tab=advertising&meta_connected=1",
+      )) ?? fallbackUrl;
 
     return NextResponse.json({
       ok: true,
-      redirectUrl: `${config.appUrl}/connections?tab=advertising&meta_connected=1`,
+      redirectUrl,
       installation: saved
         ? {
             id: saved.id,

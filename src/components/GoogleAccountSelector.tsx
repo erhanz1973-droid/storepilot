@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { redirectTop } from "@/lib/shopify/embedded-navigation";
 
 type GoogleCustomer = { id: string; name: string };
 
 export function GoogleAccountSelector({ sessionId }: { sessionId: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
@@ -61,7 +60,7 @@ export function GoogleAccountSelector({ sessionId }: { sessionId: string }) {
       });
       const data = (await res.json()) as { error?: string; redirectUrl?: string };
       if (!res.ok) throw new Error(data.error ?? "Connection failed");
-      router.push(data.redirectUrl ?? "/connections?google_connected=1");
+      redirectTop(data.redirectUrl ?? "/connections?google_connected=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
       setSubmitting(false);

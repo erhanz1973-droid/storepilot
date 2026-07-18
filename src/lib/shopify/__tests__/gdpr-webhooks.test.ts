@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   markShopifyUninstalled: vi.fn(),
+  updateShopifyInstallationScopes: vi.fn(),
   deleteAuthSessionsForShop: vi.fn(),
   verifyWebhookHmac: vi.fn(),
   claimWebhookDelivery: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db/shopify", () => ({
   markShopifyUninstalled: mocks.markShopifyUninstalled,
+  updateShopifyInstallationScopes: mocks.updateShopifyInstallationScopes,
 }));
 
 vi.mock("@/lib/shopify/supabase-session-storage", () => ({
@@ -66,6 +68,7 @@ describe("Shopify webhook GDPR compliance", () => {
     mocks.handleCustomersRedact.mockResolvedValue({ ok: true });
     mocks.handleShopRedact.mockResolvedValue({ ok: true });
     mocks.markShopifyUninstalled.mockResolvedValue(undefined);
+    mocks.updateShopifyInstallationScopes.mockResolvedValue(undefined);
     mocks.deleteAuthSessionsForShop.mockResolvedValue(undefined);
   });
 
@@ -116,6 +119,21 @@ describe("Shopify webhook GDPR compliance", () => {
     expect(mocks.markShopifyUninstalled).toHaveBeenCalledWith("gone.myshopify.com");
     expect(mocks.deleteAuthSessionsForShop).toHaveBeenCalledWith("gone.myshopify.com");
     expect(mocks.handleShopRedact).not.toHaveBeenCalled();
+  });
+
+  it("handles app/scopes_update by persisting current scopes", async () => {
+    const res = await POST(
+      makeRequest({
+        topic: "app/scopes_update",
+        shop: "scoped.myshopify.com",
+        body: { previous: ["read_products"], current: ["read_products", "read_orders"] },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.updateShopifyInstallationScopes).toHaveBeenCalledWith(
+      "scoped.myshopify.com",
+      ["read_products", "read_orders"],
+    );
   });
 
   it("skips duplicate webhook ids with 200", async () => {

@@ -4,7 +4,7 @@ import type { SmokeCheckResult, SmokeStatus, SmokeSuiteReport } from "./types";
 import { probeShopifyProducts } from "./shopify-probe";
 import { logShopifyRefreshMetrics } from "@/lib/shopify/offline-token-refresh";
 
-const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || "2024-10";
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || "2025-10";
 
 function nowIso() {
   return new Date().toISOString();

@@ -111,7 +111,7 @@ const storedClientIdPrefix = storedClientId ? storedClientId.slice(0, 6) : null;
 const appMatch =
   storedClientId && runtimeApiKey ? storedClientId === runtimeApiKey : null;
 const shop = row.shop_domain;
-const apiVersion = process.env.SHOPIFY_API_VERSION?.trim() || "2024-10";
+const apiVersion = process.env.SHOPIFY_API_VERSION?.trim() || "2025-10";
 const endpoint = `https://${shop}/admin/api/${apiVersion}/shop.json`;
 
 console.log(

@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 import { createClient } from "@supabase/supabase-js";
-const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || "2024-10";
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION?.trim() || "2025-10";
 function nowIso() {
     return new Date().toISOString();
 }

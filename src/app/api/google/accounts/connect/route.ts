@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/google-ads";
 import { syncGoogleAdsForStore } from "@/lib/google-ads/store-sync";
 import { getGoogleAdsConfig } from "@/lib/google-ads/oauth";
+import { buildEmbeddedAdminReturnUrl } from "@/lib/shopify/embedded-return-url";
 
 type ConnectBody = {
   sessionId: string;
@@ -55,9 +56,16 @@ export async function POST(request: Request) {
       // non-fatal initial sync failure
     }
 
+    const fallbackUrl = `${config.appUrl}/connections?google_connected=1`;
+    const redirectUrl =
+      (await buildEmbeddedAdminReturnUrl(
+        pending.store_id,
+        "/connections?google_connected=1",
+      )) ?? fallbackUrl;
+
     return NextResponse.json({
       ok: true,
-      redirectUrl: `${config.appUrl}/connections?google_connected=1`,
+      redirectUrl,
       installations: installations.map((i) => ({
         id: i.id,
         customerId: i.customer_id,

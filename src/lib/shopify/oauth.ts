@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-export const SHOPIFY_API_VERSION = "2024-10";
+/**
+ * Single Admin API version for the whole project. Must match:
+ * - shopify.app.toml `[webhooks] api_version`
+ * - shopify-app.server.ts `ApiVersion.October25`
+ */
+export const SHOPIFY_API_VERSION = "2025-10";
 
 export const DEFAULT_SHOPIFY_SCOPES = [
   "read_products",

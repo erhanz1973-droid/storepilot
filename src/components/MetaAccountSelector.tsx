@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
+import { redirectTop } from "@/lib/shopify/embedded-navigation";
 
 type AdAccount = { id: string; name: string; accountStatus?: number };
 type Business = { id: string; name: string; adAccounts: AdAccount[] };
@@ -25,7 +25,6 @@ function formatAccountStatus(status?: number): string | null {
 }
 
 export function MetaAccountSelector({ sessionId }: { sessionId: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metaUserName, setMetaUserName] = useState<string | null>(null);
@@ -93,7 +92,7 @@ export function MetaAccountSelector({ sessionId }: { sessionId: string }) {
       });
       const data = (await res.json()) as { error?: string; redirectUrl?: string };
       if (!res.ok) throw new Error(data.error ?? "Bağlantı başarısız");
-      router.push(data.redirectUrl ?? "/connections?tab=advertising&meta_connected=1");
+      redirectTop(data.redirectUrl ?? "/connections?tab=advertising&meta_connected=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bağlantı başarısız");
       setSubmitting(false);

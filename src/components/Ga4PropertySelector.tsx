@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Ga4AccountSummary } from "@/lib/ga4/api";
+import { redirectTop } from "@/lib/shopify/embedded-navigation";
 
 export function Ga4PropertySelector({ sessionId }: { sessionId: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
@@ -64,7 +63,7 @@ export function Ga4PropertySelector({ sessionId }: { sessionId: string }) {
       });
       const data = (await res.json()) as { error?: string; redirectUrl?: string };
       if (!res.ok) throw new Error(data.error ?? "Connection failed");
-      router.push(data.redirectUrl ?? "/connections?ga4_connected=1");
+      redirectTop(data.redirectUrl ?? "/connections?ga4_connected=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
       setSubmitting(false);

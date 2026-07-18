@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { markShopifyUninstalled } from "@/lib/db/shopify";
+import { markShopifyUninstalled, updateShopifyInstallationScopes } from "@/lib/db/shopify";
 import {
   handleCustomersDataRequest,
   handleCustomersRedact,
@@ -65,6 +65,17 @@ export async function POST(request: Request) {
           await deleteAuthSessionsForShop(shop);
           logWebhook("app_uninstalled", { shop, webhookId });
         }
+        break;
+      }
+      case "app/scopes_update": {
+        const current = (payload as { current?: unknown }).current;
+        const scopes = Array.isArray(current)
+          ? current.filter((s): s is string => typeof s === "string")
+          : [];
+        if (shop && scopes.length > 0) {
+          await updateShopifyInstallationScopes(shop, scopes);
+        }
+        logWebhook("app_scopes_update", { shop, webhookId, scopeCount: scopes.length });
         break;
       }
       case "customers/data_request": {

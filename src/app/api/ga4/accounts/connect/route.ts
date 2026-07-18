@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/ga4";
 import { syncGa4ForStore, resolveShopifyOrders30d } from "@/lib/ga4/store-sync";
 import { getGa4OAuthConfig } from "@/lib/ga4/oauth";
+import { buildEmbeddedAdminReturnUrl } from "@/lib/shopify/embedded-return-url";
 
 type ConnectBody = {
   sessionId: string;
@@ -78,9 +79,16 @@ export async function POST(request: Request) {
       // non-fatal initial sync failure — user can sync manually
     }
 
+    const fallbackUrl = `${config.appUrl}/connections?ga4_connected=1`;
+    const redirectUrl =
+      (await buildEmbeddedAdminReturnUrl(
+        pending.store_id,
+        "/connections?ga4_connected=1",
+      )) ?? fallbackUrl;
+
     return NextResponse.json({
       ok: true,
-      redirectUrl: `${config.appUrl}/connections?ga4_connected=1`,
+      redirectUrl,
       installation: {
         id: installation.id,
         propertyId: installation.property_id,

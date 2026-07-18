@@ -3,6 +3,7 @@ import { humanizeSyncError } from "@/lib/connections/connection-state";
 export type SyncApiResponse = {
   ok?: boolean;
   error?: string;
+  reason?: string;
   syncedAt?: string;
   campaigns?: number;
   products?: number;
@@ -122,6 +123,14 @@ export async function runIntegrationSync(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && body.reason === "missing_session_token") {
+      return {
+        kind: "error",
+        message: "Synchronization failed.",
+        detail: "Please open StorePilot from your Shopify Admin to perform manual sync.",
+      };
+    }
+
     const provider = PROVIDER_LABELS[integrationId] ?? "Integration";
     const friendly = humanizeSyncError(body.error, provider);
     return {
