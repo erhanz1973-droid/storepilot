@@ -65,7 +65,9 @@ export function AppNav() {
       <div className="sidebar-legal">
         <Link href="/privacy">Privacy Policy</Link>
         <span aria-hidden="true"> · </span>
-        <Link href="/terms">Terms of Service</Link>
+        <Link href="/terms">Terms</Link>
+        <span aria-hidden="true"> · </span>
+        <Link href="/data-deletion">Data Deletion</Link>
       </div>
     </aside>
   );

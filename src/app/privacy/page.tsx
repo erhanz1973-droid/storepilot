@@ -262,13 +262,17 @@ export default function PrivacyPolicyPage() {
           <h2 id="deletion">10. Data Deletion Requests</h2>
           <p>
             You can request deletion of all data StorePilot AI holds about you or your store at
-            any time by any of the following methods:
+            any time. Full step-by-step instructions — including Shopify, Google Ads, GA4, Meta
+            Ads, OAuth tokens, and stored analytics — are on our dedicated{" "}
+            <Link href="/data-deletion">User Data Deletion</Link> page (
+            <a href={`${SITE_URL}/data-deletion`}>{SITE_URL}/data-deletion</a>
+            ). In short, you can:
           </p>
           <ul>
-            <li>Uninstalling the app from your Shopify admin (triggers automatic deletion).</li>
-            <li>Disconnecting an individual integration from the Connections page in the app.</li>
+            <li>Uninstall the app from your Shopify admin (triggers automatic deletion).</li>
+            <li>Disconnect an individual integration from the Connections page in the app.</li>
             <li>
-              Emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the subject
+              Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the subject
               &ldquo;Data Deletion Request&rdquo; and your store domain. We will confirm deletion
               within 30 days.
             </li>
@@ -406,7 +410,8 @@ export default function PrivacyPolicyPage() {
 
         <footer className="legal-footer">
           <p className="muted">
-            See also our <Link href="/terms">Terms of Service</Link>.
+            See also our <Link href="/terms">Terms of Service</Link> and{" "}
+            <Link href="/data-deletion">User Data Deletion</Link> instructions.
           </p>
         </footer>
       </div>

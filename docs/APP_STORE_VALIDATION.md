@@ -97,6 +97,7 @@ Production fails if encryption keys missing.
 - [x] Privacy Policy + Terms of Service URLs
   - Privacy Policy: https://storepilot-production-d591.up.railway.app/privacy
   - Terms of Service: https://storepilot-production-d591.up.railway.app/terms
+  - User Data Deletion: https://storepilot-production-d591.up.railway.app/data-deletion
 - [ ] Support contact
 - [x] Billing Status: FREE RELEASE — Free Early Access; no Shopify Billing API required
 - [ ] App Store listing pricing is set to Free and contains no paid-tier or upgrade claims
