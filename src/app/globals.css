@@ -910,34 +910,55 @@ button {
 }
 
 .btn {
-  border: none;
+  border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: opacity 0.15s, transform 0.1s, background 0.15s, border-color 0.15s, color 0.15s;
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .btn:active {
   transform: scale(0.98);
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: white;
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.btn-primary:hover {
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-primary:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--accent-dim);
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--border);
+  color: var(--text);
 }
 
 .btn-ghost {
   background: transparent;
   color: var(--muted);
-  border: 1px solid var(--border);
+  border-color: var(--border);
 }
 
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--text);
   border-color: var(--muted);
 }
