@@ -1,24 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { marketingPageMetadata } from "@/lib/marketing/metadata";
+import { MARKETING_SITE_URL, MARKETING_SUPPORT_EMAIL } from "@/lib/marketing/site";
 
-const SITE_URL = "https://storepilot-production-d591.up.railway.app";
-const LAST_UPDATED = "July 17, 2026";
-const CONTACT_EMAIL = "erhanz1973@gmail.com";
+const LAST_UPDATED = "July 20, 2026";
+const CONTACT_EMAIL = MARKETING_SUPPORT_EMAIL;
 
-export const metadata: Metadata = {
-  title: "Privacy Policy — StorePilot AI",
-  description:
-    "How StorePilot AI collects, uses, stores, and protects data from Shopify, Google Ads, Google Analytics 4, and Meta Ads, and the rights you have under GDPR, UK GDPR, and CCPA.",
-  alternates: { canonical: `${SITE_URL}/privacy` },
-  openGraph: {
-    title: "Privacy Policy — StorePilot AI",
-    description:
-      "How StorePilot AI collects, uses, stores, and protects merchant and advertising data.",
-    url: `${SITE_URL}/privacy`,
-    type: "article",
-  },
-  robots: { index: true, follow: true },
-};
+export const metadata: Metadata = marketingPageMetadata(
+  "/privacy",
+  "Privacy Policy — StorePilot AI",
+  "How StorePilot AI collects, uses, stores, and protects data from Shopify, Google Ads, Google Analytics 4, and Meta Ads.",
+);
 
 export default function PrivacyPolicyPage() {
   return (
@@ -26,7 +18,7 @@ export default function PrivacyPolicyPage() {
       <header className="page-header">
         <h1>Privacy Policy</h1>
         <p className="muted">
-          Last Updated: <time dateTime="2026-07-17">{LAST_UPDATED}</time>
+          Last Updated: <time dateTime="2026-07-20">{LAST_UPDATED}</time>
         </p>
       </header>
 
@@ -37,7 +29,7 @@ export default function PrivacyPolicyPage() {
             StorePilot AI (&ldquo;StorePilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or
             &ldquo;our&rdquo;) is a commerce intelligence application operated by{" "}
             <strong>Erhan Zorlu</strong> and made available at{" "}
-            <a href={SITE_URL}>{SITE_URL}</a>. StorePilot AI connects to a merchant&rsquo;s
+            <a href={MARKETING_SITE_URL}>{MARKETING_SITE_URL}</a>. StorePilot AI connects to a merchant&rsquo;s
             Shopify store and, optionally, to their Google Ads, Google Analytics 4
             (&ldquo;GA4&rdquo;), and Meta Ads accounts in order to analyze store and advertising
             performance and to generate recommendations. StorePilot AI analyzes and recommends
@@ -265,7 +257,7 @@ export default function PrivacyPolicyPage() {
             any time. Full step-by-step instructions — including Shopify, Google Ads, GA4, Meta
             Ads, OAuth tokens, and stored analytics — are on our dedicated{" "}
             <Link href="/data-deletion">User Data Deletion</Link> page (
-            <a href={`${SITE_URL}/data-deletion`}>{SITE_URL}/data-deletion</a>
+            <a href={`${MARKETING_SITE_URL}/data-deletion`}>{MARKETING_SITE_URL}/data-deletion</a>
             ). In short, you can:
           </p>
           <ul>
@@ -404,13 +396,14 @@ export default function PrivacyPolicyPage() {
             <br />
             Email: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
             <br />
-            Website: <a href={SITE_URL}>{SITE_URL}</a>
+            Website: <a href={MARKETING_SITE_URL}>{MARKETING_SITE_URL}</a>
           </p>
         </section>
 
         <footer className="legal-footer">
           <p className="muted">
-            See also our <Link href="/terms">Terms of Service</Link> and{" "}
+            See also our <Link href="/terms">Terms of Service</Link>,{" "}
+            <Link href="/contact">Contact</Link>, and{" "}
             <Link href="/data-deletion">User Data Deletion</Link> instructions.
           </p>
         </footer>

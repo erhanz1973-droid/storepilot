@@ -1,23 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { marketingPageMetadata } from "@/lib/marketing/metadata";
+import { MARKETING_SITE_URL, MARKETING_SUPPORT_EMAIL } from "@/lib/marketing/site";
 
-const SITE_URL = "https://storepilot-production-d591.up.railway.app";
-const LAST_UPDATED = "July 17, 2026";
-const CONTACT_EMAIL = "erhanz1973@gmail.com";
+const LAST_UPDATED = "July 20, 2026";
+const CONTACT_EMAIL = MARKETING_SUPPORT_EMAIL;
 
-export const metadata: Metadata = {
-  title: "Terms of Service — StorePilot AI",
-  description:
-    "The terms governing use of StorePilot AI, including the free plan, user responsibilities, API usage, intellectual property, disclaimers, and limitation of liability.",
-  alternates: { canonical: `${SITE_URL}/terms` },
-  openGraph: {
-    title: "Terms of Service — StorePilot AI",
-    description: "The terms governing use of the StorePilot AI commerce intelligence app.",
-    url: `${SITE_URL}/terms`,
-    type: "article",
-  },
-  robots: { index: true, follow: true },
-};
+export const metadata: Metadata = marketingPageMetadata(
+  "/terms",
+  "Terms of Service — StorePilot AI",
+  "The terms governing use of StorePilot AI, including the free plan, user responsibilities, and limitation of liability.",
+);
 
 export default function TermsOfServicePage() {
   return (
@@ -37,7 +30,7 @@ export default function TermsOfServicePage() {
             (the merchant or business installing or using the app) and{" "}
             <strong>Erhan Zorlu</strong>, the operator of StorePilot AI
             (&ldquo;StorePilot&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;), available at{" "}
-            <a href={SITE_URL}>{SITE_URL}</a>. By installing StorePilot AI from the Shopify App
+            <a href={MARKETING_SITE_URL}>{MARKETING_SITE_URL}</a>. By installing StorePilot AI from the Shopify App
             Store, connecting an integration, or otherwise using the service, you agree to these
             Terms and to our <Link href="/privacy">Privacy Policy</Link>. If you use the service
             on behalf of a business, you represent that you have authority to bind that business.
@@ -228,7 +221,7 @@ export default function TermsOfServicePage() {
             <br />
             Email: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
             <br />
-            Website: <a href={SITE_URL}>{SITE_URL}</a>
+            Website: <a href={MARKETING_SITE_URL}>{MARKETING_SITE_URL}</a>
           </p>
         </section>
 

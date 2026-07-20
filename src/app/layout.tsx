@@ -1,20 +1,39 @@
 import { AppNav } from "@/components/AppNav";
 import { DemoDataBadge } from "@/components/DemoDataBadge";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
 import { EmbeddedShopifyBootstrap } from "@/components/shopify/EmbeddedShopifyBootstrap";
 import { ShopifyAppBridgeNav } from "@/components/shopify/ShopifyAppBridgeNav";
+import { marketingSiteMetadata } from "@/lib/marketing/metadata";
+import { isMarketingRequest } from "@/lib/marketing/site";
 import { resolveShopifyAppBridgeApiKey } from "@/lib/shopify/app-bridge-config";
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "StorePilot AI",
-  description: "Multi-platform commerce intelligence — analyze and recommend, never auto-act",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  if (await isMarketingRequest()) {
+    return marketingSiteMetadata;
+  }
+  return {
+    title: "StorePilot AI",
+    description: "Multi-platform commerce intelligence — analyze and recommend, never auto-act",
+  };
+}
 
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const appBridgeApiKey = resolveShopifyAppBridgeApiKey();
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const marketing = await isMarketingRequest();
+  const appBridgeApiKey = marketing ? null : resolveShopifyAppBridgeApiKey();
+
+  if (marketing) {
+    return (
+      <html lang="en">
+        <body>
+          <MarketingShell>{children}</MarketingShell>
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="en">
