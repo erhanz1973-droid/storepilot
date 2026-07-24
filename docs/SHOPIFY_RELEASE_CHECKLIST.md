@@ -226,3 +226,12 @@ Partial code readiness is **not** sufficient while production still serves demo 
 ## Production demo blocker update (2026-07-24)
 
 Cleared and verified live. Remaining resubmission blocker is **G7 smoke test only**.
+
+
+---
+
+## Smoke test status (2026-07-24)
+
+See [`SHOPIFY_SMOKE_TEST_REPORT.md`](./SHOPIFY_SMOKE_TEST_REPORT.md).
+
+Interactive brand-new development-store install was **not** completed in the agent environment. **G7 remains ❌.** Verdict stays **❌ DO NOT RESUBMIT**.
