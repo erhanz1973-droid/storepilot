@@ -1,6 +1,7 @@
 import type { ConnectorPlugin, ConnectorHealthResult } from "../base";
 import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
 import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
+import { allowDemoData } from "@/lib/env/runtime";
 
 export function createDemoPlugin(
   id: ConnectorPlugin["id"],
@@ -14,6 +15,22 @@ export function createDemoPlugin(
   }
 
   async function loadDemoSnapshot() {
+    if (!allowDemoData()) {
+      return {
+        source: "disconnected" as const,
+        syncedAt: new Date().toISOString(),
+        products: [],
+        collections: [],
+        campaigns: [],
+        storeMetrics: {
+          revenue30d: 0,
+          orders30d: 0,
+          aov30d: 0,
+          conversionRate30d: 0,
+        },
+        connectorStates: {},
+      };
+    }
     const scenarioId = await getActiveDemoScenarioId();
     return buildDemoSnapshot(scenarioId);
   }

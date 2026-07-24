@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
-import { getActiveShopifyInstallation, getInstallationForStore } from "@/lib/db/shopify";
+import { getInstallationForStore } from "@/lib/db/shopify";
 import { getSimulationStoreById } from "@/lib/simulation-stores/db";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 import {
   logEmbeddedBootstrap,
   readEmbeddedBootstrapDiagnostics,
@@ -42,6 +43,13 @@ export function embeddedActiveStoreCookieValue(storeId: string) {
   };
 }
 
+export class UnresolvedStoreContextError extends Error {
+  constructor(message = "No authenticated Shopify merchant in context") {
+    super(message);
+    this.name = "UnresolvedStoreContextError";
+  }
+}
+
 export type StoreResolutionDiagnostics = {
   chosenStoreId: string;
   source:
@@ -49,7 +57,8 @@ export type StoreResolutionDiagnostics = {
     | "cookie_live"
     | "cookie_simulation"
     | "cookie_demo"
-    | "demo_fallback";
+    | "demo_fallback"
+    | "unresolved";
   embedded: Awaited<ReturnType<typeof readEmbeddedBootstrapDiagnostics>>;
   cookieValue: string | null;
 };
@@ -58,6 +67,11 @@ function logStoreResolution(diagnostics: StoreResolutionDiagnostics): void {
   console.log("[store-bootstrap]", JSON.stringify(diagnostics));
 }
 
+/**
+ * Resolve the merchant workspace for this request.
+ * OAuth / embedded shop is the source of truth — never a hardcoded demo store
+ * unless Demo Mode is explicitly enabled for local development.
+ */
 export async function resolveActiveStoreId(): Promise<string> {
   const embedded = await readEmbeddedBootstrapDiagnostics();
 
@@ -78,57 +92,78 @@ export async function resolveActiveStoreId(): Promise<string> {
 
   if (fromCookie) {
     if (fromCookie === DEMO_STORE_ID) {
-      logStoreResolution({
-        chosenStoreId: DEMO_STORE_ID,
-        source: "cookie_demo",
-        embedded,
-        cookieValue: fromCookie,
-      });
-      return DEMO_STORE_ID;
-    }
-    if (isSimulationStoreId(fromCookie)) {
-      const sim = await getSimulationStoreById(fromCookie);
-      if (sim) {
+      if (allowDemoData()) {
+        logStoreResolution({
+          chosenStoreId: DEMO_STORE_ID,
+          source: "cookie_demo",
+          embedded,
+          cookieValue: fromCookie,
+        });
+        return DEMO_STORE_ID;
+      }
+      // Stale demo cookie from a prior visit — ignore in production / review.
+    } else if (isSimulationStoreId(fromCookie)) {
+      if (allowDemoData()) {
+        const sim = await getSimulationStoreById(fromCookie);
+        if (sim) {
+          logStoreResolution({
+            chosenStoreId: fromCookie,
+            source: "cookie_simulation",
+            embedded,
+            cookieValue: fromCookie,
+          });
+          return fromCookie;
+        }
+      }
+    } else {
+      const installation = await getInstallationForStore(fromCookie);
+      if (installation) {
         logStoreResolution({
           chosenStoreId: fromCookie,
-          source: "cookie_simulation",
+          source: "cookie_live",
           embedded,
           cookieValue: fromCookie,
         });
         return fromCookie;
       }
     }
-    const installation = await getInstallationForStore(fromCookie);
-    if (installation) {
-      logStoreResolution({
-        chosenStoreId: fromCookie,
-        source: "cookie_live",
-        embedded,
-        cookieValue: fromCookie,
-      });
-      return fromCookie;
-    }
   }
 
-  // Deliberately no global "most recent installation" fallback here: selecting a
-  // real merchant store without a verified shop context would allow one tenant's
-  // request to resolve to another tenant's data. Unresolved context = demo only.
-  logEmbeddedBootstrap("falling back to demo", embedded);
+  // Never select another tenant's installation. Unresolved = connect Shopify, not demo.
+  if (allowDemoData()) {
+    logEmbeddedBootstrap("dev synthetic store context", embedded);
+    logStoreResolution({
+      chosenStoreId: DEMO_STORE_ID,
+      source: "demo_fallback",
+      embedded,
+      cookieValue: fromCookie ?? null,
+    });
+    return DEMO_STORE_ID;
+  }
+
+  logEmbeddedBootstrap("unresolved store context", embedded);
   logStoreResolution({
-    chosenStoreId: DEMO_STORE_ID,
-    source: "demo_fallback",
+    chosenStoreId: "",
+    source: "unresolved",
     embedded,
     cookieValue: fromCookie ?? null,
   });
-  return DEMO_STORE_ID;
+  throw new UnresolvedStoreContextError();
+}
+
+/** Safe resolver for UI shells that should render a connect state instead of crashing. */
+export async function tryResolveActiveStoreId(): Promise<string | null> {
+  try {
+    return await resolveActiveStoreId();
+  } catch (error) {
+    if (error instanceof UnresolvedStoreContextError) return null;
+    throw error;
+  }
 }
 
 export async function hasLiveShopifyConnection(storeId?: string): Promise<boolean> {
-  const id = storeId ?? (await resolveActiveStoreId());
-  if (id === DEMO_STORE_ID) {
-    const active = await getActiveShopifyInstallation();
-    return active !== null;
-  }
+  const id = storeId ?? (await tryResolveActiveStoreId());
+  if (!id || id === DEMO_STORE_ID) return false;
   const installation = await getInstallationForStore(id);
   return installation !== null;
 }

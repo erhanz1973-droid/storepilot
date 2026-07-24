@@ -1,3 +1,4 @@
+import { allowDemoData } from "@/lib/env/runtime";
 import type { ShopifyProduct, StoreSnapshot } from "@/lib/connectors/types";
 import type { AttributionEvent } from "@/lib/attribution/models";
 import type { AttributionMethod, CampaignProductLink } from "@/lib/attribution/product-types";
@@ -107,7 +108,7 @@ export function buildCampaignProductLinks(
     links.push(link);
   };
 
-  if (snapshot.source === "demo") {
+  if (allowDemoData() && snapshot.source === "demo") {
     for (const link of PEAK_OUTFITTERS_CAMPAIGN_PRODUCTS) {
       add(link);
     }

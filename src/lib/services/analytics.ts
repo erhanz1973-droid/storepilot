@@ -7,10 +7,10 @@ import { buildExecutiveUnifiedLayer } from "@/lib/analytics/executive-unified-la
 import { buildExecutiveCeoOsLayer, type ExecutiveCeoOsLayer } from "@/lib/analytics/build-executive-ceo-os";
 import { readExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
 import type { DailyAiPlaybook, ExecutiveFocusSummary } from "@/lib/analytics/ai-daily-playbook";
-import { getPeakOutfittersSnapshot } from "@/lib/demo/peak-outfitters";
 import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
 import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
 import { computeProfitDashboard } from "@/lib/profit/engine";
+import { applyDemoProfitDashboard } from "@/lib/demo/showcase-overrides";
 import { logServerRenderError } from "@/lib/services/server-render-error";
 import { computeStoreHealthScore } from "@/lib/store-health/score";
 import { buildMarketingManagerView } from "@/lib/analytics/marketing-manager";
@@ -100,6 +100,7 @@ function attachCeoOsLayer(
   page: Omit<ExecutivePageData, "ceoOs">,
   decisions: import("@/lib/decisions/center").DecisionItem[],
   previousVisit: import("@/lib/analytics/executive-visit").ExecutiveVisitSnapshot | null,
+  snapshot?: import("@/lib/connectors/types").StoreSnapshot | null,
 ): ExecutivePageData {
   const ir = page.integrationReadiness;
   const ceoOs = buildExecutiveCeoOsLayer({
@@ -110,6 +111,7 @@ function attachCeoOsLayer(
     decisions,
     executiveMode: page.executiveMode,
     previousVisit,
+    snapshot: snapshot ?? null,
     connectedSources: {
       shopify: ir.shopifyConnected,
       metaAds: ir.metaConnected,
@@ -156,11 +158,74 @@ const EMPTY_OPPORTUNITY_HISTORY = {
   actionRate: 0,
 } as const;
 
-/** Demo fallback when live store/dashboard loading fails in production. */
+/** Empty live merchant shell — zeros and connect prompts, never fictional metrics. */
+export async function buildEmptyMerchantExecutivePageData(
+  shopDomain?: string | null,
+): Promise<ExecutivePageData> {
+  const snapshot: import("@/lib/connectors/types").StoreSnapshot = {
+    source: "disconnected",
+    syncedAt: new Date().toISOString(),
+    commerceProvider: "shopify",
+    commerceStoreDomain: shopDomain ?? undefined,
+    products: [],
+    collections: [],
+    campaigns: [],
+    storeMetrics: {
+      revenue30d: 0,
+      orders30d: 0,
+      aov30d: 0,
+      conversionRate30d: 0,
+    },
+    connectorStates: {
+      shopify: shopDomain ? "disconnected" : "disconnected",
+    },
+  };
+  const profitDashboard = computeProfitDashboard(snapshot, []);
+  const storeHealth = computeStoreHealthScore({
+    snapshot,
+    profitDashboard,
+    productIntelligence: null,
+    attributionDashboard: null,
+    activeRecommendations: [],
+  });
+  const experienceInput = {
+    snapshot,
+    profitDashboard,
+    executiveSummary: null,
+    trends: null,
+    decisions: [],
+    opportunityFeed: [],
+    priorityQueue: [],
+    morningBrief: null,
+    predictiveInsights: [],
+    storeHealth,
+  };
+  const view = buildExecutiveAdvisorView({
+    snapshot,
+    profitDashboard,
+    trends: null,
+    decisions: [],
+    activityFeed: [],
+    autopilot: null,
+    morningBrief: null,
+    opportunityHistory: EMPTY_OPPORTUNITY_HISTORY,
+    experienceInput,
+    businessProfile: null,
+  });
+  const base = attachUnifiedLayer(view, snapshot, profitDashboard, snapshot.syncedAt);
+  const previousVisit = await readExecutiveVisitSnapshot();
+  return attachCeoOsLayer(base, [], previousVisit, snapshot);
+}
+
+/** Dev-only demo executive page — gated by allowDemoData(). */
+
 export async function buildDemoExecutivePageData(): Promise<ExecutivePageData> {
   const scenarioId = await getActiveDemoScenarioId();
   const snapshot = buildDemoSnapshot(scenarioId);
-  const profitDashboard = computeProfitDashboard(snapshot, []);
+  const profitDashboard = applyDemoProfitDashboard(
+    snapshot,
+    computeProfitDashboard(snapshot, []),
+  );
   const storeHealth = computeStoreHealthScore({
     snapshot,
     profitDashboard,
@@ -194,7 +259,7 @@ export async function buildDemoExecutivePageData(): Promise<ExecutivePageData> {
     });
   const base = attachUnifiedLayer(view, snapshot, profitDashboard, snapshot.syncedAt);
   const previousVisit = await readExecutiveVisitSnapshot();
-  return attachCeoOsLayer(base, [], previousVisit);
+  return attachCeoOsLayer(base, [], previousVisit, snapshot);
 }
 
 export async function buildExecutivePageData(): Promise<ExecutivePageData> {
@@ -286,13 +351,14 @@ export async function buildExecutivePageData(): Promise<ExecutivePageData> {
     });
     const decisions = dashboard.decisionCenter ?? [];
     const previousVisit = await readExecutiveVisitSnapshot();
-    return attachCeoOsLayer(base, decisions, previousVisit);
+    return attachCeoOsLayer(base, decisions, previousVisit, bundle.snapshot);
   } catch (error) {
     logServerRenderError("buildExecutivePageData", error);
     if (allowDemoData()) {
       return await buildDemoExecutivePageData();
     }
-    throw error;
+    // Production / App Store review: never invent revenue or catalog.
+    return await buildEmptyMerchantExecutivePageData();
   }
 }
 

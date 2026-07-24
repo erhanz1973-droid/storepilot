@@ -1458,6 +1458,7 @@ export function buildExecutiveAdvisorView(input: {
     financialContext,
     moneyLeaks,
     recoveryScenarios: recoveryBreakdownValidated.scenarios,
+    snapshot: input.snapshot,
   });
 
   const aiBehavior = buildExecutiveAiBehavior({

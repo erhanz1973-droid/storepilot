@@ -10,17 +10,13 @@ import {
 } from "@/lib/db/shopify";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { DEMO_STORE_ID } from "@/lib/types";
-import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
+import { allowDemoData } from "@/lib/env/runtime";
 import { TokenDecryptionError, logTokenDecryptionFailure } from "@/lib/crypto/decrypt-errors";
 import {
   installationRequiresReinstall,
   isShopifyReinstallRequiredError,
 } from "@/lib/shopify/auth-errors";
 import { detectAppMismatch } from "@/lib/shopify/token-diagnostics";
-
-function isDedicatedLiveStore(storeId: string): boolean {
-  return storeId !== DEMO_STORE_ID && !isSimulationStoreId(storeId);
-}
 
 function tokenDecryptionHealth(
   installation: NonNullable<Awaited<ReturnType<typeof getInstallationForStore>>>,
@@ -118,14 +114,14 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
     async connect() {
       const installation = await getInstallationMetadata();
       if (!installation) {
-        if (!isDedicatedLiveStore(storeId)) await demo.connect();
+        if (allowDemoData() && storeId === DEMO_STORE_ID) await demo.connect();
       }
     },
     async sync(): Promise<Partial<StoreSnapshot>> {
       const installation = await getInstallationWithToken();
       if (!installation) {
-        if (isDedicatedLiveStore(storeId)) return {};
-        return demo.sync();
+        if (allowDemoData() && storeId === DEMO_STORE_ID) return demo.sync();
+        return {};
       }
 
       try {
@@ -162,10 +158,8 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
     async healthCheck() {
       const installation = await getInstallationMetadata();
       if (!installation) {
-        if (isDedicatedLiveStore(storeId)) {
-          return { status: "disconnected" as const };
-        }
-        return demo.healthCheck();
+        if (allowDemoData() && storeId === DEMO_STORE_ID) return demo.healthCheck();
+        return { status: "disconnected" as const };
       }
       return resolveHealthFromMetadata(installation);
     },
@@ -175,8 +169,11 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
     async getStatus() {
       const installation = await getInstallationMetadata();
       if (!installation) {
-        const demoStatus = await demo.getStatus();
-        return { ...demoStatus, status: "demo" as const };
+        if (allowDemoData() && storeId === DEMO_STORE_ID) {
+          const demoStatus = await demo.getStatus();
+          return { ...demoStatus, status: "demo" as const };
+        }
+        return { id: "shopify", label: "Shopify", status: "disconnected" as const };
       }
       const health = await resolveHealthFromMetadata(installation);
       return { id: "shopify", label: "Shopify", ...health };
@@ -184,9 +181,11 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
     async fetchStoreSnapshot() {
       const installation = await getInstallationWithToken();
       if (!installation) {
-        if (isDedicatedLiveStore(storeId)) return {};
-        await demo.connect();
-        return demo.sync();
+        if (allowDemoData() && storeId === DEMO_STORE_ID) {
+          await demo.connect();
+          return demo.sync();
+        }
+        return {};
       }
 
       const cached = await getCachedShopifySnapshot(storeId);
@@ -199,9 +198,8 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
       } catch (error) {
         if (error instanceof TokenDecryptionError) {
           logTokenDecryptionFailure("shopify", error, "fetchStoreSnapshot");
-          if (isDedicatedLiveStore(storeId)) throw error;
-          await demo.connect();
-          return demo.sync();
+          // Never fall back to fictional catalog for a live merchant token failure.
+          throw error;
         }
         throw error;
       }

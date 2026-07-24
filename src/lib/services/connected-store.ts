@@ -3,7 +3,7 @@ import { listMetaAdsInstallationsForStore } from "@/lib/db/meta-ads";
 import { aggregateStoreSnapshot, getDataSourceStatuses } from "@/lib/connectors/registry";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import { resolveActiveStoreId } from "@/lib/store/context";
-import { PEAK_OUTFITTERS } from "@/lib/demo/peak-outfitters/constants";
+import { ALPINE_OUTFITTERS } from "@/lib/demo/alpine-outfitters/constants";
 import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 import { isMetaOAuthConfigured, getMetaDevOverride } from "@/lib/meta/oauth";
 import type { MetaCampaignSyncStats } from "@/lib/meta/campaign-stats";
@@ -81,19 +81,19 @@ export async function getConnectedStoreView(): Promise<ConnectedStoreView> {
       metaConnected: metaAdsAccounts.length > 0,
       storeId,
       shopDomain: null,
-      shopName: "Peak Outfitters (Demo)",
-      shopifyPlan: "Demo",
+      shopName: `${ALPINE_OUTFITTERS.name} (Demo)`,
+      shopifyPlan: ALPINE_OUTFITTERS.plan,
       lastSyncAt: dataSources.find((d) => d.id === "shopify")?.lastSyncAt ?? null,
       connectionHealth: "demo",
       errorMessage: null,
       stats: {
-        productCount: snapshot?.products.length ?? 30,
+        productCount: snapshot?.products.length ?? 18,
         inventoryCount:
           snapshot?.products.reduce((s, p) => s + p.inventoryQuantity, 0) ?? 0,
-        orderCount: snapshot?.storeMetrics.orders30d ?? PEAK_OUTFITTERS.orders30d,
-        customerCount: PEAK_OUTFITTERS.customerCount,
-        collectionCount: snapshot?.collections.length ?? 9,
-        discountCount: 12,
+        orderCount: snapshot?.storeMetrics.orders30d ?? ALPINE_OUTFITTERS.orders30d,
+        customerCount: ALPINE_OUTFITTERS.customerCount,
+        collectionCount: snapshot?.collections.length ?? 6,
+        discountCount: 8,
       },
       metaAdsAccounts,
       metaCampaignTotals,

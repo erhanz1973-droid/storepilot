@@ -1,6 +1,7 @@
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { IntegrationSnapshot } from "./types";
 import { PHASE6_INTEGRATIONS } from "./types";
+import { allowDemoData } from "@/lib/env/runtime";
 
 export type IntegrationConfidence = {
   scorePct: number;
@@ -92,5 +93,6 @@ export function computeIntegrationConfidence(
 }
 
 export function shouldUseDemoIntegrations(snapshot: StoreSnapshot): boolean {
+  if (!allowDemoData()) return false;
   return snapshot.source === "demo" || snapshot.connectorStates?.shopify === "demo";
 }

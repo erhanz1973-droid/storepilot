@@ -21,6 +21,11 @@ import {
 } from "@/lib/decision-validation";
 import { buildDeepAiExecutiveBrief } from "@/lib/analytics/deep-ai-brief";
 import type { DeepAiExecutiveBrief } from "@/lib/analytics/deep-ai-brief";
+import {
+  isAlpineShowcaseActive,
+  getAlpineRecoverableProfitPresentation,
+} from "@/lib/demo/showcase-overrides";
+import { getAlpineHeroRecommendation } from "@/lib/demo/alpine-outfitters/ui-metrics";
 
 /**
  * Executive Mode — every CEO OS section must agree with this state.
@@ -785,6 +790,8 @@ export function buildExecutiveCeoOsLayer(input: {
   observingCampaignName?: string | null;
   upgradePlanLabel?: string | null;
   isUnlimitedPlan?: boolean;
+  /** Demo Mode: when Alpine snapshot, Recoverable Profit comes from Demo Provider */
+  snapshot?: import("@/lib/connectors/types").StoreSnapshot | null;
   /** Connected integration context for Executive Brief */
   connectedSources?: {
     shopify?: boolean;
@@ -819,7 +826,25 @@ export function buildExecutiveCeoOsLayer(input: {
 
   let dailyDecision: ExecutiveCeoDailyDecision;
 
-  if (selection.kind === "none") {
+  /** Demo Mode Alpine: Recoverable Profit Opportunity from Demo Provider only */
+  if (input.snapshot && isAlpineShowcaseActive(input.snapshot)) {
+    const hero = getAlpineHeroRecommendation();
+    const presentation = getAlpineRecoverableProfitPresentation();
+    dailyDecision = {
+      hasDecision: true,
+      title: "Today's #1 executive decision",
+      action: hero.title,
+      narrative: hero.description,
+      ceoOpinion: `Highest-leverage move for Alpine Outfitters: ${hero.title}. Estimated recoverable opportunity ${presentation.heroValueFormatted}/month.`,
+      impactPresentation: presentation,
+      estimatedMinutes: 15,
+      risk: hero.priority === "critical" ? "Medium Risk" : "Low Risk",
+      evidence: null,
+      evidencePoints: hero.evidence.map((e) => `${e.label}: ${e.value}`),
+      approvalHref: `/approvals?recommendationId=${encodeURIComponent(hero.id)}`,
+      recommendationId: hero.id,
+    };
+  } else if (selection.kind === "none") {
     // Also try priority action if featured was built from opportunities with known amounts
     if (action) {
       const candidate = {

@@ -6,6 +6,7 @@ import { computeProfitDashboard } from "@/lib/profit/engine";
 import type { ProfitDashboard } from "@/lib/profit/types";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import { resolveActiveStoreId } from "@/lib/store/context";
+import { applyDemoProfitDashboard } from "@/lib/demo/showcase-overrides";
 
 /** Request-scoped store id — deduped within a single RSC render. */
 export const getCachedActiveStoreId = cache(async (): Promise<string> => {
@@ -27,7 +28,10 @@ export const getCachedProfitDashboard = cache(
   async (storeId: string): Promise<ProfitDashboard | null> => {
     const snapshot = await getCachedSnapshot(storeId);
     const costRecords = await getCachedProductCosts(storeId);
-    return computeProfitDashboard(snapshot, costRecords);
+    return applyDemoProfitDashboard(
+      snapshot,
+      computeProfitDashboard(snapshot, costRecords),
+    );
   },
 );
 
@@ -45,6 +49,9 @@ export const getCachedStoreBundle = cache(async (): Promise<StoreBundle> => {
     getCachedSnapshot(storeId),
     getCachedProductCosts(storeId),
   ]);
-  const profitDashboard = computeProfitDashboard(snapshot, costRecords);
+  const profitDashboard = applyDemoProfitDashboard(
+    snapshot,
+    computeProfitDashboard(snapshot, costRecords),
+  );
   return { storeId, snapshot, costRecords, profitDashboard };
 });

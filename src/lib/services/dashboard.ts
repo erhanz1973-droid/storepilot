@@ -53,6 +53,14 @@ import { applyLearningToOutputs } from "@/lib/learning/outcomes";
 import { recommendationHasMeasurableImpact } from "@/lib/recommendations/impact";
 import { resolveActiveStoreId } from "@/lib/store/context";
 import {
+  ALPINE_OUTFITTERS,
+  isAlpineOutfittersSnapshot,
+} from "@/lib/demo/alpine-outfitters";
+import {
+  applyDemoProfitDashboard,
+  resolveDemoModeRecommendations,
+} from "@/lib/demo/showcase-overrides";
+import {
   annotateSimulatedAdRecommendations,
   tagSimulatedAdOpportunities,
 } from "@/lib/executive/hybrid";
@@ -264,7 +272,7 @@ export async function buildDashboard(
     getDataSourceStatuses(storeId),
     getCachedProductCosts(storeId),
   ]);
-  const allRecs = options?.skipRecommendationSync
+  const storedRecs = options?.skipRecommendationSync
     ? await listStoredRecommendations(storeId)
     : options?.syncRecommendations && options?.snapshotOverride
       ? await ensureRecommendationsSynced(
@@ -274,17 +282,22 @@ export async function buildDashboard(
           options.hybridDataSources,
         )
       : await getCachedRecommendations(storeId);
+  /** Demo Mode Alpine: Demo Provider owns recommendations — ignore stale DB / analyzer leftovers */
+  const allRecs = resolveDemoModeRecommendations(snapshot, storedRecs);
   const activeRecs = allRecs.filter(isActiveRecommendation);
   const inventorySummary = computeInventorySummary(snapshot.products);
   const adsConnected = hasActiveAdsConnector(snapshot.connectorStates);
   const activeMetaCampaigns = countActiveCampaigns(snapshot.campaigns);
 
-  const profitDashboard = computeProfitDashboard(snapshot, costRecords);
+  const profitDashboard = applyDemoProfitDashboard(
+    snapshot,
+    computeProfitDashboard(snapshot, costRecords),
+  );
   const productIntelligence = buildProductIntelligence(snapshot, costRecords, profitDashboard);
   const attributionDashboard = buildAttributionDashboard(snapshot, profitDashboard);
 
   const previousSnapshot = await getPreviousDailySnapshot(storeId);
-  const storeHealth = computeStoreHealthScore({
+  let storeHealth = computeStoreHealthScore({
     snapshot,
     profitDashboard,
     productIntelligence,
@@ -300,7 +313,7 @@ export async function buildDashboard(
     hasActiveAdsConnector: adsConnected,
     hasActiveMetaCampaigns: activeMetaCampaigns > 0,
   });
-  const healthScore = storeHealth.score;
+  let healthScore = storeHealth.score;
 
   const criticalAlerts = activeRecs.filter((r) => r.severity === "critical");
   const revenueOpportunities = activeRecs.filter((r) =>
@@ -318,7 +331,23 @@ export async function buildDashboard(
 
   const measuredRecs = await listMeasuredRecommendations(storeId);
   const outcomeHistory = await listOutcomeHistory(storeId);
-  const aiPerformance = computeAiPerformance(measuredRecs, outcomeHistory);
+  let aiPerformance = computeAiPerformance(measuredRecs, outcomeHistory);
+
+  /** Alpine Outfitters App Store showcase — pin published demo KPIs */
+  if (allowDemoData() && isAlpineOutfittersSnapshot(snapshot)) {
+    const showcase = ALPINE_OUTFITTERS;
+    storeHealth = {
+      ...storeHealth,
+      score: showcase.storeHealthScore,
+      label: "Excellent",
+    };
+    healthScore = showcase.storeHealthScore;
+    aiPerformance = {
+      ...aiPerformance,
+      predictionAccuracy: showcase.aiConfidencePct,
+      measuredCount: Math.max(aiPerformance.measuredCount, 5),
+    };
+  }
 
   const netMarginPct = profitDashboard?.primary.profitMarginPct ?? undefined;
   const topOpportunities = evaluateOpportunities(snapshot, {

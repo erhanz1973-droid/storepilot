@@ -8,7 +8,9 @@ export type DataMode = "live" | "demo" | "simulation";
 
 export function resolveDataMode(storeId: string, snapshot: StoreSnapshot): DataMode {
   if (isSimulationStoreId(storeId)) return "simulation";
-  if (isDemoStoreSnapshot(snapshot) || storeId === DEMO_STORE_ID) return "demo";
+  if (allowDemoData() && (isDemoStoreSnapshot(snapshot) || storeId === DEMO_STORE_ID)) {
+    return "demo";
+  }
   return "live";
 }
 

@@ -10,6 +10,8 @@ import type { RevenuePlaybook, RevenueStudio } from "@/lib/analytics/revenue-stu
 import type { SalesOpportunity } from "@/lib/analytics/sales-manager-v2";
 import { DEMO_SCENARIOS } from "@/lib/demo/scenarios/registry";
 import type { DemoScenarioId } from "@/lib/demo/scenarios/types";
+import { ALPINE_UI_METRICS } from "@/lib/demo/alpine-outfitters/ui-metrics";
+import { allowDemoData } from "@/lib/env/runtime";
 import {
   EXECUTIVE_MODULES,
   type ExecutiveModuleId,
@@ -282,11 +284,16 @@ export function buildDailyAiPlaybook(input: {
   const rawTotal = sorted.reduce((s, i) => s + (i.impactMonthly ?? 0), 0);
   const constrainedTotal = constrainRecoveryTotal(rawTotal, 75, businessContext);
 
+  let totalRecoverableMonthly = constrainedTotal.amount;
+  if (allowDemoData() && input.snapshot.demoScenario === "healthy_growth") {
+    totalRecoverableMonthly = ALPINE_UI_METRICS.totalRecoverableOpportunityMonthly;
+  }
+
   return {
     title: "Today's AI Playbook",
     subtitle: `${scenario.focusVerbs.slice(0, 3).join(" · ")} — actions from your AI executive team.`,
     items: sorted,
-    totalRecoverableMonthly: constrainedTotal.amount,
+    totalRecoverableMonthly,
   };
 }
 

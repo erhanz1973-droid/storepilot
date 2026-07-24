@@ -1,3 +1,4 @@
+import { allowDemoData } from "@/lib/env/runtime";
 import { getBearerToken } from "@/lib/shopify/session-token";
 
 /** Request header carrying the merchant shop verified from a session token. */
@@ -33,7 +34,6 @@ const PUBLIC_API_PREFIXES: readonly string[] = [
   "/api/cron",
   "/api/internal",
   "/api/dev",
-  "/api/demo",
   "/api/debug",
   // Post-OAuth account/property selection runs top-level (outside the Shopify
   // Admin iframe), so no embedded session token exists. These routes
@@ -53,6 +53,12 @@ export function isApiPath(pathname: string): boolean {
 }
 
 export function isPublicApiPath(pathname: string): boolean {
+  if (
+    (pathname === "/api/demo" || pathname.startsWith("/api/demo/")) &&
+    allowDemoData()
+  ) {
+    return true;
+  }
   return PUBLIC_API_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

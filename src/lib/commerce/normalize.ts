@@ -3,6 +3,7 @@ import type { CommercePlatformId, NormalizedCommerceSnapshot } from "./types";
 import { mergeCommercePartial } from "./provider";
 import { getCommercePlatform } from "./registry";
 import { isDemoStoreSnapshot } from "@/lib/demo/is-demo-store";
+import { allowDemoData } from "@/lib/env/runtime";
 import {
   peakOutfittersCommerceCustomers,
   peakOutfittersCommerceOrders,
@@ -76,7 +77,7 @@ export function normalizeCommerceSnapshot(
     metrics: snapshot.storeMetrics,
     syncedAt: snapshot.syncedAt,
     storeDomain: options?.storeDomain ?? snapshot.commerceStoreDomain,
-    ...(isDemoStoreSnapshot(snapshot)
+    ...(allowDemoData() && isDemoStoreSnapshot(snapshot)
       ? {
           orders: peakOutfittersCommerceOrders(),
           customers: peakOutfittersCommerceCustomers(snapshot.customerSnapshot),

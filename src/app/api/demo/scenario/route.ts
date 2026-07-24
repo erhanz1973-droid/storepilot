@@ -4,8 +4,26 @@ import { DEMO_SCENARIO_LIST } from "@/lib/demo/scenarios/registry";
 import { demoScenarioCookieValue, getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
 import { activeStoreCookieValue } from "@/lib/store/context";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData, isProductionRuntime } from "@/lib/env/runtime";
+
+/**
+ * Demo scenario API — development opt-in only.
+ * Production must never return synthetic KPIs (Shopify App Store requirement).
+ */
+function demoDisabled() {
+  return NextResponse.json(
+    { error: "Not found" },
+    { status: 404 },
+  );
+}
+
+function demoAllowed(): boolean {
+  if (isProductionRuntime()) return false;
+  return allowDemoData();
+}
 
 export async function GET() {
+  if (!demoAllowed()) return demoDisabled();
   const activeId = await getActiveDemoScenarioId();
   const active = DEMO_SCENARIO_LIST.find((s) => s.id === activeId) ?? DEMO_SCENARIO_LIST[0]!;
   return NextResponse.json({
@@ -23,6 +41,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!demoAllowed()) return demoDisabled();
   const body = (await request.json()) as { scenarioId?: string };
   const scenarioId = resolveDemoScenarioId(body.scenarioId);
   const cookie = demoScenarioCookieValue(scenarioId);

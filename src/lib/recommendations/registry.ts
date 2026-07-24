@@ -19,6 +19,8 @@ import type { RecommendationAnalyzer } from "./analyzer-types";
 import { buildAnalyzerContext } from "./analyzer-context";
 import { analyzerAllowedByPack, filterAnalyzerOutputs } from "@/lib/decision-packs/registry";
 import type { DecisionPack } from "@/lib/decision-packs/types";
+import { mergeAlpineCuratedAnalyzerOutputs } from "@/lib/demo/showcase-overrides";
+import { allowDemoData } from "@/lib/env/runtime";
 
 /** Auto-discovered recommendation modules */
 export const RECOMMENDATION_ANALYZERS: RecommendationAnalyzer[] = [
@@ -70,6 +72,16 @@ export function runAllAnalyzers(
   snapshot: StoreSnapshot,
   context?: RecommendationAnalyzerContext,
 ): AnalyzerOutput[] {
+  /** Alpine Outfitters showcase — development Demo Mode only */
+  if (
+    allowDemoData() &&
+    snapshot.source === "demo" &&
+    snapshot.demoScenario === "healthy_growth"
+  ) {
+    const curated = mergeAlpineCuratedAnalyzerOutputs(snapshot, []);
+    if (curated.length > 0) return curated;
+  }
+
   const outputs = RECOMMENDATION_ANALYZERS.flatMap((analyzer) =>
     shouldRunAnalyzer(analyzer, snapshot) ? analyzer.analyze(snapshot, context) : [],
   );
@@ -91,6 +103,17 @@ export function runBusinessModelAwareAnalyzers(
   pack: DecisionPack,
   context?: RecommendationAnalyzerContext,
 ): AnalyzerOutput[] {
+  if (
+    allowDemoData() &&
+    snapshot.source === "demo" &&
+    snapshot.demoScenario === "healthy_growth"
+  ) {
+    const curated = mergeAlpineCuratedAnalyzerOutputs(snapshot, []);
+    if (curated.length > 0) {
+      return applyValidationGateToOutputs(curated, gate, RECOMMENDATION_ANALYZERS);
+    }
+  }
+
   const raw = RECOMMENDATION_ANALYZERS.flatMap((analyzer) => {
     if (!shouldRunAnalyzer(analyzer, snapshot)) return [];
     if (!analyzerAllowedByPack(analyzer, pack)) return [];

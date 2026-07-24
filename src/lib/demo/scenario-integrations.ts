@@ -15,6 +15,10 @@ import type {
 import { PEAK_OUTFITTERS } from "@/lib/demo/peak-outfitters/constants";
 import { peakOutfittersGA4Snapshot } from "@/lib/demo/peak-outfitters/ga4";
 import { peakOutfittersGoogleAdsSnapshot } from "@/lib/demo/peak-outfitters/google-campaigns";
+import {
+  alpineOutfittersGA4Snapshot,
+  alpineOutfittersGoogleAdsSnapshot,
+} from "@/lib/demo/alpine-outfitters";
 import { getDemoScenario } from "@/lib/demo/scenarios/registry";
 import type { DemoScenarioDefinition } from "@/lib/demo/scenarios/types";
 import {
@@ -44,8 +48,11 @@ function orderRatio(snapshot: StoreSnapshot): number {
 }
 
 export function buildScenarioGA4Snapshot(snapshot: StoreSnapshot): GA4Snapshot {
-  const base = peakOutfittersGA4Snapshot();
   const scenario = scenarioDef(snapshot);
+  if (scenario?.id === "healthy_growth") {
+    return alpineOutfittersGA4Snapshot();
+  }
+  const base = peakOutfittersGA4Snapshot();
   const m = snapshot.storeMetrics;
   const sRatio = sessionRatio(snapshot, scenario);
   const rRatio = revenueRatio(snapshot);
@@ -122,8 +129,11 @@ export function buildScenarioGA4Snapshot(snapshot: StoreSnapshot): GA4Snapshot {
 }
 
 export function buildScenarioGoogleAdsSnapshot(snapshot: StoreSnapshot): GoogleAdsSnapshot {
-  const base = peakOutfittersGoogleAdsSnapshot();
   const scenario = scenarioDef(snapshot);
+  if (scenario?.id === "healthy_growth") {
+    return alpineOutfittersGoogleAdsSnapshot();
+  }
+  const base = peakOutfittersGoogleAdsSnapshot();
   const targetSpend = scenario?.googleSpend7d ?? base.campaigns.reduce((s, c) => s + c.spend7d, 0);
   const targetRev = scenario?.googleRevenue7d ?? base.campaigns.reduce((s, c) => s + c.revenue7d, 0);
   const baseSpend = base.campaigns.reduce((s, c) => s + c.spend7d, 0) || 1;

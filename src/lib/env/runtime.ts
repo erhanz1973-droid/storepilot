@@ -1,6 +1,10 @@
 /**
  * Runtime environment policy for production vs development.
- * Demo data and estimated metrics are disabled in production unless explicitly opted in.
+ *
+ * Demo / synthetic merchant data:
+ *   - NEVER available in production (Shopify App Store / live merchants)
+ *   - Development only when STOREPILOT_ALLOW_DEMO=true
+ *   - Never auto-entered for authenticated Shopify merchants
  */
 
 export function isProductionRuntime(): boolean {
@@ -9,10 +13,11 @@ export function isProductionRuntime(): boolean {
 
 /** Whether synthetic demo stores / integration fixtures may be used. */
 export function allowDemoData(): boolean {
+  // Hard kill — production App Store / Railway must never serve fictional merchants.
+  if (isProductionRuntime()) return false;
   const flag = process.env.STOREPILOT_ALLOW_DEMO?.trim().toLowerCase();
-  if (flag === "true") return true;
-  if (flag === "false") return false;
-  return !isProductionRuntime();
+  // Explicit opt-in only — never default into demo mode.
+  return flag === "true";
 }
 
 /** Phase-6 integration demo (GA4, TikTok, etc.) — off by default in production. */

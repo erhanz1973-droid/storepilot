@@ -1,6 +1,7 @@
 import type { ProfitDashboard } from "@/lib/profit/types";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import { isDemoStoreSnapshot } from "@/lib/demo/is-demo-store";
+import { allowDemoData } from "@/lib/env/runtime";
 import {
   peakOutfittersOrderIntelligenceSeeds,
   peakOrderMarginPct,
@@ -283,6 +284,76 @@ function fromCustomerHistory(
   return rows.sort((a, b) => b.revenue - a.revenue).slice(0, 20);
 }
 
+
+function fromCommerceOrders(
+  snapshot: StoreSnapshot,
+  profitDashboard: ProfitDashboard | null | undefined,
+): SalesOrderRow[] {
+  const aov = snapshot.storeMetrics.aov30d;
+  const storeAdRate =
+    profitDashboard?.primary.adSpend && profitDashboard.primary.revenue
+      ? profitDashboard.primary.adSpend / profitDashboard.primary.revenue
+      : 0.18;
+
+  const rows: SalesOrderRow[] = [];
+  for (const order of snapshot.commerceOrders ?? []) {
+    const revenue = order.revenue;
+    if (revenue <= 0) continue;
+    const productCost = order.cogs;
+    const advertisingCost = Math.round(revenue * storeAdRate * 100) / 100;
+    const shipping = order.shipping;
+    const paymentFees =
+      Math.round((revenue * DEFAULT_TRANSACTION_FEE_RATE + DEFAULT_TRANSACTION_FEE_FIXED) * 100) / 100;
+    const discounts = order.discounts;
+    const refunds = order.refunds;
+    const profit =
+      Math.round(
+        (revenue - productCost - advertisingCost - shipping - paymentFees - discounts - refunds) * 100,
+      ) / 100;
+    const margin = revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0;
+    const channel = "Shopify";
+    const isBundle = order.lines.length > 1;
+
+    rows.push({
+      id: order.id,
+      externalId: order.externalId,
+      customer: order.customerEmail ?? "Customer",
+      revenue,
+      profit,
+      marginPct: margin,
+      channel,
+      customerType: order.isNewCustomer ? "First-time" : "Returning",
+      refundRisk: refunds > 0 ? "High" : "Low",
+      health: orderHealth(margin),
+      badges: buildBadges({
+        marginPct: margin,
+        channel,
+        isNewCustomer: order.isNewCustomer,
+        isReturning: !order.isNewCustomer,
+        isVip: false,
+        isBundle,
+        revenue,
+        aov,
+        advertisingCost,
+      }),
+      date: order.createdAt,
+      breakdown: {
+        revenue,
+        productCost,
+        advertisingCost,
+        shipping,
+        paymentFees,
+        discounts,
+        refunds,
+        netProfit: profit,
+      },
+      customerLifetimeValue: revenue,
+      isBundle,
+    });
+  }
+  return rows.sort((a, b) => b.revenue - a.revenue).slice(0, 20);
+}
+
 export function buildOrderIntelligenceRows(
   snapshot: StoreSnapshot,
   profitDashboard: ProfitDashboard | null | undefined,
@@ -290,16 +361,89 @@ export function buildOrderIntelligenceRows(
   const aov = snapshot.storeMetrics.aov30d;
 
   let orders: SalesOrderRow[];
-  if (isDemoStoreSnapshot(snapshot)) {
+  // Demo fixtures — development only. Never inject Peak/Alpine rows for live merchants.
+  if (allowDemoData() && isDemoStoreSnapshot(snapshot) && snapshot.demoScenario === "healthy_growth") {
+    orders = fromAlpineProducts(snapshot, aov);
+  } else if (allowDemoData() && isDemoStoreSnapshot(snapshot)) {
     orders = fromDemoSeeds(aov);
   } else if (snapshot.customerSnapshot?.customers.length) {
     orders = fromCustomerHistory(snapshot, profitDashboard);
+  } else if (snapshot.commerceOrders?.length) {
+    orders = fromCommerceOrders(snapshot, profitDashboard);
   } else {
-    orders = fromDemoSeeds(aov).slice(0, 8);
+    // Fresh / empty merchant — professional empty table, never fake Peak seeds.
+    orders = [];
   }
 
   return {
     orders,
     highlights: buildHighlights(orders),
   };
+}
+
+function fromAlpineProducts(snapshot: StoreSnapshot, aov: number): SalesOrderRow[] {
+  const demoToday = Date.UTC(2026, 6, 20);
+  const channels = [
+    "Meta Ads",
+    "Google Ads",
+    "Organic Search",
+    "Direct",
+    "Email",
+  ] as const;
+
+  return snapshot.products
+    .filter((p) => p.unitsSold30d > 0)
+    .sort((a, b) => b.revenue30d - a.revenue30d)
+    .slice(0, 20)
+    .map((p, i) => {
+      const revenue = Math.round(p.price * 100) / 100;
+      const productCost = p.unitCost ?? p.price * 0.38;
+      const advertisingCost = Math.round(revenue * 0.12 * 100) / 100;
+      const shipping = 8;
+      const paymentFees = Math.round(revenue * 0.029 * 100) / 100;
+      const profit = Math.round((revenue - productCost - advertisingCost - shipping - paymentFees) * 100) / 100;
+      const marginPct = revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0;
+      const channel = channels[i % channels.length]!;
+      const isReturning = i % 3 !== 0;
+      const breakdown: OrderProfitBreakdown = {
+        revenue,
+        productCost,
+        advertisingCost,
+        shipping,
+        paymentFees,
+        discounts: 0,
+        refunds: 0,
+        netProfit: profit,
+      };
+
+      return {
+        id: `ao-order-${i + 1}`,
+        externalId: `#AO${1000 + i}`,
+        customer: ["Alex Chen", "Jordan Martinez", "Taylor Kim", "Morgan Lee", "Casey Brooks"][
+          i % 5
+        ]!,
+        revenue,
+        profit,
+        marginPct,
+        channel,
+        customerType: isReturning ? ("Returning" as const) : ("First-time" as const),
+        refundRisk: "Low" as const,
+        health: orderHealth(marginPct),
+        badges: buildBadges({
+          marginPct,
+          channel,
+          isNewCustomer: !isReturning,
+          isReturning,
+          isVip: i % 7 === 0,
+          isBundle: false,
+          revenue,
+          aov,
+          advertisingCost,
+        }),
+        date: new Date(demoToday - i * 86_400_000).toISOString(),
+        breakdown,
+        customerLifetimeValue: Math.round(revenue * (isReturning ? 3.2 : 1)),
+        isBundle: false,
+      };
+    });
 }

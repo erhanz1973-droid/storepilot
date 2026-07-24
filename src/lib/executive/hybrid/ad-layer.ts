@@ -10,6 +10,7 @@ import { hasActiveMetaAdsInstallations } from "@/lib/db/meta-ads";
 import { getMetaSyncCache } from "@/lib/db/meta-sync-cache";
 import { SIMULATION_STORE_BY_SLUG } from "@/lib/simulation-lab/store-ids";
 import { mayUseSyntheticData } from "@/lib/trust/data-mode";
+import { isAlpineOutfittersSnapshot } from "@/lib/demo/alpine-outfitters";
 import {
   buildMetricLabels,
   GA4_SIMULATION_LABEL,
@@ -79,7 +80,10 @@ export async function loadHybridAdvertisingLayer(
   storeId: string,
   shopifySnapshot: StoreSnapshot,
 ): Promise<AdvertisingLayer> {
-  const allowSimulation = mayUseSyntheticData(storeId, shopifySnapshot);
+  /** Alpine Demo Provider owns ads — never inject simulation_roas leftovers */
+  const allowSimulation =
+    mayUseSyntheticData(storeId, shopifySnapshot) &&
+    !isAlpineOutfittersSnapshot(shopifySnapshot);
 
   const [hasMeta, hasGoogle, hasGa4] = await Promise.all([
     hasActiveMetaAdsInstallations(storeId),

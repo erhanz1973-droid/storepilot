@@ -1,5 +1,6 @@
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import { isDemoStoreSnapshot } from "@/lib/demo/is-demo-store";
+import { allowDemoData } from "@/lib/env/runtime";
 import { peakOutfittersOrderIntelligenceSeeds } from "@/lib/demo/peak-outfitters/order-intelligence";
 import type { ProductIntelligenceProfile } from "./types";
 
@@ -70,7 +71,7 @@ export function recentOrdersForProduct(
   snapshot: StoreSnapshot,
   productId: string,
 ): ProductRecentOrder[] {
-  if (!isDemoStoreSnapshot(snapshot)) return [];
+  if (!allowDemoData() || !isDemoStoreSnapshot(snapshot)) return [];
 
   return peakOutfittersOrderIntelligenceSeeds()
     .filter((order) => order.lines.some((line) => line.productId === productId))

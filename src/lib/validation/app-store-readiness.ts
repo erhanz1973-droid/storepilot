@@ -35,11 +35,12 @@ export function validateAppStoreReadiness(): ValidationCheck[] {
     id: "appstore-production-demo-disabled",
     suite: "app_store",
     name: "Demo data disabled in production",
-    status: !isProductionRuntime() || !allowDemoData() ? "pass" : "fail",
-    message:
-      isProductionRuntime() && allowDemoData()
-        ? "STOREPILOT_ALLOW_DEMO must not be true in production"
-        : "Demo data policy OK",
+    status: !allowDemoData() || !isProductionRuntime() ? "pass" : "fail",
+    message: allowDemoData()
+      ? isProductionRuntime()
+        ? "FAIL: demo data reachable in production"
+        : "Demo allowed in development only (STOREPILOT_ALLOW_DEMO=true)"
+      : "Demo data disabled — live Shopify merchants only",
   });
 
   const freeReleaseConfigured =

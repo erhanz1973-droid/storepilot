@@ -216,7 +216,7 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
   }
 
   let base: StoreSnapshot = {
-    source: hasLiveCommerce ? "connected" : "demo",
+    source: hasLiveCommerce ? "connected" : "disconnected",
     syncedAt: new Date().toISOString(),
     commerceProvider,
     commerceStoreDomain,

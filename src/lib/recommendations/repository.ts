@@ -13,6 +13,7 @@ import {
 } from "./types";
 import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 
 type DbRow = {
   id: string;
@@ -285,8 +286,8 @@ async function ensureStoreExists(storeId: string): Promise<void> {
 
   const { error: insertError } = await supabase.from("stores").insert({
     id: storeId,
-    name: storeId === DEMO_STORE_ID ? "Demo Store" : "Store",
-    shopify_domain: storeId === DEMO_STORE_ID ? "demo.storepilot.ai" : null,
+    name: storeId === DEMO_STORE_ID && allowDemoData() ? "Demo Store" : "Store",
+    shopify_domain: storeId === DEMO_STORE_ID && allowDemoData() ? "demo.storepilot.ai" : null,
   });
 
   if (insertError && !/duplicate key|unique/i.test(insertError.message)) {

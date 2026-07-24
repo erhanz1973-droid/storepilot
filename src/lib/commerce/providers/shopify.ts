@@ -6,6 +6,7 @@ import { isShopifyOAuthConfigured } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 import { getPeakOutfittersSnapshot } from "@/lib/connectors/demo-data";
 import { PEAK_OUTFITTERS } from "@/lib/demo/peak-outfitters/constants";
 import {
@@ -97,8 +98,11 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
   },
 
   async getStatus(storeId: string) {
-    if (storeId === DEMO_STORE_ID) {
+    if (storeId === DEMO_STORE_ID && allowDemoData()) {
       return { status: "demo" as const, storeDomain: "demo.storepilot.ai" };
+    }
+    if (storeId === DEMO_STORE_ID) {
+      return { status: "disconnected" as const };
     }
     const installation = await getInstallationForStore(storeId);
     if (!installation) {
@@ -136,8 +140,25 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
   },
 
   async sync(storeId: string): Promise<CommerceSyncPartial> {
-    const demoSnapshot = getPeakOutfittersSnapshot();
-    if (storeId === DEMO_STORE_ID) {
+    const emptyPartial = (storeDomain?: string): CommerceSyncPartial =>
+      mapSnapshotToPartial(
+        {
+          products: [],
+          collections: [],
+          storeMetrics: {
+            revenue30d: 0,
+            orders30d: 0,
+            aov30d: 0,
+            conversionRate30d: 0,
+          },
+          syncedAt: new Date().toISOString(),
+        },
+        storeDomain,
+      );
+
+    // Demo Mode only — never used for App Store / production merchants.
+    if (storeId === DEMO_STORE_ID && allowDemoData()) {
+      const demoSnapshot = getPeakOutfittersSnapshot();
       return mapSnapshotToPartial(demoSnapshot, PEAK_OUTFITTERS.shopDomain, {
         includeDemoRecords: true,
       });
@@ -149,16 +170,13 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
     } catch (error) {
       if (error instanceof TokenDecryptionError) {
         logTokenDecryptionFailure("shopify", error, "commerce.sync");
-        return mapSnapshotToPartial(demoSnapshot, PEAK_OUTFITTERS.shopDomain, {
-          includeDemoRecords: true,
-        });
+        // Never fabricate Peak Outfitters / demo catalog for a live store id.
+        return emptyPartial();
       }
       throw error;
     }
     if (!installation) {
-      return mapSnapshotToPartial(demoSnapshot, PEAK_OUTFITTERS.shopDomain, {
-        includeDemoRecords: true,
-      });
+      return emptyPartial();
     }
 
     const result = await syncShopifyStore(installation.shop_domain, installation.accessToken, {
@@ -174,3 +192,4 @@ export const shopifyCommerceProvider: CommerceProviderAdapter = {
     return mapSnapshotToPartial(result.snapshot, installation.shop_domain);
   },
 };
+

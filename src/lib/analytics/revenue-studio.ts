@@ -1,3 +1,4 @@
+import { allowDemoData } from "@/lib/env/runtime";
 import type { CommerceOrder } from "@/lib/commerce/types";
 import type { ShopifyProduct, StoreSnapshot } from "@/lib/connectors/types";
 import { peakOutfittersCommerceOrders } from "@/lib/demo/peak-outfitters/orders";
@@ -235,7 +236,7 @@ type ProductPair = { a: ShopifyProduct; b: ShopifyProduct; coCount: number; atta
 
 function resolveOrders(snapshot: StoreSnapshot): CommerceOrder[] {
   if (snapshot.commerceOrders?.length) return snapshot.commerceOrders;
-  if (snapshot.source === "demo") return peakOutfittersCommerceOrders();
+  if (allowDemoData() && snapshot.source === "demo") return peakOutfittersCommerceOrders();
   return [];
 }
 

@@ -1,13 +1,17 @@
-import { resolveActiveStoreId } from "@/lib/store/context";
+import { tryResolveActiveStoreId } from "@/lib/store/context";
 import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
 import { DEMO_SCENARIOS } from "@/lib/demo/scenarios/registry";
 import { DemoScenarioSwitcher } from "@/components/demo/DemoScenarioSwitcher";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 
-/** Persistent banner when viewing fictional demo or simulation data — keyed to active store, not account-wide Shopify links. */
+/** Persistent banner when viewing fictional demo or simulation data — never shown in production. */
 export async function DemoDataBadge() {
-  const storeId = await resolveActiveStoreId();
+  if (!allowDemoData()) return null;
+
+  const storeId = await tryResolveActiveStoreId();
+  if (!storeId) return null;
   const isLiveActiveStore = storeId !== DEMO_STORE_ID && !isSimulationStoreId(storeId);
   if (isLiveActiveStore) return null;
 

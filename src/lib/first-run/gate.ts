@@ -1,13 +1,14 @@
 import { cookies } from "next/headers";
 import { hasAlphaEvent } from "@/lib/analytics/alpha-funnel";
-import { hasLiveShopifyConnection, resolveActiveStoreId } from "@/lib/store/context";
+import { hasLiveShopifyConnection, tryResolveActiveStoreId } from "@/lib/store/context";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
 
 export const FIRST_RUN_DONE_COOKIE = "storepilot_first_run_done";
 
 export async function isFirstRunComplete(storeId?: string): Promise<boolean> {
-  const id = storeId ?? (await resolveActiveStoreId());
+  const id = storeId ?? (await tryResolveActiveStoreId());
+  if (!id) return false;
   const cookieStore = await cookies();
   if (cookieStore.get(FIRST_RUN_DONE_COOKIE)?.value === id) return true;
   if (cookieStore.get(FIRST_RUN_DONE_COOKIE)?.value === "1") return true;
@@ -19,7 +20,8 @@ export async function isFirstRunComplete(storeId?: string): Promise<boolean> {
  * should land on /first-run instead of the Executive dashboard.
  */
 export async function shouldRedirectToFirstRun(): Promise<boolean> {
-  const storeId = await resolveActiveStoreId();
+  const storeId = await tryResolveActiveStoreId();
+  if (!storeId) return false;
   if (storeId === DEMO_STORE_ID || isSimulationStoreId(storeId)) return false;
   const live = await hasLiveShopifyConnection(storeId);
   if (!live) return false;

@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { listStoredRecommendations } from "@/lib/db/recommendations";
 import { listScheduledOutcomeRecords } from "@/lib/db/outcome-records";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 
 /**
  * Stores that likely have pending measurements or active learning data.
@@ -40,11 +41,13 @@ export async function listStoreIdsForLearningCron(): Promise<string[]> {
       if (row.store_id) ids.add(row.store_id as string);
     }
   } else {
-    ids.add(DEMO_STORE_ID);
-    const recs = await listStoredRecommendations(DEMO_STORE_ID);
-    if (recs.some((r) => r.status === "implemented")) ids.add(DEMO_STORE_ID);
-    const scheduled = await listScheduledOutcomeRecords(DEMO_STORE_ID);
-    if (scheduled.length > 0) ids.add(DEMO_STORE_ID);
+    if (allowDemoData()) {
+      ids.add(DEMO_STORE_ID);
+      const recs = await listStoredRecommendations(DEMO_STORE_ID);
+      if (recs.some((r) => r.status === "implemented")) ids.add(DEMO_STORE_ID);
+      const scheduled = await listScheduledOutcomeRecords(DEMO_STORE_ID);
+      if (scheduled.length > 0) ids.add(DEMO_STORE_ID);
+    }
   }
 
   return [...ids];

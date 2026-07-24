@@ -7,9 +7,11 @@ import {
 import { resolveAdvertisingEntitlements } from "@/lib/billing/resolve-entitlements-light";
 import { buildEmbeddedSafeExecutiveFallback } from "@/lib/services/embedded-executive-fallback";
 import { shouldRedirectToFirstRun } from "@/lib/first-run/gate";
-import { resolveActiveStoreId } from "@/lib/store/context";
+import { tryResolveActiveStoreId } from "@/lib/store/context";
 import { isSimulationStoreId } from "@/lib/simulation-lab/store-ids";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
+import { CommerceEmptyState } from "@/components/commerce/CommerceEmptyState";
 
 const ExecutivePageClient = nextDynamic(
   () =>
@@ -31,7 +33,7 @@ export default async function ExecutiveAnalyticsPage() {
   }
 
   const [activeStoreId, dataResult, entitlementsResult] = await Promise.all([
-    resolveActiveStoreId(),
+    tryResolveActiveStoreId(),
     buildExecutivePageData().catch(async (error) => {
       return buildEmbeddedSafeExecutiveFallback(error);
     }),
@@ -40,8 +42,24 @@ export default async function ExecutiveAnalyticsPage() {
     })),
   ]);
 
+  if (!activeStoreId && !allowDemoData()) {
+    return (
+      <AnalyticsPageShell
+        title="Executive Dashboard"
+        description="Connect Shopify to load your live store."
+        context="executive"
+        showDateRange={false}
+      >
+        <CommerceEmptyState entity="orders" />
+      </AnalyticsPageShell>
+    );
+  }
+
   const data = dataResult;
-  const isDemo = activeStoreId === DEMO_STORE_ID || isSimulationStoreId(activeStoreId);
+  const isDemo =
+    activeStoreId != null &&
+    allowDemoData() &&
+    (activeStoreId === DEMO_STORE_ID || isSimulationStoreId(activeStoreId));
   const planUsage = entitlementsResult.entitlements;
 
   return (

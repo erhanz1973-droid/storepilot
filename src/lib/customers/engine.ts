@@ -1,3 +1,4 @@
+import { allowDemoData } from "@/lib/env/runtime";
 import type { AttributionDashboard } from "@/lib/attribution/models";
 import { CHANNEL_LABELS } from "@/lib/attribution/models";
 import type { ChartDefinition } from "@/lib/analytics/types";
@@ -52,7 +53,7 @@ function normalizeSnapshot(raw: CustomerSnapshot, orders30d?: number): CustomerS
 
 function resolveCommerceOrders(snapshot: StoreSnapshot): CommerceOrder[] {
   if (snapshot.commerceOrders?.length) return snapshot.commerceOrders;
-  if (snapshot.source === "demo") return peakOutfittersCommerceOrders();
+  if (allowDemoData() && snapshot.source === "demo") return peakOutfittersCommerceOrders();
   return [];
 }
 
@@ -102,7 +103,7 @@ function resolveCustomerSnapshot(snapshot: StoreSnapshot): CustomerSnapshot | nu
   if (snapshot.customerSnapshot?.customers.length) {
     return normalizeSnapshot(snapshot.customerSnapshot, snapshot.storeMetrics.orders30d);
   }
-  if (snapshot.source === "demo") return peakOutfittersCustomerSnapshot();
+  if (allowDemoData() && snapshot.source === "demo") return peakOutfittersCustomerSnapshot();
   if (!snapshot.storeMetrics.orders30d) return null;
 
   return buildAggregatedCustomerSnapshot(snapshot);

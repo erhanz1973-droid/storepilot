@@ -7,6 +7,7 @@ import type {
   RecoveryBreakdown,
   RiskAssessment,
 } from "./executive-advisor";
+import { applyDemoExecutiveKpis } from "@/lib/demo/showcase-overrides";
 
 export type AiEvidenceStrength = "Limited" | "Moderate" | "Strong";
 
@@ -289,6 +290,8 @@ export function buildExecutiveKpis(input: {
   financialContext: ExecutiveFinancialContext;
   moneyLeaks: MoneyLeaksSection;
   recoveryScenarios: RecoveryScenarios;
+  /** When provided and Alpine demo is active, KPIs come from Demo Provider */
+  snapshot?: import("@/lib/connectors/types").StoreSnapshot | null;
 }): ExecutiveKpi[] {
   const { financialContext: ctx, moneyLeaks, recoveryScenarios } = input;
   const topThreat = moneyLeaks.items[0];
@@ -305,7 +308,7 @@ export function buildExecutiveKpis(input: {
         ? "negative"
         : "positive";
 
-  return [
+  const kpis: ExecutiveKpi[] = [
     {
       id: "revenue",
       label: "Revenue",
@@ -345,4 +348,9 @@ export function buildExecutiveKpis(input: {
       tone: "positive",
     },
   ];
+
+  if (input.snapshot) {
+    return applyDemoExecutiveKpis(input.snapshot, kpis);
+  }
+  return kpis;
 }

@@ -12,6 +12,7 @@ import type {
   RecommendationOutcome,
 } from "@/lib/types";
 import { DEMO_STORE_ID } from "@/lib/types";
+import { allowDemoData } from "@/lib/env/runtime";
 
 export { getRecommendationById, listStoredRecommendations } from "@/lib/db/recommendations";
 
@@ -94,7 +95,7 @@ export async function listOutcomeHistory(storeId = DEMO_STORE_ID): Promise<Outco
   const supabase = getSupabaseAdmin();
 
   if (!supabase) {
-    await seedDemoLearningData(storeId);
+    if (allowDemoData()) await seedDemoLearningData(storeId);
     return memoryOutcomes
       .filter((o) => o.store_id === storeId)
       .map(({ store_id: _, ...rest }) => rest);
@@ -125,7 +126,7 @@ export async function listMeasuredRecommendations(
 }
 
 async function seedDemoLearningData(storeId: string) {
-  if (demoSeeded || storeId !== DEMO_STORE_ID) return;
+  if (!allowDemoData() || demoSeeded || storeId !== DEMO_STORE_ID) return;
   demoSeeded = true;
 
   const now = Date.now();

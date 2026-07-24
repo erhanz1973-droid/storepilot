@@ -1,5 +1,6 @@
 import { buildStrugglingStoreSnapshot } from "@/lib/demo/scenarios/struggling";
 import { buildParameterizedDemoSnapshot } from "@/lib/demo/scenarios/build-parameterized";
+import { getAlpineOutfittersSnapshot } from "@/lib/demo/alpine-outfitters";
 import {
   DEFAULT_DEMO_SCENARIO_ID,
   getDemoScenario,
@@ -14,6 +15,10 @@ export { DEFAULT_DEMO_SCENARIO_ID, DEMO_SCENARIOS, DEMO_SCENARIO_LIST } from "@/
 export function buildDemoScenarioSnapshot(scenarioId: DemoScenarioId): StoreSnapshot {
   if (scenarioId === "struggling") {
     return buildStrugglingStoreSnapshot();
+  }
+  /** App Store / website showcase — dedicated Alpine Outfitters provider */
+  if (scenarioId === "healthy_growth") {
+    return getAlpineOutfittersSnapshot();
   }
   return buildParameterizedDemoSnapshot(getDemoScenario(scenarioId));
 }
