@@ -1,4 +1,3 @@
-import { allowDemoData } from "@/lib/env/runtime";
 import { getBearerToken } from "@/lib/shopify/session-token";
 
 /** Request header carrying the merchant shop verified from a session token. */
@@ -53,10 +52,9 @@ export function isApiPath(pathname: string): boolean {
 }
 
 export function isPublicApiPath(pathname: string): boolean {
-  if (
-    (pathname === "/api/demo" || pathname.startsWith("/api/demo/")) &&
-    allowDemoData()
-  ) {
+  // Demo routes are reachable so production can answer 404 from the handler.
+  // Handlers must never return synthetic merchant metrics when demo is disabled.
+  if (pathname === "/api/demo" || pathname.startsWith("/api/demo/")) {
     return true;
   }
   return PUBLIC_API_PREFIXES.some(
