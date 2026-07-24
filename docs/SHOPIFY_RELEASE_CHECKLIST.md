@@ -20,12 +20,12 @@ Do **not** change this to ✅ until every item in **Gate summary** below is chec
 
 | # | Gate | Status | Evidence |
 | --- | --- | --- | --- |
-| G1 | Review fixes committed | ❌ FAIL | Many modified/untracked files still local (see §1) |
-| G2 | Review fixes deployed to Railway | ❌ FAIL | Live `/api/demo/scenario` returns **200** + synthetic KPIs |
-| G3 | `STOREPILOT_ALLOW_DEMO` absent/false | ✅ PASS | Absent on Railway (no demoish env keys) |
-| G4 | `NODE_ENV=production` explicit | ⚠️ WARN | Not set in Railway variables UI (Next usually injects at runtime — set explicitly) |
-| G5 | Required prod secrets present | ✅ PASS* | Shopify + encryption + Meta + Google Ads + Supabase service role set (*see gaps) |
-| G6 | Production cannot reach demo functionality | ❌ FAIL | Public GET `/api/demo/scenario` → 200 with `revenue30d: 82400` |
+| G1 | Review fixes committed | ✅ PASS | `1c76c14`, `1b9bec9` on `main` |
+| G2 | Review fixes deployed to Railway | ✅ PASS | Deploy `90f63988…` SUCCESS |
+| G3 | `STOREPILOT_ALLOW_DEMO` absent/false | ✅ PASS | Absent on Railway |
+| G4 | `NODE_ENV=production` explicit | ✅ PASS | Set on Railway |
+| G5 | Required prod secrets present | ✅ PASS* | Shopify + encryption + Meta + Google Ads + Supabase service role (*optional gaps remain) |
+| G6 | Production cannot reach demo functionality | ✅ PASS | `GET/POST /api/demo/scenario` → **404** `{"error":"Not found"}` |
 | G7 | Fresh-store smoke test complete | ❌ FAIL | Not executed against post-fix deploy |
 
 \*Optional/secondary gaps: `META_APP_URL`, `GOOGLE_ADS_APP_URL`, `GA4_*`, `SMOKE_SECRET`, `SUPABASE_ANON_KEY` unset (fallbacks may apply).
@@ -133,7 +133,7 @@ curl -i https://storepilot-production-d591.up.railway.app/api/demo/scenario
 curl -s https://storepilotai.pro/api/demo/scenario | head
 ```
 
-**Current live result (pre-fix deploy):** both URLs return **HTTP 200** with synthetic scenario JSON including `revenue30d: 82400`. That is a **release blocker**.
+**Current live result (post-fix):** both URLs return **HTTP 404** `{"error":"Not found"}`. See [`PRODUCTION_VERIFICATION_DEMO_API.md`](./PRODUCTION_VERIFICATION_DEMO_API.md).
 
 ---
 
@@ -219,3 +219,10 @@ This document must keep:
 
 until **G1–G7** are all ✅.  
 Partial code readiness is **not** sufficient while production still serves demo scenario KPIs.
+
+
+---
+
+## Production demo blocker update (2026-07-24)
+
+Cleared and verified live. Remaining resubmission blocker is **G7 smoke test only**.
