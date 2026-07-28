@@ -1,4 +1,5 @@
 import { getActiveStoreIdForShopDomain } from "@/lib/db/shopify";
+import { ensureShopifySyncIfNeeded } from "@/lib/shopify/ensure-sync.server";
 import { getShopifyApp } from "@/lib/shopify/shopify-app.server";
 import { persistInstallationFromSession } from "@/lib/shopify/persist-installation.server";
 import { logEmbeddedBootstrap } from "@/lib/store/embedded-context";
@@ -8,6 +9,13 @@ export type EmbeddedBootstrapResult = {
   storeId: string | null;
   sessionId: string;
   persisted: boolean;
+  sync?: {
+    synced: boolean;
+    skipped: boolean;
+    reason: string;
+    products?: number;
+    orders30d?: number;
+  };
 };
 
 function isEmbeddedBootstrapRequest(request: Request): boolean {
@@ -80,20 +88,38 @@ export async function runEmbeddedShopifyBootstrap(
   const storeId =
     persisted?.storeId ?? (await getActiveStoreIdForShopDomain(session.shop));
 
+  let sync: EmbeddedBootstrapResult["sync"];
+  if (storeId && session.accessToken) {
+    // App Review / revisit path often skips afterAuth — sync here when cache is empty/stale.
+    sync = await ensureShopifySyncIfNeeded({
+      shop: session.shop,
+      accessToken: session.accessToken,
+      storeId,
+      source: "embedded-bootstrap",
+      storedClientId: persisted?.clientId,
+      refreshToken: session.refreshToken ?? null,
+    });
+  }
+
   const result: EmbeddedBootstrapResult = {
     shop: session.shop,
     storeId,
     sessionId: session.id,
     persisted: Boolean(persisted),
+    sync,
   };
 
   console.log(
     "[embedded-bootstrap]",
     JSON.stringify({
       phase: "authenticate.admin complete",
-      ...result,
+      shop: result.shop,
+      storeId: result.storeId,
+      sessionId: result.sessionId,
+      persisted: result.persisted,
       isOnline: session.isOnline,
       hasAccessToken: Boolean(session.accessToken),
+      sync,
     }),
   );
 

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       storeId: result.storeId,
       sessionId: result.sessionId,
       persisted: result.persisted,
+      sync: result.sync ?? null,
     });
 
     if (result.storeId) {

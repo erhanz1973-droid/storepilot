@@ -67,14 +67,30 @@ describe("syncShopifyStore optional discounts", () => {
       throw new Error(`Unexpected query: ${query}`);
     });
 
-    shopifyGraphQLResult.mockResolvedValue({
-      data: undefined,
-      errors: [
-        {
-          message: "Access denied for discountNodes field. Required access: read_discounts",
-          path: ["discountNodes"],
-        },
-      ],
+    shopifyGraphQLResult.mockImplementation(async (_shop, _token, query) => {
+      if (query.includes("query DiscountCount") || query.includes("discountNodes")) {
+        return {
+          data: undefined,
+          errors: [
+            {
+              message: "Access denied for discountNodes field. Required access: read_discounts",
+              path: ["discountNodes"],
+            },
+          ],
+        };
+      }
+      if (query.includes("query Orders") || query.includes("query OrdersNoPii")) {
+        return {
+          data: {
+            orders: {
+              edges: [],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+          errors: [],
+        };
+      }
+      return { data: undefined, errors: [] };
     });
   });
 

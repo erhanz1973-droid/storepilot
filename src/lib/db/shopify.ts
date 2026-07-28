@@ -272,15 +272,16 @@ export async function upsertShopifyInstallation(input: {
       refresh_token_expires_at: input.refreshToken
         ? (input.refreshTokenExpires?.toISOString() ?? null)
         : (existing?.refresh_token_expires_at ?? null),
-      shop_name: input.shopName ?? null,
-      shopify_plan: input.shopifyPlan ?? null,
+      shop_name: input.shopName ?? existing?.shop_name ?? null,
+      shopify_plan: input.shopifyPlan ?? existing?.shopify_plan ?? null,
       scopes: input.scopes,
       status: "active",
       connection_health: "healthy",
       error_message: null,
       installed_at: existing?.installed_at ?? now,
       uninstalled_at: null,
-      last_sync_at: null,
+      // Never wipe sync timestamps on token re-persist.
+      last_sync_at: existing?.last_sync_at ?? null,
       sync_stats: existing?.sync_stats ?? {
         productCount: 0,
         inventoryCount: 0,
@@ -299,20 +300,35 @@ export async function upsertShopifyInstallation(input: {
     return rowToInstallation(record as unknown as Record<string, unknown>);
   }
 
+  // Only set identity/auth fields here. Never null out shop_name / shopify_plan /
+  // installed_at / last_sync_at when bootstrap re-persists a token without shop meta.
   const upsertRow: Record<string, unknown> = {
     store_id: input.storeId,
     shop_domain: input.shopDomain,
     access_token_encrypted: encrypted,
     scopes: input.scopes,
-    shop_name: input.shopName ?? null,
-    shopify_plan: input.shopifyPlan ?? null,
     status: "active",
     connection_health: "healthy",
     error_message: null,
     uninstalled_at: null,
-    installed_at: now,
     client_id: clientId,
   };
+  if (input.shopName !== undefined) {
+    upsertRow.shop_name = input.shopName;
+  }
+  if (input.shopifyPlan !== undefined) {
+    upsertRow.shopify_plan = input.shopifyPlan;
+  }
+  // Preserve original installed_at on reinstall/re-persist via DB default / existing row.
+  // Only set installed_at when we know this is a brand-new activation.
+  const { data: existingRow } = await supabase
+    .from("shopify_installations")
+    .select("id, installed_at")
+    .eq("shop_domain", input.shopDomain)
+    .maybeSingle();
+  if (!existingRow) {
+    upsertRow.installed_at = now;
+  }
   // Never wipe an existing refresh_token when the session payload omits it.
   if (input.refreshToken) {
     upsertRow.refresh_token_encrypted = encryptToken(input.refreshToken);
@@ -334,6 +350,26 @@ export async function upsertShopifyInstallation(input: {
     throw new Error(error.message);
   }
 
+  // Verify the row is actually readable (guards against silent write/read skew).
+  const { data: verify, error: verifyError } = await supabase
+    .from("shopify_installations")
+    .select("id, store_id, shop_domain, status")
+    .eq("shop_domain", input.shopDomain)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (verifyError || !verify) {
+    console.error("[shopify-persist] upsert verify failed — row not readable after write", {
+      shopDomain: input.shopDomain,
+      storeId: input.storeId,
+      message: verifyError?.message ?? "missing_row",
+    });
+    throw new Error(
+      verifyError?.message ??
+        `Shopify installation upsert for ${input.shopDomain} did not persist`,
+    );
+  }
+
   const installation = rowToInstallation(data as Record<string, unknown>);
   console.log(
     "[shopify-persist]",
@@ -343,6 +379,7 @@ export async function upsertShopifyInstallation(input: {
       storeId: installation.store_id,
       status: installation.status,
       clientIdPrefix: installation.clientId ? installation.clientId.slice(0, 6) : null,
+      verified: true,
     }),
   );
   return installation;
@@ -591,6 +628,8 @@ export async function createStoreForShop(shopName: string, shopDomain: string): 
   const supabase = getSupabaseAdmin();
 
   if (!supabase) {
+    const existing = [...memoryInstallations.values()].find((i) => i.shop_domain === shopDomain);
+    if (existing) return existing.store_id;
     return crypto.randomUUID();
   }
 
@@ -611,11 +650,35 @@ export async function findStoreByShopDomain(shopDomain: string): Promise<string 
     return inst?.store_id ?? null;
   }
 
-  const { data } = await supabase
+  // Prefer an active installation mapping — survives duplicate/orphan store rows.
+  const { data: installation } = await supabase
+    .from("shopify_installations")
+    .select("store_id")
+    .eq("shop_domain", shopDomain)
+    .eq("status", "active")
+    .order("installed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (installation?.store_id) {
+    return (installation as { store_id: string }).store_id;
+  }
+
+  // limit(1) avoids maybeSingle() failing when duplicate shopify_domain rows exist.
+  const { data: stores, error } = await supabase
     .from("stores")
     .select("id")
     .eq("shopify_domain", shopDomain)
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1);
 
-  return data ? (data as { id: string }).id : null;
+  if (error) {
+    console.error("[shopify-persist] findStoreByShopDomain failed", {
+      shopDomain,
+      message: error.message,
+    });
+    return null;
+  }
+
+  return stores?.[0] ? ((stores[0] as { id: string }).id ?? null) : null;
 }

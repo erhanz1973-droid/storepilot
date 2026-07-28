@@ -98,6 +98,34 @@ const ORDERS_QUERY = `
   }
 `;
 
+/** Fallback when order email/customer fields are blocked (Protected Customer Data). */
+const ORDERS_QUERY_NO_PII = `
+  query OrdersNoPii($cursor: String, $query: String) {
+    orders(first: 50, after: $cursor, query: $query) {
+      edges {
+        node {
+          id
+          createdAt
+          totalPriceSet { shopMoney { amount } }
+          totalShippingPriceSet { shopMoney { amount } }
+          totalRefundedSet { shopMoney { amount } }
+          lineItems(first: 50) {
+            edges {
+              node {
+                quantity
+                product { id }
+                originalTotalSet { shopMoney { amount } }
+                discountedTotalSet { shopMoney { amount } }
+              }
+            }
+          }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
 const COLLECTIONS_QUERY = `
   query Collections($cursor: String) {
     collections(first: 50, after: $cursor) {
@@ -411,21 +439,75 @@ async function fetchAllOrders(
   query: string,
   context?: ShopifyGraphQLContext,
 ): Promise<RawOrder[]> {
+  const probe = await shopifyGraphQLResult<OrdersQueryResult>(
+    shop,
+    tokenState.accessToken,
+    ORDERS_QUERY,
+    { cursor: null, query },
+    context,
+  );
+
+  const protectedCustomerBlocked = /protected customer data|not approved to access the Customer/i.test(
+    probe.errors.map((e) => e.message).join(" "),
+  );
+  const ordersDenied =
+    Boolean(probe.errors.length) &&
+    (isGraphQLFieldAccessDenied(probe.errors, "orders") ||
+      isGraphQLFieldAccessDenied(probe.errors, "email") ||
+      isGraphQLFieldAccessDenied(probe.errors, "customer") ||
+      protectedCustomerBlocked) &&
+    !probe.data?.orders;
+
+  const piiFieldsDenied =
+    Boolean(probe.errors.length) &&
+    (isGraphQLFieldAccessDenied(probe.errors, "email") ||
+      isGraphQLFieldAccessDenied(probe.errors, "customer") ||
+      protectedCustomerBlocked);
+
+  const ordersQuery = ordersDenied || piiFieldsDenied ? ORDERS_QUERY_NO_PII : ORDERS_QUERY;
+  if (ordersDenied || piiFieldsDenied) {
+    console.warn(
+      "[shopify-sync] Order sync falling back to query without customer PII fields.",
+      { shop },
+    );
+  } else if (probe.errors.length > 0) {
+    for (const error of probe.errors) {
+      console.warn(`[shopify-sync] orders GraphQL warning: ${error.message}`);
+    }
+  }
+
   let cursor: string | null = null;
   let hasNextPage = true;
   const orders: RawOrder[] = [];
 
   while (hasNextPage) {
-    const data: OrdersQueryResult = await shopifyGraphQL<OrdersQueryResult>(
-      shop,
-      tokenState.accessToken,
-      ORDERS_QUERY,
-      { cursor, query },
-      context,
+    const page: ShopifyGraphQLResult<OrdersQueryResult> =
+      await shopifyGraphQLResult<OrdersQueryResult>(
+        shop,
+        tokenState.accessToken,
+        ordersQuery,
+        { cursor, query },
+        context,
+      );
+
+    if (!page.data?.orders) {
+      if (page.errors.length > 0) {
+        throw new Error(page.errors.map((err) => err.message).join("; "));
+      }
+      throw new Error("Shopify GraphQL returned no orders connection");
+    }
+
+    if (page.errors.length > 0) {
+      for (const error of page.errors) {
+        console.warn(`[shopify-sync] orders page warning: ${error.message}`);
+      }
+    }
+
+    orders.push(
+      ...page.data.orders.edges.map((edge: { node: RawOrder }) => edge.node),
     );
-    orders.push(...data.orders.edges.map((e: { node: RawOrder }) => e.node));
-    hasNextPage = data.orders.pageInfo.hasNextPage;
-    cursor = data.orders.pageInfo.endCursor;
+    hasNextPage = page.data.orders.pageInfo.hasNextPage;
+    cursor = page.data.orders.pageInfo.endCursor;
   }
 
   return orders;

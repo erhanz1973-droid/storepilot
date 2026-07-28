@@ -80,8 +80,44 @@ export async function GET(request: Request) {
         shopName: syncResult.shopName,
         shopifyPlan: syncResult.shopifyPlan,
       });
-    } catch {
-      // Initial sync failure is non-fatal; store is still connected
+      console.log(
+        "[shopify-sync]",
+        JSON.stringify({
+          event: "oauth_callback_sync_complete",
+          shop,
+          storeId,
+          products: syncResult.stats.productCount,
+          orders30d: syncResult.stats.orderCount,
+        }),
+      );
+    } catch (syncError) {
+      // Initial sync failure is non-fatal; store is still connected — but must be visible in logs.
+      const message = syncError instanceof Error ? syncError.message : String(syncError);
+      console.error("[shopify-sync] oauth_callback_sync_failed", {
+        shop,
+        storeId,
+        message,
+      });
+      try {
+        await updateShopifySyncResult(
+          storeId,
+          {
+            productCount: 0,
+            inventoryCount: 0,
+            orderCount: 0,
+            customerCount: 0,
+            collectionCount: 0,
+            discountCount: 0,
+          },
+          {},
+          { error: message },
+        );
+      } catch (persistError) {
+        console.error("[shopify-sync] oauth_callback failed to persist sync error", {
+          shop,
+          message: persistError instanceof Error ? persistError.message : String(persistError),
+        });
+      }
     }
 
     await trackAlphaEvent(storeId, "installation_completed", { shop });
