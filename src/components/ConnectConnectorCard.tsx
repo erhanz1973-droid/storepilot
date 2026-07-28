@@ -7,15 +7,20 @@ type Props = {
 };
 
 export function ConnectConnectorCard({ connector }: Props) {
-  const href = connector.connectHref ?? "/connected-store";
-  const isOAuthRoute = href.startsWith("/api/");
+  const href = connector.connectHref;
+  const isOAuthRoute = Boolean(href?.startsWith("/api/"));
+  const comingSoon = !href;
 
-  const connectButton = isOAuthRoute ? (
-    <TopLevelOAuthLink href={href} className="btn btn-primary" style={{ flexShrink: 0 }}>
+  const connectButton = comingSoon ? (
+    <button type="button" className="btn btn-secondary" disabled title="Coming soon">
+      Coming soon
+    </button>
+  ) : isOAuthRoute ? (
+    <TopLevelOAuthLink href={href!} className="btn btn-primary" style={{ flexShrink: 0 }}>
       Connect
     </TopLevelOAuthLink>
   ) : (
-    <Link href={href} className="btn btn-primary" style={{ flexShrink: 0 }}>
+    <Link href={href!} className="btn btn-primary" style={{ flexShrink: 0 }}>
       Connect
     </Link>
   );
@@ -26,8 +31,9 @@ export function ConnectConnectorCard({ connector }: Props) {
         <div>
           <h3 style={{ margin: "0 0 8px" }}>Connect {connector.label}</h3>
           <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-            {connector.description}. AI recommendations for this source are disabled until you
-            connect.
+            {comingSoon
+              ? `${connector.description}. This connector is not available yet.`
+              : `${connector.description}. AI recommendations for this source are disabled until you connect.`}
           </p>
         </div>
         {connectButton}

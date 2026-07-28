@@ -3,8 +3,16 @@ import type { ConnectorCapability } from "@/lib/connectors/capabilities";
 import { TopLevelOAuthLink } from "@/components/connections/TopLevelOAuthLink";
 
 function ConnectButton({ connector }: { connector: ConnectorCapability }) {
-  const href = connector.connectHref ?? "/connected-store";
-  const isOAuthRoute = href.startsWith("/api/");
+  const href = connector.connectHref;
+  const isOAuthRoute = Boolean(href?.startsWith("/api/"));
+
+  if (!href) {
+    return (
+      <button type="button" className="btn btn-secondary btn-sm" disabled title="Coming soon">
+        Coming soon
+      </button>
+    );
+  }
 
   if (isOAuthRoute) {
     return (
@@ -25,6 +33,7 @@ export function IntegrationIntelligenceCard({ connector }: { connector: Connecto
   const unlocks =
     connector.intelligenceUnlocks ??
     connector.analyzers.map((a) => `${a} analysis`);
+  const comingSoon = !connector.connectHref;
 
   return (
     <div className="card integration-intelligence-card">
@@ -32,7 +41,9 @@ export function IntegrationIntelligenceCard({ connector }: { connector: Connecto
         <div>
           <h3 style={{ margin: "0 0 6px" }}>{connector.label}</h3>
           <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>
-            Unlock additional AI intelligence by connecting this source.
+            {comingSoon
+              ? "This integration is coming soon — Connect is disabled until OAuth is available."
+              : "Unlock additional AI intelligence by connecting this source."}
           </p>
         </div>
         <ConnectButton connector={connector} />

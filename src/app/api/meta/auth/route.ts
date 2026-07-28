@@ -5,6 +5,12 @@ import { ACTIVE_STORE_COOKIE, resolveActiveStoreId } from "@/lib/store/context";
 
 export async function GET() {
   if (!isMetaOAuthConfigured()) {
+    const appUrl = process.env.META_APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+    if (appUrl) {
+      return NextResponse.redirect(
+        `${appUrl}/connections?tab=advertising&error=${encodeURIComponent("meta_oauth_not_configured")}`,
+      );
+    }
     return NextResponse.json({ error: "Meta OAuth is not configured" }, { status: 503 });
   }
 

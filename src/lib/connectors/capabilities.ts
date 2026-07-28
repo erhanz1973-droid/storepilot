@@ -27,7 +27,7 @@ export const CONNECTOR_CAPABILITIES: ConnectorCapability[] = [
       "promotion_opportunity",
     ],
     envKeys: ["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET"],
-    connectHref: "/connected-store",
+    connectHref: "/connections?tab=commerce&highlight=shopify",
   },
   {
     id: "meta_ads",
@@ -76,7 +76,8 @@ export const CONNECTOR_CAPABILITIES: ConnectorCapability[] = [
     analyzers: ["campaigns"],
     recommendationCategories: ["campaign_review"],
     envKeys: ["TIKTOK_ADS_ACCESS_TOKEN"],
-    connectHref: "/connected-store",
+    // No OAuth yet — Approvals/connect cards must show Coming soon, not a fake Connect.
+    connectHref: undefined,
   },
   {
     id: "klaviyo",
@@ -91,7 +92,7 @@ export const CONNECTOR_CAPABILITIES: ConnectorCapability[] = [
     analyzers: [],
     recommendationCategories: [],
     envKeys: ["KLAVIYO_API_KEY"],
-    connectHref: "/connected-store",
+    connectHref: undefined,
   },
 ];
 

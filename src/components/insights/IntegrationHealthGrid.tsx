@@ -38,11 +38,15 @@ function IntegrationHealthCardView({ card }: { card: IntegrationHealthCard }) {
             {card.dataMode === "live" && card.status === "connected" ? " · Live" : ""}
           </p>
         </div>
-        {card.connectHref && card.status !== "connected" && (
+        {card.connectHref && card.status !== "connected" ? (
           <a href={card.connectHref} className="btn btn-secondary" style={{ fontSize: "0.85rem" }}>
             Connect
           </a>
-        )}
+        ) : card.status !== "connected" ? (
+          <button type="button" className="btn btn-secondary" style={{ fontSize: "0.85rem" }} disabled>
+            Coming soon
+          </button>
+        ) : null}
       </div>
 
       {card.syncFailed && (

@@ -130,7 +130,7 @@ export const CONNECTION_CATALOG: ConnectionCatalogItem[] = [
     description: "Search, Shopping, and Performance Max campaigns",
     category: "advertising",
     status: "available",
-    connectHref: "/connections",
+    connectHref: "/connections?tab=advertising&highlight=google_ads",
     integrationId: "google_ads",
   },
   {
@@ -139,7 +139,7 @@ export const CONNECTION_CATALOG: ConnectionCatalogItem[] = [
     description: "Facebook and Instagram campaign performance",
     category: "advertising",
     status: "available",
-    connectHref: "/connections",
+    connectHref: "/connections?tab=advertising&highlight=meta_ads",
     integrationId: "meta_ads",
   },
   {
@@ -147,8 +147,7 @@ export const CONNECTION_CATALOG: ConnectionCatalogItem[] = [
     label: "TikTok Ads",
     description: "TikTok campaign spend and conversions",
     category: "advertising",
-    status: "beta",
-    connectHref: "/integrations",
+    status: "planned",
     integrationId: "tiktok",
   },
   {
@@ -165,8 +164,8 @@ export const CONNECTION_CATALOG: ConnectionCatalogItem[] = [
     label: "GA4",
     description: "Sessions, landing pages, and attribution touchpoints",
     category: "analytics",
-    status: "beta",
-    connectHref: "/integrations",
+    status: "available",
+    connectHref: "/connections?tab=analytics&highlight=ga4",
   },
   {
     id: "google_merchant_center",
@@ -182,8 +181,7 @@ export const CONNECTION_CATALOG: ConnectionCatalogItem[] = [
     label: "Klaviyo",
     description: "Email flows, segments, and campaign revenue",
     category: "marketing",
-    status: "beta",
-    connectHref: "/integrations",
+    status: "planned",
     integrationId: "klaviyo",
   },
   {

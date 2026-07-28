@@ -6,7 +6,22 @@
 /** Leave the Admin iframe (OAuth, billing, external hosts). */
 export function redirectTop(url: string): void {
   if (typeof window === "undefined") return;
-  window.open(url, "_top");
+  const absolute =
+    url.startsWith("http://") || url.startsWith("https://")
+      ? url
+      : new URL(url, window.location.origin).toString();
+
+  try {
+    if (window.top && window.top !== window.self) {
+      window.top.location.assign(absolute);
+      return;
+    }
+  } catch {
+    // Cross-origin top access can throw — fall through.
+  }
+
+  // Same-tab navigation is more reliable than window.open inside Admin iframes.
+  window.location.assign(absolute);
 }
 
 /** True when running inside Shopify Admin iframe / embedded query context. */

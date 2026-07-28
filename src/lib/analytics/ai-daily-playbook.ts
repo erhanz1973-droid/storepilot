@@ -12,6 +12,7 @@ import { DEMO_SCENARIOS } from "@/lib/demo/scenarios/registry";
 import type { DemoScenarioId } from "@/lib/demo/scenarios/types";
 import { ALPINE_UI_METRICS } from "@/lib/demo/alpine-outfitters/ui-metrics";
 import { allowDemoData } from "@/lib/env/runtime";
+import { hasCustomerRecords } from "@/lib/customers/metrics";
 import {
   EXECUTIVE_MODULES,
   type ExecutiveModuleId,
@@ -209,7 +210,7 @@ function marketingCandidates(snapshot: StoreSnapshot): Candidate[] {
       impactLabel: "Unlock Advertising Intelligence",
       impactMonthly: null,
       confidence: "High",
-      approvalHref: "/connections?highlight=meta_ads",
+      approvalHref: "/connections?tab=advertising&highlight=meta_ads",
     });
   }
 
@@ -266,6 +267,72 @@ function inventoryCandidates(snapshot: StoreSnapshot): Candidate[] {
   return items;
 }
 
+function customerCandidates(snapshot: StoreSnapshot): Candidate[] {
+  const items: Candidate[] = [];
+  const cs = snapshot.customerSnapshot;
+  if (!cs || !hasCustomerRecords(cs)) return items;
+
+  const inactive = cs.customers.filter((c) => c.segment === "inactive" || c.segment === "at_risk");
+  const vip = cs.customers.filter((c) => c.segment === "vip");
+  const oneTime = cs.customers.filter((c) => c.segment === "one_time");
+  const buyers = cs.customers.filter((c) => c.ordersCount >= 1);
+  const repeatBuyers = cs.customers.filter((c) => c.ordersCount >= 2);
+  const repeatPct =
+    buyers.length > 0 ? Math.round((repeatBuyers.length / buyers.length) * 1000) / 10 : null;
+
+  if (inactive.length > 0) {
+    const recoverable = Math.round(inactive.reduce((s, c) => s + c.lifetimeRevenue, 0) * 0.08);
+    pushCandidate(items, {
+      id: "cust-reengage",
+      module: "customers",
+      title: "Re-engage inactive customers",
+      impactLabel: `${inactive.length} customers inactive 60+ days`,
+      impactMonthly: recoverable > 0 ? recoverable : null,
+      confidence: "High",
+      approvalHref: "/commerce/customers?playbook=cust-reengage",
+    });
+  }
+
+  if (repeatPct != null && repeatPct < 30 && oneTime.length > 5) {
+    pushCandidate(items, {
+      id: "cust-repeat",
+      module: "customers",
+      title: "Increase repeat purchases with post-purchase flows",
+      impactLabel: `Repeat purchase rate ${repeatPct}% · ${oneTime.length} one-time buyers`,
+      impactMonthly: null,
+      confidence: "High",
+      approvalHref: "/commerce/customers?playbook=cust-repeat",
+    });
+  }
+
+  if (vip.length >= 3) {
+    pushCandidate(items, {
+      id: "cust-vip",
+      module: "customers",
+      title: "Reward VIP customers with exclusive retention offers",
+      impactLabel: `${vip.length} VIP customers in connected dataset`,
+      impactMonthly: null,
+      confidence: "High",
+      approvalHref: "/commerce/customers?playbook=cust-vip",
+    });
+  }
+
+  // Fallback insight when records exist but no strong segment signal yet
+  if (items.length === 0 && cs.customers.length > 0) {
+    pushCandidate(items, {
+      id: "cust-review-segments",
+      module: "customers",
+      title: "Review customer segments for retention opportunities",
+      impactLabel: `${cs.customers.length} customers synced from Shopify`,
+      impactMonthly: null,
+      confidence: "Medium",
+      approvalHref: "/commerce/customers",
+    });
+  }
+
+  return items;
+}
+
 function connectionCandidates(snapshot: StoreSnapshot): Candidate[] {
   const items: Candidate[] = [];
   const states = snapshot.connectorStates ?? {};
@@ -282,10 +349,12 @@ function connectionCandidates(snapshot: StoreSnapshot): Candidate[] {
     });
   }
 
-  if (!snapshot.customerSnapshot?.customers.length) {
+  // Only when customer records are actually unavailable — never when Customers is connected.
+  const cs = snapshot.customerSnapshot;
+  if (!cs || !hasCustomerRecords(cs)) {
     pushCandidate(items, {
       id: "conn-customers",
-      module: "customers",
+      module: "connections",
       title: "Connect Customer Data",
       impactLabel: "Unlock retention intelligence",
       impactMonthly: null,
@@ -340,6 +409,7 @@ export function buildDailyAiPlaybook(input: {
   }
 
   candidates.push(...inventoryCandidates(input.snapshot));
+  candidates.push(...customerCandidates(input.snapshot));
   candidates.push(...connectionCandidates(input.snapshot));
 
   const sorted = candidates

@@ -171,6 +171,28 @@ export const SHOPIFY_DATA_REQUIREMENTS: DataRequirementSpec[] = [
     requiredSources: ["shopify", "inventory"],
     matchPatterns: [/bundle products?/i, /create bundle/i],
   },
+  {
+    id: "connect_customer_data",
+    kind: "integration",
+    label: "Connect customer data",
+    // Integration CTA — customer records are missing; do not list Customers as supporting evidence.
+    requiredSources: ["shopify"],
+    matchPatterns: [/connect customer data/i],
+  },
+  {
+    id: "customer_retention",
+    kind: "recommendation",
+    label: "Customer retention",
+    requiredSources: ["shopify", "customers", "orders"],
+    matchPatterns: [
+      /re-engage inactive/i,
+      /reward vip/i,
+      /repeat purchase/i,
+      /post-purchase/i,
+      /retention/i,
+      /inactive customers/i,
+    ],
+  },
 ];
 
 export const ALL_DATA_REQUIREMENTS: DataRequirementSpec[] = [
@@ -325,7 +347,7 @@ export function buildAdvertisingIntelligencePanel(): AdvertisingIntelligencePane
     closing:
       "If you are already running advertising, connect Meta Ads and/or Google Ads. If you are not yet running advertising, your Shopify data may still surface merchandising and inventory opportunities before paid acquisition.",
     ctaLabel: "Connect Advertising Platforms",
-    ctaHref: "/connections?highlight=meta_ads",
+      ctaHref: "/connections?tab=advertising&highlight=meta_ads",
   };
 }
 
@@ -352,6 +374,10 @@ export function filterPlaybookTitlesForDataAvailability<T extends { title: strin
   sources: ConnectedSourcesInput,
 ): T[] {
   return items.filter((item) => {
+    // Never emit "Connect Customer Data" when customer records are already connected.
+    if (/connect customer data/i.test(item.title)) {
+      return !sources.customers;
+    }
     if (item.module === "connections") return true;
     return canEmitAsRecommendation(item.title, sources);
   });
@@ -454,7 +480,11 @@ export function groundRecommendationEvidence(input: {
 }
 
 function inferDefaultRequiredSources(title: string): ExecutiveDataSourceId[] {
-  if (/\b(cart|customer|retention|vip|lifetime)\b/i.test(title)) {
+  // Integration CTAs: required source is the platform we already have — never the missing one.
+  if (/\bconnect\b/i.test(title)) {
+    return ["shopify"];
+  }
+  if (/\b(cart|customer|retention|vip|lifetime|re-engage|repeat)\b/i.test(title)) {
     return ["shopify", "customers", "orders"];
   }
   if (/\b(inventory|stock|reorder|bundle|clearance|dead)\b/i.test(title)) {

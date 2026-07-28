@@ -751,13 +751,43 @@ function IntegrationDetailPanel({
 export function ConnectionsWorkspace({ payload }: { payload: IntegrationBoardPayload }) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as ConnectionCategory | null;
+  const highlightParam = searchParams.get("highlight");
+
+  // Legacy / mistaken tab aliases used by older CTAs
+  const normalizedTab: ConnectionCategory | null = (() => {
+    if (!tabParam && !highlightParam) return null;
+    if (tabParam === ("ads" as ConnectionCategory) || highlightParam === "meta_ads" || highlightParam === "google_ads") {
+      return "advertising";
+    }
+    if (tabParam === ("operations" as ConnectionCategory)) {
+      return "business_systems";
+    }
+    if (highlightParam === "ga4" || highlightParam === "analytics") {
+      return "analytics";
+    }
+    if (highlightParam === "shopify") {
+      return "commerce";
+    }
+    if (tabParam && CONNECTIONS_CATEGORY_ORDER.includes(tabParam)) {
+      return tabParam;
+    }
+    return null;
+  })();
+
   const initialTab =
-    tabParam && CONNECTIONS_CATEGORY_ORDER.includes(tabParam)
-      ? tabParam
+    normalizedTab && CONNECTIONS_CATEGORY_ORDER.includes(normalizedTab)
+      ? normalizedTab
       : CONNECTIONS_CATEGORY_ORDER[0];
 
   const tabItemsForInit = payload.items.filter((item) => item.category === initialTab);
+  const highlightId =
+    highlightParam === "meta_ads" || highlightParam === "google_ads" || highlightParam === "ga4" || highlightParam === "shopify"
+      ? highlightParam === "ga4"
+        ? "ga4"
+        : highlightParam
+      : null;
   const initialSelectedId =
+    (highlightId ? tabItemsForInit.find((i) => i.id === highlightId)?.id : undefined) ??
     tabItemsForInit.find((i) => i.status === "connected")?.id ??
     tabItemsForInit.find((i) => i.id === "shopify")?.id ??
     tabItemsForInit[0]?.id;
@@ -766,12 +796,13 @@ export function ConnectionsWorkspace({ payload }: { payload: IntegrationBoardPay
   const [selectedId, setSelectedId] = useState(initialSelectedId);
 
   useEffect(() => {
-    if (tabParam && CONNECTIONS_CATEGORY_ORDER.includes(tabParam)) {
-      setActiveTab(tabParam);
-      const first = payload.items.find((i) => i.category === tabParam);
-      if (first) setSelectedId(first.id);
-    }
-  }, [tabParam, payload.items]);
+    if (!normalizedTab) return;
+    setActiveTab(normalizedTab);
+    const inTab = payload.items.filter((i) => i.category === normalizedTab);
+    const preferred =
+      (highlightId ? inTab.find((i) => i.id === highlightId) : undefined) ?? inTab[0];
+    if (preferred) setSelectedId(preferred.id);
+  }, [normalizedTab, highlightId, payload.items]);
 
   const tabItems = useMemo(
     () => payload.items.filter((item) => item.category === activeTab),

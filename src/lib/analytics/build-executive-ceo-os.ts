@@ -597,7 +597,7 @@ export function buildExecutiveBrief(input: {
   businessHealthLabel: string;
   observingCampaignName?: string | null;
   /** Evidence-based playbook / decision titles already filtered for data availability */
-  recommendationTitles?: string[];
+  recommendationTitles?: Array<string | { title: string; evidence?: string[] }>;
 }): ExecutiveBrief {
   const src = input.connectedSources ?? {};
   const analyzedSources: ExecutiveBriefSource[] = [
@@ -653,12 +653,14 @@ export function buildExecutiveBrief(input: {
     findings.push(`One campaign is under close observation: ${input.observingCampaignName}`);
   }
   const healthPositive = !/(poor|critical)/i.test(input.businessHealthLabel);
-  if (src.customers !== false) {
+  if (src.customers === true) {
     findings.push(
       healthPositive
         ? "Customer retention remains healthy"
         : "Customer retention requires attention",
     );
+  } else {
+    findings.push("Customer records are not available yet — retention insights are limited");
   }
 
   // Primary concern — never elevate ad threats without ads data
@@ -762,10 +764,11 @@ export function buildExecutiveBrief(input: {
   }
 
   const recommendationTitles = (input.recommendationTitles ?? [])
-    .filter((t) => canEmitAsRecommendation(t, src))
+    .map((entry) => (typeof entry === "string" ? { title: entry, evidence: [] as string[] } : entry))
+    .filter((entry) => canEmitAsRecommendation(entry.title, src))
     .slice(0, 5);
 
-  const recommendations = recommendationTitles.map((title) => {
+  const recommendations = recommendationTitles.map(({ title, evidence: evidenceIn }) => {
     const isTodayDecision =
       input.dailyDecision.hasDecision && input.dailyDecision.action === title;
     const grounded = groundRecommendationEvidence({
@@ -773,14 +776,16 @@ export function buildExecutiveBrief(input: {
       sources: src,
       evidencePointCount: isTodayDecision
         ? input.dailyDecision.evidencePoints.length
-        : 1,
+        : Math.max(evidenceIn?.length ?? 0, /connect customer data/i.test(title) ? 0 : 1),
       confidencePct: isTodayDecision
         ? input.dailyDecision.impactPresentation.confidencePct
-        : 70,
+        : /connect customer data/i.test(title)
+          ? 55
+          : 70,
     });
     const evidence = isTodayDecision
       ? filterBusinessEvidencePoints(input.dailyDecision.evidencePoints).slice(0, 4)
-      : [];
+      : filterBusinessEvidencePoints(evidenceIn ?? []).slice(0, 4);
     return {
       title,
       kind: (grounded.standing === "recommendation" ? "recommendation" : "hypothesis") as
@@ -1419,8 +1424,13 @@ export function buildExecutiveCeoOsLayer(input: {
   }
 
   const recommendationTitles = [
-    ...(dailyDecision.hasDecision ? [dailyDecision.action] : []),
-    ...playbookForPlanning.items.map((i) => i.title),
+    ...(dailyDecision.hasDecision
+      ? [{ title: dailyDecision.action, evidence: dailyDecision.evidencePoints }]
+      : []),
+    ...playbookForPlanning.items.map((i) => ({
+      title: i.title,
+      evidence: i.impactLabel ? [i.impactLabel] : [],
+    })),
   ];
 
   const safeThreat =

@@ -119,8 +119,12 @@ function attachCeoOsLayer(
       metaAds: ir.metaConnected,
       googleAds: ir.googleConnected,
       ga4: Boolean(snapshot?.ga4Snapshot),
-      inventory: true,
-      customers: true,
+      inventory: (snapshot?.products?.length ?? 0) > 0,
+      customers: Boolean(
+        snapshot?.customerSnapshot &&
+          snapshot.customerSnapshot.dataTier === "record_level" &&
+          snapshot.customerSnapshot.customers.length > 0,
+      ),
     },
   });
   return { ...page, ceoOs };

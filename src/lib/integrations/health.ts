@@ -98,7 +98,7 @@ export async function buildIntegrationHealth(
         value: formatCurrency(snapshot.storeMetrics.revenue30d),
       },
     ],
-    connectHref: "/connected-store",
+    connectHref: "/connections?tab=commerce&highlight=shopify",
   });
 
   const googleErrored = googleInstalls.find(
@@ -143,7 +143,7 @@ export async function buildIntegrationHealth(
         value: googleConnected && !googleFailed ? "Live" : googleFailed ? "Sync Failed" : "Not Connected",
       },
     ],
-    connectHref: "/connections",
+    connectHref: "/connections?tab=advertising&highlight=google_ads",
     syncEndpoint: "/api/google/sync",
   });
 
@@ -180,7 +180,7 @@ export async function buildIntegrationHealth(
         value: metaConnected && !metaFailed ? "Live" : metaFailed ? "Sync Failed" : "Not Connected",
       },
     ],
-    connectHref: "/connections",
+    connectHref: "/connections?tab=advertising&highlight=meta_ads",
     syncEndpoint: "/api/meta/sync",
   });
 
@@ -241,7 +241,8 @@ export async function buildIntegrationHealth(
       syncFailed: false,
       errorMessage: null,
       metrics: p.preview ? [{ label: "Preview", value: p.preview }] : [],
-      connectHref: "/integrations",
+      // No OAuth for these Phase 6 cards yet — omit Connect so UI can show Coming soon.
+      connectHref: undefined,
     });
   }
 
