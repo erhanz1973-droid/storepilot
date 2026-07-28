@@ -42,7 +42,7 @@ describe("live store without ads", () => {
     expect(
       playbook.items.some((i) => /Increase Google Ads budget/i.test(i.title)),
     ).toBe(false);
-    expect(playbook.items.some((i) => /Connect Meta or Google Ads/i.test(i.title))).toBe(true);
+    expect(playbook.items.some((i) => /Connect Advertising Platforms/i.test(i.title))).toBe(true);
   });
 
   it("reports zero campaigns scanned when ads are disconnected", () => {

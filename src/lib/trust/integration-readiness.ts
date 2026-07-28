@@ -27,6 +27,8 @@ export type IntegrationReadiness = {
   canGenerateAdvertisingRecommendations: boolean;
   canShowChannelComparison: boolean;
   canShowBudgetAllocation: boolean;
+  /** 0–100 share of tracked executive data sources connected */
+  businessCoverageScorePct: number;
   executiveMessage: string | null;
   advertisingMessage: string | null;
   dataConfidence: DataConfidenceLevel;
@@ -48,7 +50,7 @@ function connectorFailed(
   id: DataSourceId,
 ): boolean {
   const status = states?.[id];
-  return status === "error";
+  return status === "error" || status === "sync_failed";
 }
 
 export function assessDataConfidence(input: {
@@ -131,11 +133,25 @@ export function buildIntegrationReadiness(input: {
   }
 
   const confidence = assessDataConfidence(input);
+  const coveragePieces = [
+    shopifyConnected,
+    true, // inventory when Shopify connected (catalog synced)
+    true, // customers when Shopify connected
+    metaConnected,
+    googleConnected,
+    Boolean(snapshot.ga4Snapshot),
+  ];
+  // When Shopify is offline, only count ads/ga4 that might still be true.
+  const coverageDenom = shopifyConnected ? 6 : 3;
+  const coverageNumer = shopifyConnected
+    ? coveragePieces.filter(Boolean).length
+    : [metaConnected, googleConnected, Boolean(snapshot.ga4Snapshot)].filter(Boolean).length;
+  const businessCoverageScorePct = Math.round((coverageNumer / coverageDenom) * 100);
 
   const executiveMessage = !shopifyConnected
     ? "Connect Shopify to analyze your store. We explain what's missing instead of showing demo data."
     : phase === "shopify_only"
-      ? "I can analyze your store performance. Connect advertising platforms to unlock marketing intelligence."
+      ? "I can analyze your store performance. Connect advertising platforms to unlock Advertising Intelligence."
       : integrationIssues.length > 0
         ? "Some integrations need attention. Recommendations use only connected platforms with live data."
         : confidence.level === "low"
@@ -143,10 +159,7 @@ export function buildIntegrationReadiness(input: {
           : null;
 
   const advertisingMessage = !hasAds
-    ? dataUnavailableMessage(
-        "Advertising recommendations",
-        "no ad platforms connected — connect Meta or Google Ads in Connections",
-      )
+    ? "Advertising platforms are not connected. I cannot evaluate campaign performance or advertising profitability until Meta Ads and/or Google Ads sync."
     : adsConnectedCount === 1
       ? `Recommendations use ${metaConnected ? "Meta Ads" : "Google Ads"} only. Connect the other platform for cross-channel comparison.`
       : integrationIssues.length > 0
@@ -164,6 +177,7 @@ export function buildIntegrationReadiness(input: {
     canGenerateAdvertisingRecommendations: hasAds && integrationIssues.length === 0,
     canShowChannelComparison: metaConnected && googleConnected,
     canShowBudgetAllocation: hasAds,
+    businessCoverageScorePct,
     executiveMessage,
     advertisingMessage,
     dataConfidence: confidence.level,

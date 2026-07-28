@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ExecutiveBrief } from "@/lib/analytics/build-executive-ceo-os";
 
 export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
@@ -11,24 +12,65 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
         <p className="exec-brief-intro">{brief.introLine}</p>
       </header>
 
-      {/* 1. What did StorePilot analyze? */}
+      <div className="exec-brief-section exec-brief-coverage">
+        <h3 className="exec-brief-section-title">Business Coverage</h3>
+        <p className="exec-brief-coverage-score">{brief.businessCoverage.scorePct}%</p>
+        {brief.businessCoverage.confidenceLimitation ? (
+          <p className="exec-brief-coverage-note muted">{brief.businessCoverage.confidenceLimitation}</p>
+        ) : null}
+      </div>
+
       <div className="exec-brief-section exec-brief-sources">
-        <h3 className="exec-brief-section-title">Business analyzed</h3>
+        <h3 className="exec-brief-section-title">Today&apos;s Executive Briefing is based on</h3>
         <ul className="exec-brief-source-list">
-          {brief.analyzedSources.map((source) => (
-            <li key={source.label} className={source.connected ? "connected" : "disconnected"}>
+          {brief.basedOnSources.map((label) => (
+            <li key={label} className="connected">
               <span className="exec-brief-source-check" aria-hidden>
-                {source.connected ? "✓" : "—"}
+                ✓
               </span>
-              {source.label}
+              {label}
             </li>
           ))}
         </ul>
+        {brief.notAvailableSources.length > 0 ? (
+          <>
+            <h4 className="exec-brief-subsection-title">Not available</h4>
+            <ul className="exec-brief-source-list">
+              {brief.notAvailableSources.map((label) => (
+                <li key={label} className="disconnected">
+                  <span className="exec-brief-source-check" aria-hidden>
+                    ○
+                  </span>
+                  {label}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        <p className="exec-brief-data-footer muted">{brief.dataBasisFooter}</p>
       </div>
 
-      {/* 2. What did StorePilot find? */}
+      {brief.advertisingIntelligence ? (
+        <div className="exec-brief-section exec-brief-ad-intel">
+          <h3 className="exec-brief-section-title">{brief.advertisingIntelligence.headline}</h3>
+          <p className="exec-brief-ad-intel-body">{brief.advertisingIntelligence.body}</p>
+          <p className="exec-brief-ad-intel-lead muted">
+            If you are already running advertising, connect Meta Ads and/or Google Ads so I can:
+          </p>
+          <ul className="exec-brief-ad-intel-bullets">
+            {brief.advertisingIntelligence.bullets.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+          <p className="exec-brief-ad-intel-closing muted">{brief.advertisingIntelligence.closing}</p>
+          <Link className="button primary exec-brief-ad-intel-cta" href={brief.advertisingIntelligence.ctaHref}>
+            {brief.advertisingIntelligence.ctaLabel}
+          </Link>
+        </div>
+      ) : null}
+
       <div className="exec-brief-section exec-brief-findings">
-        <h3 className="exec-brief-section-title">Today's findings</h3>
+        <h3 className="exec-brief-section-title">Today&apos;s findings</h3>
         <ul className="exec-brief-finding-list">
           {brief.findings.map((finding) => (
             <li key={finding}>{finding}</li>
@@ -36,7 +78,35 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
         </ul>
       </div>
 
-      {/* 3. What concerns the AI most? */}
+      {brief.recommendations.length > 0 ? (
+        <div className="exec-brief-section exec-brief-recs">
+          <h3 className="exec-brief-section-title">Recommendations</h3>
+          <p className="muted exec-brief-kind-note">Require supporting evidence from connected data.</p>
+          <ul className="exec-brief-finding-list">
+            {brief.recommendations.map((r) => (
+              <li key={r.title}>{r.title}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {brief.opportunities.length > 0 ? (
+        <div className="exec-brief-section exec-brief-opps">
+          <h3 className="exec-brief-section-title">Opportunities</h3>
+          <p className="muted exec-brief-kind-note">
+            Suggested without live advertising data — not evidence-based recommendations.
+          </p>
+          <ul className="exec-brief-finding-list">
+            {brief.opportunities.map((o) => (
+              <li key={o.title}>
+                {o.title}
+                <span className="muted"> — {o.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div
         className={`exec-brief-section exec-brief-concern${
           brief.primaryConcern.actionRequired ? " exec-brief-concern-action" : ""
@@ -47,13 +117,11 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
         <p className="exec-brief-concern-body">{brief.primaryConcern.body}</p>
       </div>
 
-      {/* 4. What would StorePilot do? */}
       <div className="exec-brief-section exec-brief-recommendation">
         <h3 className="exec-brief-section-title">If I were running this business today…</h3>
         <p className="exec-brief-recommendation-body">{brief.aiRecommendation}</p>
       </div>
 
-      {/* 5. Expected Business Outcome */}
       <div className="exec-brief-section exec-brief-outcome">
         <h3 className="exec-brief-section-title">{brief.expectedOutcome.label}</h3>
         {brief.expectedOutcome.amountFormatted ? (

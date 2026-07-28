@@ -205,8 +205,8 @@ function marketingCandidates(snapshot: StoreSnapshot): Candidate[] {
     pushCandidate(items, {
       id: "mkt-connect-ads",
       module: "connections",
-      title: "Connect Meta or Google Ads",
-      impactLabel: "Unlock advertising intelligence",
+      title: "Connect Advertising Platforms",
+      impactLabel: "Unlock Advertising Intelligence",
       impactMonthly: null,
       confidence: "High",
       approvalHref: "/connections?highlight=meta_ads",

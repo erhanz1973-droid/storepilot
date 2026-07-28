@@ -21827,6 +21827,66 @@ button {
   color: var(--muted);
 }
 
+.exec-brief-coverage-score {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.exec-brief-coverage-note,
+.exec-brief-data-footer,
+.exec-brief-kind-note {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.exec-brief-subsection-title {
+  margin: 14px 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.exec-brief-ad-intel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 16px 18px;
+}
+
+.exec-brief-ad-intel-body {
+  margin: 0 0 10px;
+  white-space: pre-line;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.exec-brief-ad-intel-lead {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+}
+
+.exec-brief-ad-intel-bullets {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.exec-brief-ad-intel-closing {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.exec-brief-ad-intel-cta {
+  display: inline-flex;
+}
+
 .exec-brief-section {
   padding: 16px 0;
   border-top: 1px solid var(--border);

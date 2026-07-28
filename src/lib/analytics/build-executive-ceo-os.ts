@@ -1,6 +1,15 @@
 import type { DecisionItem } from "@/lib/decisions/center";
 import type { DailyAiPlaybook, ExecutiveFocusSummary } from "@/lib/analytics/ai-daily-playbook";
 import { countLiveCampaignsScanned } from "@/lib/analytics/ai-daily-playbook";
+import {
+  adsCampaignDataAvailable,
+  ADVERTISING_OPPORTUNITIES_WITHOUT_DATA,
+  applyCoverageConfidencePenalty,
+  buildAdvertisingIntelligencePanel,
+  buildBusinessCoverage,
+  canEmitAsRecommendation,
+  filterPlaybookTitlesForDataAvailability,
+} from "@/lib/analytics/data-availability";
 import type { ExecutiveAiBehavior } from "@/lib/analytics/executive-ai-behavior";
 import type { AiEvidence, PriorityAction } from "@/lib/analytics/executive-advisor";
 import type { ExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
@@ -152,6 +161,22 @@ export type ExecutiveBrief = {
   introLine: string;
   /** Platforms/sources that were analyzed */
   analyzedSources: ExecutiveBriefSource[];
+  /** Explicit "based on" connected labels (Rule 3) */
+  basedOnSources: string[];
+  /** Explicit "not available" labels (Rule 3) */
+  notAvailableSources: string[];
+  dataBasisFooter: string;
+  /** Business Coverage Score 0–100 (Rule 4) */
+  businessCoverage: {
+    scorePct: number;
+    confidenceLimitation: string | null;
+  };
+  /** Advertising Intelligence panel when ads disconnected (Rule 2) */
+  advertisingIntelligence: import("@/lib/analytics/data-availability").AdvertisingIntelligencePanel | null;
+  /** Evidence-based recommendations (Rule 5) */
+  recommendations: Array<{ title: string; kind: "recommendation" }>;
+  /** Soft opportunities without campaign evidence (Rule 5) */
+  opportunities: Array<{ title: string; detail: string; kind: "opportunity" }>;
   /** Bullet findings for "What did StorePilot find?" */
   findings: string[];
   /** Primary concern heading + body */
@@ -551,6 +576,8 @@ export function buildExecutiveBrief(input: {
   dailyDecision: ExecutiveCeoDailyDecision;
   businessHealthLabel: string;
   observingCampaignName?: string | null;
+  /** Evidence-based playbook / decision titles already filtered for data availability */
+  recommendationTitles?: string[];
 }): ExecutiveBrief {
   const src = input.connectedSources ?? {};
   const analyzedSources: ExecutiveBriefSource[] = [
@@ -562,59 +589,104 @@ export function buildExecutiveBrief(input: {
     { label: "Customers", connected: src.customers !== false },
   ];
 
-  const connectedLabels = analyzedSources
-    .filter((s) => s.connected)
-    .map((s) => s.label);
-  const introLine =
-    connectedLabels.length > 0
-      ? `I analyzed your business across ${connectedLabels.join(", ")}. Here's today's executive briefing.`
-      : "I analyzed your business. Here's today's executive briefing.";
+  const basedOnSources = analyzedSources.filter((s) => s.connected).map((s) => s.label);
+  const notAvailableSources = analyzedSources.filter((s) => !s.connected).map((s) => s.label);
+  const coverage = buildBusinessCoverage(src);
+  const adsAvailable = adsCampaignDataAvailable(src);
 
-  // Findings
+  const introLine =
+    basedOnSources.length > 0
+      ? `Today's Executive Briefing is based on ${basedOnSources.join(", ")}. This analysis reflects only the connected business systems.`
+      : "I don't have enough connected systems yet to brief you with confidence.";
+
+  // Findings — never invent campaign analysis without ads data
   const findings: string[] = [];
-  if (input.campaignsScanned > 0) {
+  if (input.campaignsScanned > 0 && adsAvailable) {
     findings.push(`${input.campaignsScanned} campaigns analyzed`);
+  } else if (!adsAvailable) {
+    findings.push("No advertising platforms connected — campaign analysis skipped");
   }
   if (input.potentialOpportunities > 0) {
-    findings.push(`${input.potentialOpportunities} optimization ${input.potentialOpportunities === 1 ? "opportunity" : "opportunities"} detected`);
+    findings.push(
+      `${input.potentialOpportunities} evidence-based ${
+        input.potentialOpportunities === 1 ? "recommendation" : "recommendations"
+      } from connected data`,
+    );
   }
-  if (input.biggestThreat.amountMonthly > 0) {
-    if (isAdvertisingThreatLabel(input.biggestThreat.label)) {
+  const threatUsable =
+    input.biggestThreat.amountMonthly > 0 &&
+    canEmitAsRecommendation(input.biggestThreat.label || "x", src);
+  if (threatUsable) {
+    if (isAdvertisingThreatLabel(input.biggestThreat.label) && adsAvailable) {
       findings.push(`Advertising leakage identified: ${input.biggestThreat.label}`);
-    } else {
+    } else if (!isAdvertisingThreatLabel(input.biggestThreat.label)) {
       findings.push(`Profit leakage identified: ${input.biggestThreat.label}`);
     }
-  } else if ((input.connectedSources?.metaAds || input.connectedSources?.googleAds) ?? false) {
+  } else if (adsAvailable) {
     findings.push("Advertising remains profitable overall");
   }
-  if (input.observingCampaignName && looksLikeCampaignObservation(input.observingCampaignName)) {
+  if (
+    adsAvailable &&
+    input.observingCampaignName &&
+    looksLikeCampaignObservation(input.observingCampaignName)
+  ) {
     findings.push(`One campaign is under close observation: ${input.observingCampaignName}`);
   }
   const healthPositive = !/(poor|critical)/i.test(input.businessHealthLabel);
-  findings.push(
-    healthPositive
-      ? "Customer retention remains healthy"
-      : "Customer retention requires attention",
-  );
+  if (src.customers !== false) {
+    findings.push(
+      healthPositive
+        ? "Customer retention remains healthy"
+        : "Customer retention requires attention",
+    );
+  }
 
-  // Primary concern
+  // Primary concern — never elevate ad threats without ads data
   let primaryConcern: ExecutiveBrief["primaryConcern"];
-  if (input.mode === "ACTION_REQUIRED" || input.mode === "CRITICAL") {
+  const threatIsAd =
+    isAdvertisingThreatLabel(input.biggestThreat.label) ||
+    !canEmitAsRecommendation(input.biggestThreat.label || "x", src);
+
+  if (
+    (input.mode === "ACTION_REQUIRED" || input.mode === "CRITICAL") &&
+    !(threatIsAd && !adsAvailable && isAdvertisingThreatLabel(input.biggestThreat.label))
+  ) {
     const threat = input.biggestThreat;
+    const decisionTitle = input.dailyDecision.action;
+    const useThreat =
+      threat.amountMonthly > 0 && canEmitAsRecommendation(threat.label || decisionTitle, src);
     primaryConcern = {
-      headline: threat.label || input.dailyDecision.action,
-      body:
-        threat.amountMonthly > 0
-          ? `${threat.label} is now destroying approximately ${fmt(threat.amountMonthly)}/month in recoverable profit. Executive action is recommended today.`
-          : `Executive action is recommended today: ${input.dailyDecision.action}.`,
+      headline: useThreat ? threat.label || decisionTitle : decisionTitle,
+      body: useThreat
+        ? `${threat.label} is now destroying approximately ${fmt(threat.amountMonthly)}/month in recoverable profit. Executive action is recommended today.`
+        : `Executive action is recommended today: ${decisionTitle}.`,
       actionRequired: true,
     };
-  } else if (input.mode === "OBSERVE" && input.observingCampaignName) {
+  } else if (input.mode === "OBSERVE" && input.observingCampaignName && adsAvailable) {
     primaryConcern = {
       headline: input.observingCampaignName,
       body: `${input.observingCampaignName} has been underperforming. Although the impact is increasing, current evidence is not yet sufficient to recommend executive intervention. StorePilot continues monitoring.`,
       actionRequired: false,
     };
+  } else if (!adsAvailable && (input.mode === "ACTION_REQUIRED" || input.mode === "CRITICAL")) {
+    const decisionTitle = input.dailyDecision.action;
+    if (canEmitAsRecommendation(decisionTitle, src)) {
+      primaryConcern = {
+        headline: decisionTitle || input.biggestThreat.label,
+        body:
+          input.biggestThreat.amountMonthly > 0 &&
+          canEmitAsRecommendation(input.biggestThreat.label, src)
+            ? `${input.biggestThreat.label} is now destroying approximately ${fmt(input.biggestThreat.amountMonthly)}/month in recoverable profit. Executive action is recommended today.`
+            : `Executive action is recommended today: ${decisionTitle}.`,
+        actionRequired: true,
+      };
+    } else {
+      primaryConcern = {
+        headline: "Connect advertising to unlock campaign analysis",
+        body: "I don't have enough advertising data to evaluate campaign performance. Shopify, inventory, and customer recommendations remain available from connected systems.",
+        actionRequired: false,
+      };
+    }
   } else {
     primaryConcern = {
       headline: "No material concerns",
@@ -627,13 +699,18 @@ export function buildExecutiveBrief(input: {
   let aiRecommendation: string;
   const pa = input.priorityAction;
   if (pa && (input.mode === "ACTION_REQUIRED" || input.mode === "CRITICAL")) {
-    const parts: string[] = [];
-    if (pa.suggestedAction) parts.push(pa.suggestedAction);
-    else parts.push(pa.title);
-    if (pa.whyThisMatters?.businessImpact) {
-      parts.push(pa.whyThisMatters.businessImpact);
+    if (!canEmitAsRecommendation(pa.title, src)) {
+      aiRecommendation =
+        "I don't have enough advertising data to recommend campaign changes. I would focus on inventory and merchandising opportunities visible in Shopify until Meta or Google Ads is connected.";
+    } else {
+      const parts: string[] = [];
+      if (pa.suggestedAction) parts.push(pa.suggestedAction);
+      else parts.push(pa.title);
+      if (pa.whyThisMatters?.businessImpact) {
+        parts.push(pa.whyThisMatters.businessImpact);
+      }
+      aiRecommendation = `I would ${parts[0]?.charAt(0).toLowerCase()}${parts[0]?.slice(1) ?? ""}${parts[1] ? `. ${parts[1]}` : ""}`;
     }
-    aiRecommendation = `I would ${parts[0]?.charAt(0).toLowerCase()}${parts[0]?.slice(1) ?? ""}${parts[1] ? `. ${parts[1]}` : ""}`;
   } else if (input.mode === "OBSERVE") {
     aiRecommendation =
       "I would continue monitoring and let the evidence build. No premature action needed — intervening too early risks optimizing on incomplete data.";
@@ -664,10 +741,37 @@ export function buildExecutiveBrief(input: {
     };
   }
 
+  const recommendationTitles = (input.recommendationTitles ?? [])
+    .filter((t) => canEmitAsRecommendation(t, src))
+    .slice(0, 5);
+
+  const recommendations = recommendationTitles.map((title) => ({
+    title,
+    kind: "recommendation" as const,
+  }));
+
+  const opportunities = !adsAvailable
+    ? ADVERTISING_OPPORTUNITIES_WITHOUT_DATA.map((o) => ({
+        title: o.title,
+        detail: o.detail,
+        kind: "opportunity" as const,
+      }))
+    : [];
+
   return {
     greeting: timeGreeting(),
     introLine,
     analyzedSources,
+    basedOnSources,
+    notAvailableSources,
+    dataBasisFooter: "This analysis reflects only the connected business systems.",
+    businessCoverage: {
+      scorePct: coverage.scorePct,
+      confidenceLimitation: coverage.confidenceLimitation,
+    },
+    advertisingIntelligence: adsAvailable ? null : buildAdvertisingIntelligencePanel(),
+    recommendations,
+    opportunities,
     findings,
     primaryConcern,
     aiRecommendation,
@@ -835,7 +939,10 @@ export function buildExecutiveCeoOsLayer(input: {
   };
 
   // Re-rank from open decisions so Today's #1 always matches Impact Engine eligibility.
-  const openCandidates = candidatesFromOpenDecisions(input.decisions);
+  const connectedSources = input.connectedSources ?? {};
+  const openCandidates = candidatesFromOpenDecisions(input.decisions).filter((c) =>
+    canEmitAsRecommendation(c.title, connectedSources),
+  );
   const selection = selectTodaysExecutiveDecision(openCandidates);
 
   let dailyDecision: ExecutiveCeoDailyDecision;
@@ -1060,8 +1167,15 @@ export function buildExecutiveCeoOsLayer(input: {
   });
 
   const plannedSection = buildExecutivePlannedSection(mode);
+  const playbookForPlanning = {
+    ...input.dailyPlaybook,
+    items: filterPlaybookTitlesForDataAvailability(
+      input.dailyPlaybook.items,
+      connectedSources,
+    ),
+  };
   const plannedDecisions = buildExecutivePlannedDecisions(
-    input.dailyPlaybook,
+    playbookForPlanning,
     mode,
     dailyDecision.hasDecision ? dailyDecision.action : undefined,
   );
@@ -1152,19 +1266,58 @@ export function buildExecutiveCeoOsLayer(input: {
     });
   }
 
+  // Apply Business Coverage penalty to displayed AI confidence (Rule 4).
+  if (dailyDecision.hasDecision) {
+    const coverage = buildBusinessCoverage(connectedSources);
+    const adjusted = applyCoverageConfidencePenalty(
+      dailyDecision.impactPresentation.confidencePct,
+      coverage,
+    );
+    dailyDecision = {
+      ...dailyDecision,
+      impactPresentation: {
+        ...dailyDecision.impactPresentation,
+        confidencePct: adjusted.confidencePct,
+      },
+      evidencePoints: adjusted.limitation
+        ? [...dailyDecision.evidencePoints, adjusted.limitation]
+        : dailyDecision.evidencePoints,
+    };
+  }
+
+  const recommendationTitles = [
+    ...(dailyDecision.hasDecision ? [dailyDecision.action] : []),
+    ...playbookForPlanning.items.map((i) => i.title),
+  ];
+
+  const safeThreat =
+    canEmitAsRecommendation(input.executiveMode.biggestThreat.label, connectedSources)
+      ? input.executiveMode.biggestThreat
+      : { label: dailyDecision.action || "Connected-data opportunity", amountMonthly: 0 };
+
   const executiveBrief = buildExecutiveBrief({
     mode,
     domains: input.aiBehavior.liveStatus.domains.map((d) => ({ label: d.label, status: d.status })),
     connectedSources: input.connectedSources,
     campaignsScanned,
-    potentialOpportunities,
-    biggestThreat: input.executiveMode.biggestThreat,
-    bestOpportunity: input.executiveMode.bestOpportunity,
+    potentialOpportunities: playbookForPlanning.items.length,
+    biggestThreat: safeThreat,
+    bestOpportunity: canEmitAsRecommendation(
+      input.executiveMode.bestOpportunity.label,
+      connectedSources,
+    )
+      ? input.executiveMode.bestOpportunity
+      : { label: "", amountMonthly: 0 },
     estimatedProfit: input.executiveMode.estimatedProfit,
-    priorityAction: input.priorityAction,
+    priorityAction:
+      input.priorityAction &&
+      canEmitAsRecommendation(input.priorityAction.title, connectedSources)
+        ? input.priorityAction
+        : null,
     dailyDecision,
     businessHealthLabel: focus.businessHealth.label,
     observingCampaignName,
+    recommendationTitles,
   });
 
   return {
