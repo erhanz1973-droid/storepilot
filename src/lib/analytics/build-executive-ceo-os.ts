@@ -1,5 +1,6 @@
 import type { DecisionItem } from "@/lib/decisions/center";
 import type { DailyAiPlaybook, ExecutiveFocusSummary } from "@/lib/analytics/ai-daily-playbook";
+import { countLiveCampaignsScanned } from "@/lib/analytics/ai-daily-playbook";
 import type { ExecutiveAiBehavior } from "@/lib/analytics/executive-ai-behavior";
 import type { AiEvidence, PriorityAction } from "@/lib/analytics/executive-advisor";
 import type { ExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
@@ -26,6 +27,15 @@ import {
   getAlpineRecoverableProfitPresentation,
 } from "@/lib/demo/showcase-overrides";
 import { getAlpineHeroRecommendation } from "@/lib/demo/alpine-outfitters/ui-metrics";
+
+function isAdvertisingThreatLabel(label: string): boolean {
+  return /\bads?\b|campaigns?|roas|\bmeta\b|google\s*ads?|cpc|cpa|advertis/i.test(label);
+}
+
+function looksLikeCampaignObservation(title: string | null | undefined): boolean {
+  if (!title) return false;
+  return /\bcampaigns?\b|\bads?\b\s+budget|meta\s+budget|google\s*ads?|roas|cpc|cpa/i.test(title);
+}
 
 /**
  * Executive Mode — every CEO OS section must agree with this state.
@@ -569,11 +579,15 @@ export function buildExecutiveBrief(input: {
     findings.push(`${input.potentialOpportunities} optimization ${input.potentialOpportunities === 1 ? "opportunity" : "opportunities"} detected`);
   }
   if (input.biggestThreat.amountMonthly > 0) {
-    findings.push(`Advertising leakage identified: ${input.biggestThreat.label}`);
-  } else {
+    if (isAdvertisingThreatLabel(input.biggestThreat.label)) {
+      findings.push(`Advertising leakage identified: ${input.biggestThreat.label}`);
+    } else {
+      findings.push(`Profit leakage identified: ${input.biggestThreat.label}`);
+    }
+  } else if ((input.connectedSources?.metaAds || input.connectedSources?.googleAds) ?? false) {
     findings.push("Advertising remains profitable overall");
   }
-  if (input.observingCampaignName) {
+  if (input.observingCampaignName && looksLikeCampaignObservation(input.observingCampaignName)) {
     findings.push(`One campaign is under close observation: ${input.observingCampaignName}`);
   }
   const healthPositive = !/(poor|critical)/i.test(input.businessHealthLabel);
@@ -981,7 +995,22 @@ export function buildExecutiveCeoOsLayer(input: {
     input.dailyPlaybook.items.length,
     openCandidates.length,
   );
-  const campaignsScanned = input.campaignsScanned ?? potentialOpportunities;
+  // Never substitute opportunity count for campaign scan count — that invents
+  // "7 campaigns analyzed" when Meta/Google Ads are disconnected.
+  const campaignsScanned =
+    input.campaignsScanned ?? countLiveCampaignsScanned(input.snapshot);
+
+  const adsConnected =
+    Boolean(input.connectedSources?.metaAds) || Boolean(input.connectedSources?.googleAds);
+  const observingCampaignNameRaw =
+    input.observingCampaignName ??
+    thresholdPeek?.title ??
+    input.dailyPlaybook.items.find((i) => i.module === "marketing")?.title ??
+    null;
+  const observingCampaignName =
+    adsConnected && looksLikeCampaignObservation(observingCampaignNameRaw)
+      ? observingCampaignNameRaw
+      : null;
 
   const mode = resolveExecutiveMode({
     hasDecision: dailyDecision.hasDecision,
@@ -1069,11 +1098,7 @@ export function buildExecutiveCeoOsLayer(input: {
     campaignsScanned,
     potentialOpportunities,
     executiveCandidates: dailyDecision.hasDecision ? 1 : 0,
-    observingCampaignName:
-      input.observingCampaignName ??
-      thresholdPeek?.title ??
-      input.dailyPlaybook.items[0]?.title ??
-      null,
+    observingCampaignName,
     thresholdPeek,
     hasDecisionAction: dailyDecision.hasDecision ? dailyDecision.action : null,
     upgradePlanLabel: input.upgradePlanLabel ?? null,
@@ -1139,8 +1164,7 @@ export function buildExecutiveCeoOsLayer(input: {
     priorityAction: input.priorityAction,
     dailyDecision,
     businessHealthLabel: focus.businessHealth.label,
-    observingCampaignName:
-      input.observingCampaignName ?? thresholdPeek?.title ?? input.dailyPlaybook.items[0]?.title ?? null,
+    observingCampaignName,
   });
 
   return {

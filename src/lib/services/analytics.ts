@@ -7,6 +7,7 @@ import { buildExecutiveUnifiedLayer } from "@/lib/analytics/executive-unified-la
 import { buildExecutiveCeoOsLayer, type ExecutiveCeoOsLayer } from "@/lib/analytics/build-executive-ceo-os";
 import { readExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
 import type { DailyAiPlaybook, ExecutiveFocusSummary } from "@/lib/analytics/ai-daily-playbook";
+import { countLiveCampaignsScanned } from "@/lib/analytics/ai-daily-playbook";
 import { buildDemoSnapshot } from "@/lib/demo/get-demo-snapshot";
 import { getActiveDemoScenarioId } from "@/lib/demo/scenario-context";
 import { computeProfitDashboard } from "@/lib/profit/engine";
@@ -112,11 +113,12 @@ function attachCeoOsLayer(
     executiveMode: page.executiveMode,
     previousVisit,
     snapshot: snapshot ?? null,
+    campaignsScanned: countLiveCampaignsScanned(snapshot),
     connectedSources: {
       shopify: ir.shopifyConnected,
       metaAds: ir.metaConnected,
       googleAds: ir.googleConnected,
-      ga4: ir.googleConnected,
+      ga4: Boolean(snapshot?.ga4Snapshot),
       inventory: true,
       customers: true,
     },

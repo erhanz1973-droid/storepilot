@@ -93,60 +93,123 @@ function fromRevenuePlaybook(
   };
 }
 
+function adsConnected(snapshot: StoreSnapshot): { meta: boolean; google: boolean } {
+  const states = snapshot.connectorStates ?? {};
+  const meta =
+    states.meta_ads === "connected" ||
+    states.meta_ads === "demo" ||
+    (snapshot.campaigns?.length ?? 0) > 0;
+  const google =
+    states.google_ads === "connected" ||
+    states.google_ads === "demo" ||
+    (snapshot.googleAdsSnapshot?.campaigns?.length ?? 0) > 0;
+  return { meta, google };
+}
+
+/** Live Meta + Google campaign count — never invents demo campaign volume. */
+export function countLiveCampaignsScanned(snapshot: StoreSnapshot | null | undefined): number {
+  if (!snapshot) return 0;
+  const { meta, google } = adsConnected(snapshot);
+  const metaCount = meta ? (snapshot.campaigns?.length ?? 0) : 0;
+  const googleCount = google ? (snapshot.googleAdsSnapshot?.campaigns?.length ?? 0) : 0;
+  return metaCount + googleCount;
+}
+
+function isDemoScenarioActive(snapshot: StoreSnapshot): boolean {
+  return Boolean(allowDemoData() && snapshot.demoScenario);
+}
+
 function marketingCandidates(snapshot: StoreSnapshot): Candidate[] {
   const items: Candidate[] = [];
-  const scenarioId = snapshot.demoScenario ?? "healthy_growth";
-  const scenario = DEMO_SCENARIOS[scenarioId];
 
-  if (scenario.personality === "growth") {
-    pushCandidate(items, {
-      id: "mkt-scale-google",
-      module: "marketing",
-      title: "Increase Google Ads budget on winning campaigns",
-      impactLabel: "Scale high-ROAS campaigns",
-      impactMonthly: 2800,
-      confidence: "High",
-      approvalHref: "/approvals?playbook=mkt-scale-google",
-    });
-    pushCandidate(items, {
-      id: "mkt-vip-campaign",
-      module: "marketing",
-      title: "Create VIP customer campaign",
-      impactLabel: "Grow customer lifetime value",
-      impactMonthly: 1900,
-      confidence: "High",
-      approvalHref: "/approvals?playbook=mkt-vip-campaign",
-    });
-    return items;
+  // Demo personality templates only apply to explicit demo scenarios — never to live merchants.
+  if (isDemoScenarioActive(snapshot)) {
+    const scenarioId = snapshot.demoScenario ?? "healthy_growth";
+    const scenario = DEMO_SCENARIOS[scenarioId];
+
+    if (scenario.personality === "growth") {
+      pushCandidate(items, {
+        id: "mkt-scale-google",
+        module: "marketing",
+        title: "Increase Google Ads budget on winning campaigns",
+        impactLabel: "Scale high-ROAS campaigns",
+        impactMonthly: 2800,
+        confidence: "High",
+        approvalHref: "/approvals?playbook=mkt-scale-google",
+      });
+      pushCandidate(items, {
+        id: "mkt-vip-campaign",
+        module: "marketing",
+        title: "Create VIP customer campaign",
+        impactLabel: "Grow customer lifetime value",
+        impactMonthly: 1900,
+        confidence: "High",
+        approvalHref: "/approvals?playbook=mkt-vip-campaign",
+      });
+      return items;
+    }
+
+    if (scenario.personality === "operations" || scenario.personality === "seasonal") {
+      pushCandidate(items, {
+        id: "mkt-seasonal-budget",
+        module: "marketing",
+        title: "Increase advertising budget for seasonal demand",
+        impactLabel: "Capture peak-season traffic",
+        impactMonthly: 4200,
+        confidence: "High",
+        approvalHref: "/approvals?playbook=mkt-seasonal-budget",
+      });
+      return items;
+    }
   }
 
-  if (scenario.personality === "operations" || scenario.personality === "seasonal") {
-    pushCandidate(items, {
-      id: "mkt-seasonal-budget",
-      module: "marketing",
-      title: "Increase advertising budget for seasonal demand",
-      impactLabel: "Capture peak-season traffic",
-      impactMonthly: 4200,
-      confidence: "High",
-      approvalHref: "/approvals?playbook=mkt-seasonal-budget",
-    });
-    return items;
+  const { meta, google } = adsConnected(snapshot);
+
+  if (meta) {
+    const losing = [...(snapshot.campaigns ?? [])]
+      .filter((c) => c.roas7d < 1 && c.spend7d > 200)
+      .sort((a, b) => b.spend7d - a.spend7d)[0];
+
+    if (losing) {
+      const recovery = Math.round(losing.spend7d * 4.33 * 0.1);
+      pushCandidate(items, {
+        id: `mkt-reduce-${losing.id}`,
+        module: "marketing",
+        title: `Reduce Meta budget on ${losing.name}`,
+        impactLabel: `ROAS ${losing.roas7d.toFixed(2)} — tighten targeting before scaling`,
+        impactMonthly: recovery,
+        confidence: "Medium",
+        approvalHref: `/approvals?playbook=mkt-reduce-${losing.id}`,
+      });
+    }
   }
 
-  const losing = [...(snapshot.campaigns ?? [])]
-    .filter((c) => c.roas7d < 1 && c.spend7d > 200)
-    .sort((a, b) => b.spend7d - a.spend7d)[0];
+  if (google) {
+    const winners = [...(snapshot.googleAdsSnapshot?.campaigns ?? [])]
+      .filter((c) => c.roas7d >= 2 && c.spend7d > 50)
+      .sort((a, b) => b.roas7d - a.roas7d);
+    if (winners.length > 0) {
+      pushCandidate(items, {
+        id: "mkt-scale-google-live",
+        module: "marketing",
+        title: "Increase Google Ads budget on winning campaigns",
+        impactLabel: "Scale high-ROAS campaigns",
+        impactMonthly: Math.round(winners[0]!.spend7d * 4.33 * 0.15),
+        confidence: "High",
+        approvalHref: "/approvals?playbook=mkt-scale-google-live",
+      });
+    }
+  }
 
-  if (losing) {
-    const recovery = Math.round(losing.spend7d * 4.33 * 0.1);
+  if (!meta && !google) {
     pushCandidate(items, {
-      id: `mkt-reduce-${losing.id}`,
-      module: "marketing",
-      title: `Reduce Meta budget on ${losing.name}`,
-      impactLabel: `ROAS ${losing.roas7d.toFixed(2)} — tighten targeting before scaling`,
-      impactMonthly: recovery,
-      confidence: "Medium",
-      approvalHref: `/approvals?playbook=mkt-reduce-${losing.id}`,
+      id: "mkt-connect-ads",
+      module: "connections",
+      title: "Connect Meta or Google Ads",
+      impactLabel: "Unlock advertising intelligence",
+      impactMonthly: null,
+      confidence: "High",
+      approvalHref: "/connections?highlight=meta_ads",
     });
   }
 
@@ -241,8 +304,11 @@ export function buildDailyAiPlaybook(input: {
   salesOpportunities?: SalesOpportunity[];
   profitRecovery?: ProfitRecoveryOpportunity[];
 }): DailyAiPlaybook {
-  const scenarioId: DemoScenarioId = input.snapshot.demoScenario ?? "healthy_growth";
-  const scenario = DEMO_SCENARIOS[scenarioId];
+  const demoActive = isDemoScenarioActive(input.snapshot);
+  const scenarioId: DemoScenarioId | null = demoActive
+    ? (input.snapshot.demoScenario ?? "healthy_growth")
+    : null;
+  const scenario = scenarioId ? DEMO_SCENARIOS[scenarioId] : null;
   const candidates: Candidate[] = [];
   const businessContext = buildBusinessScaleContext(
     input.profitDashboard ?? null,
@@ -285,13 +351,17 @@ export function buildDailyAiPlaybook(input: {
   const constrainedTotal = constrainRecoveryTotal(rawTotal, 75, businessContext);
 
   let totalRecoverableMonthly = constrainedTotal.amount;
-  if (allowDemoData() && input.snapshot.demoScenario === "healthy_growth") {
+  if (demoActive && input.snapshot.demoScenario === "healthy_growth") {
     totalRecoverableMonthly = ALPINE_UI_METRICS.totalRecoverableOpportunityMonthly;
   }
 
+  const subtitle = scenario
+    ? `${scenario.focusVerbs.slice(0, 3).join(" · ")} — actions from your AI executive team.`
+    : "Actions grounded in connected Shopify, inventory, and customer data.";
+
   return {
     title: "Today's AI Playbook",
-    subtitle: `${scenario.focusVerbs.slice(0, 3).join(" · ")} — actions from your AI executive team.`,
+    subtitle,
     items: sorted,
     totalRecoverableMonthly,
   };
