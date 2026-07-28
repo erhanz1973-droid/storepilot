@@ -21887,6 +21887,63 @@ button {
   display: inline-flex;
 }
 
+.exec-brief-rec-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.exec-brief-rec-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.exec-brief-rec-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.exec-brief-standing-badge {
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.evidence-standing-recommendation {
+  color: #166534;
+  background: rgba(22, 101, 52, 0.08);
+}
+
+.evidence-standing-hypothesis {
+  color: #92400e;
+  background: rgba(146, 64, 14, 0.08);
+}
+
+.evidence-standing-insufficient {
+  color: #9f1239;
+  background: rgba(159, 18, 57, 0.08);
+}
+
+.exec-brief-supported-by,
+.exec-brief-rec-explain,
+.exec-ceo-evidence-standing,
+.exec-ceo-supported-by {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 .exec-brief-section {
   padding: 16px 0;
   border-top: 1px solid var(--border);

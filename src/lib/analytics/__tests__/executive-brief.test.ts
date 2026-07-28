@@ -67,10 +67,16 @@ describe("Executive Brief", () => {
       ...emptyDecision,
       hasDecision: true,
       action: "Reduce Prospecting Broad",
+      evidencePoints: [
+        "Spend $12,400 over 7 days",
+        "ROAS 0.6 vs account average 2.1",
+        "Redirect toward Shopping recovers margin",
+      ],
       impactPresentation: {
         ...emptyDecision.impactPresentation,
         heroAmount: 10473,
         heroValueFormatted: "$10,473",
+        confidencePct: 92,
       },
     };
 
@@ -161,5 +167,45 @@ describe("Executive Brief", () => {
     expect(brief.introLine).toMatch(/GA4/);
     expect(brief.introLine).toMatch(/Inventory/);
     expect(brief.introLine).toMatch(/Customers/);
+  });
+
+  it("labels weak decisions as hypotheses and never as facts (Rule 8)", () => {
+    const hypothesisDecision: ExecutiveCeoDailyDecision = {
+      ...emptyDecision,
+      hasDecision: true,
+      action: "Dead inventory clearance",
+      evidencePoints: [],
+      evidenceStanding: "hypothesis",
+      evidenceExplanation:
+        "Hypothesis to evaluate — supported by Shopify, Inventory, but evidence is still thin.",
+      evidenceSupportedBy: ["Shopify", "Inventory"],
+      impactPresentation: {
+        ...emptyDecision.impactPresentation,
+        heroAmount: 1200,
+        heroValueFormatted: "$1,200",
+        confidencePct: 40,
+      },
+    };
+
+    const brief = buildExecutiveBrief({
+      mode: "ACTION_REQUIRED",
+      domains: [],
+      connectedSources: { shopify: true, inventory: true, metaAds: false, googleAds: false },
+      campaignsScanned: 0,
+      potentialOpportunities: 1,
+      biggestThreat: { label: "Dead inventory", amountMonthly: 1200 },
+      bestOpportunity: { label: "Dead inventory clearance", amountMonthly: 1200 },
+      estimatedProfit: 1200,
+      priorityAction: null,
+      dailyDecision: hypothesisDecision,
+      businessHealthLabel: "Watch",
+      recommendationTitles: ["Dead inventory clearance"],
+    });
+
+    expect(brief.decisionEvidence?.standing).toBe("hypothesis");
+    expect(brief.aiRecommendation).toMatch(/hypothesis/i);
+    expect(brief.aiRecommendation).not.toMatch(/I would approve/i);
+    expect(brief.recommendations[0]?.standing).toBe("hypothesis");
+    expect(brief.dataBasisFooter).toMatch(/Assumptions are never presented as facts/i);
   });
 });

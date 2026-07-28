@@ -9,6 +9,7 @@ import {
   buildBusinessCoverage,
   canEmitAsRecommendation,
   filterPlaybookTitlesForDataAvailability,
+  groundRecommendationEvidence,
 } from "@/lib/analytics/data-availability";
 import type { ExecutiveAiBehavior } from "@/lib/analytics/executive-ai-behavior";
 import type { AiEvidence, PriorityAction } from "@/lib/analytics/executive-advisor";
@@ -83,6 +84,10 @@ export type ExecutiveCeoDailyDecision = {
   moduleHref?: string;
   decisionId?: string;
   recommendationId?: string;
+  /** Rule 8 — evidence standing for today's decision */
+  evidenceStanding?: import("@/lib/analytics/data-availability").EvidenceStanding;
+  evidenceExplanation?: string;
+  evidenceSupportedBy?: string[];
 };
 
 export type ExecutiveAccountabilityItem = {
@@ -173,10 +178,19 @@ export type ExecutiveBrief = {
   };
   /** Advertising Intelligence panel when ads disconnected (Rule 2) */
   advertisingIntelligence: import("@/lib/analytics/data-availability").AdvertisingIntelligencePanel | null;
-  /** Evidence-based recommendations (Rule 5) */
-  recommendations: Array<{ title: string; kind: "recommendation" }>;
+  /** Evidence-based recommendations (Rule 5 + Rule 8) */
+  recommendations: Array<{
+    title: string;
+    kind: "recommendation" | "hypothesis";
+    standing: import("@/lib/analytics/data-availability").EvidenceStanding;
+    standingLabel: string;
+    supportedBy: string[];
+    explanation: string;
+  }>;
   /** Soft opportunities without campaign evidence (Rule 5) */
   opportunities: Array<{ title: string; detail: string; kind: "opportunity" }>;
+  /** Rule 8 — how today's #1 decision is grounded */
+  decisionEvidence: import("@/lib/analytics/data-availability").EvidenceGrounding | null;
   /** Bullet findings for "What did StorePilot find?" */
   findings: string[];
   /** Primary concern heading + body */
@@ -745,10 +759,60 @@ export function buildExecutiveBrief(input: {
     .filter((t) => canEmitAsRecommendation(t, src))
     .slice(0, 5);
 
-  const recommendations = recommendationTitles.map((title) => ({
-    title,
-    kind: "recommendation" as const,
-  }));
+  const recommendations = recommendationTitles.map((title) => {
+    const grounded = groundRecommendationEvidence({
+      title,
+      sources: src,
+      evidencePointCount:
+        input.dailyDecision.hasDecision && input.dailyDecision.action === title
+          ? input.dailyDecision.evidencePoints.length
+          : 1,
+      confidencePct:
+        input.dailyDecision.hasDecision && input.dailyDecision.action === title
+          ? input.dailyDecision.impactPresentation.confidencePct
+          : 70,
+    });
+    return {
+      title,
+      kind: (grounded.standing === "recommendation" ? "recommendation" : "hypothesis") as
+        | "recommendation"
+        | "hypothesis",
+      standing: grounded.standing,
+      standingLabel: grounded.label,
+      supportedBy: grounded.supportedBy,
+      explanation: grounded.explanation,
+    };
+  });
+
+  const decisionEvidence =
+    input.dailyDecision.evidenceStanding && input.dailyDecision.evidenceExplanation
+      ? {
+          standing: input.dailyDecision.evidenceStanding,
+          supportedBy: input.dailyDecision.evidenceSupportedBy ?? [],
+          missingRequired: [] as string[],
+          label:
+            input.dailyDecision.evidenceStanding === "recommendation"
+              ? "Recommendation"
+              : input.dailyDecision.evidenceStanding === "hypothesis"
+                ? "Hypothesis"
+                : "More data needed",
+          explanation: input.dailyDecision.evidenceExplanation,
+        }
+      : input.dailyDecision.hasDecision
+        ? groundRecommendationEvidence({
+            title: input.dailyDecision.action,
+            sources: src,
+            evidencePointCount: input.dailyDecision.evidencePoints.length,
+            confidencePct: input.dailyDecision.impactPresentation.confidencePct,
+          })
+        : null;
+
+  // Soften AI copy when today's decision is only a hypothesis / insufficient
+  if (decisionEvidence?.standing === "insufficient_data") {
+    aiRecommendation = `I don't have enough data to make a strong recommendation yet. ${decisionEvidence.explanation}`;
+  } else if (decisionEvidence?.standing === "hypothesis") {
+    aiRecommendation = `I would treat this as a hypothesis to evaluate — not a settled fact. ${decisionEvidence.explanation}`;
+  }
 
   const opportunities = !adsAvailable
     ? ADVERTISING_OPPORTUNITIES_WITHOUT_DATA.map((o) => ({
@@ -764,7 +828,7 @@ export function buildExecutiveBrief(input: {
     analyzedSources,
     basedOnSources,
     notAvailableSources,
-    dataBasisFooter: "This analysis reflects only the connected business systems.",
+    dataBasisFooter: "This analysis reflects only the connected business systems. Assumptions are never presented as facts.",
     businessCoverage: {
       scorePct: coverage.scorePct,
       confidenceLimitation: coverage.confidenceLimitation,
@@ -772,6 +836,7 @@ export function buildExecutiveBrief(input: {
     advertisingIntelligence: adsAvailable ? null : buildAdvertisingIntelligencePanel(),
     recommendations,
     opportunities,
+    decisionEvidence,
     findings,
     primaryConcern,
     aiRecommendation,
@@ -1119,6 +1184,70 @@ export function buildExecutiveCeoOsLayer(input: {
       ? observingCampaignNameRaw
       : null;
 
+  // Rule 4 + Rule 8 — coverage penalty and evidence standing before mode resolution
+  if (dailyDecision.hasDecision) {
+    const coverage = buildBusinessCoverage(connectedSources);
+    const adjusted = applyCoverageConfidencePenalty(
+      dailyDecision.impactPresentation.confidencePct,
+      coverage,
+    );
+    const grounded = groundRecommendationEvidence({
+      title: dailyDecision.action,
+      sources: connectedSources,
+      evidencePointCount: dailyDecision.evidencePoints.length,
+      confidencePct: adjusted.confidencePct,
+    });
+
+    if (grounded.standing === "insufficient_data") {
+      dailyDecision = {
+        ...dailyDecision,
+        hasDecision: false,
+        title: "More data needed",
+        action: dailyDecision.action,
+        emptyMessage: "More data is needed before a recommendation.",
+        emptyDetail: grounded.explanation,
+        narrative: grounded.explanation,
+        ceoOpinion: grounded.explanation,
+        impactPresentation: {
+          ...dailyDecision.impactPresentation,
+          confidencePct: adjusted.confidencePct,
+          heroAmount: 0,
+          heroValueFormatted: "$0",
+          netProfitAmount: 0,
+          netProfitFormatted: "$0/month",
+        },
+        evidenceStanding: grounded.standing,
+        evidenceExplanation: grounded.explanation,
+        evidenceSupportedBy: grounded.supportedBy,
+        evidencePoints: [grounded.explanation, ...(adjusted.limitation ? [adjusted.limitation] : [])],
+      };
+    } else {
+      dailyDecision = {
+        ...dailyDecision,
+        title:
+          grounded.standing === "hypothesis"
+            ? "Hypothesis to evaluate"
+            : dailyDecision.title,
+        impactPresentation: {
+          ...dailyDecision.impactPresentation,
+          confidencePct: adjusted.confidencePct,
+        },
+        evidenceStanding: grounded.standing,
+        evidenceExplanation: grounded.explanation,
+        evidenceSupportedBy: grounded.supportedBy,
+        evidencePoints: [
+          ...dailyDecision.evidencePoints,
+          grounded.explanation,
+          ...(adjusted.limitation ? [adjusted.limitation] : []),
+        ],
+        ceoOpinion:
+          grounded.standing === "hypothesis"
+            ? `Hypothesis — not a settled fact. ${grounded.explanation}`
+            : dailyDecision.ceoOpinion,
+      };
+    }
+  }
+
   const mode = resolveExecutiveMode({
     hasDecision: dailyDecision.hasDecision,
     priority: selection.kind === "decision" ? selection.ranked.candidate.priority : null,
@@ -1264,25 +1393,6 @@ export function buildExecutiveCeoOsLayer(input: {
       minNetProfit: resolveExecutiveNetProfitThreshold(),
       highestTitle: thresholdPeek?.title ?? null,
     });
-  }
-
-  // Apply Business Coverage penalty to displayed AI confidence (Rule 4).
-  if (dailyDecision.hasDecision) {
-    const coverage = buildBusinessCoverage(connectedSources);
-    const adjusted = applyCoverageConfidencePenalty(
-      dailyDecision.impactPresentation.confidencePct,
-      coverage,
-    );
-    dailyDecision = {
-      ...dailyDecision,
-      impactPresentation: {
-        ...dailyDecision.impactPresentation,
-        confidencePct: adjusted.confidencePct,
-      },
-      evidencePoints: adjusted.limitation
-        ? [...dailyDecision.evidencePoints, adjusted.limitation]
-        : dailyDecision.evidencePoints,
-    };
   }
 
   const recommendationTitles = [

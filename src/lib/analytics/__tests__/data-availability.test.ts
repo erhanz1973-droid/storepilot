@@ -4,6 +4,7 @@ import {
   applyCoverageConfidencePenalty,
   buildBusinessCoverage,
   canEmitAsRecommendation,
+  groundRecommendationEvidence,
   requiresUnavailableAdvertisingData,
 } from "@/lib/analytics/data-availability";
 
@@ -45,5 +46,35 @@ describe("data availability layer", () => {
     const adjusted = applyCoverageConfidencePenalty(72, coverage);
     expect(adjusted.confidencePct).toBeLessThan(72);
     expect(adjusted.limitation).toMatch(/Limited by missing/);
+  });
+
+  it("grounds recommendations as hypothesis or insufficient when evidence is weak (Rule 8)", () => {
+    const insufficient = groundRecommendationEvidence({
+      title: "Increase Google Ads budget on winning campaigns",
+      sources: shopifyOnly,
+      evidencePointCount: 3,
+      confidencePct: 90,
+    });
+    expect(insufficient.standing).toBe("insufficient_data");
+    expect(insufficient.explanation).toMatch(/don't have enough data/i);
+
+    const hypothesis = groundRecommendationEvidence({
+      title: "Dead inventory",
+      sources: shopifyOnly,
+      evidencePointCount: 0,
+      confidencePct: 40,
+    });
+    expect(hypothesis.standing).toBe("hypothesis");
+    expect(hypothesis.label).toBe("Hypothesis");
+    expect(hypothesis.supportedBy).toEqual(expect.arrayContaining(["Shopify", "Inventory"]));
+
+    const strong = groundRecommendationEvidence({
+      title: "Dead inventory",
+      sources: shopifyOnly,
+      evidencePointCount: 3,
+      confidencePct: 80,
+    });
+    expect(strong.standing).toBe("recommendation");
+    expect(strong.explanation).toMatch(/Supported by connected data/i);
   });
 });

@@ -20,7 +20,21 @@ export type ExecutiveDataSourceState = {
   connected: boolean;
 };
 
-export type RecommendationKind = "recommendation" | "opportunity" | "integration";
+export type RecommendationKind = "recommendation" | "opportunity" | "integration" | "hypothesis";
+
+/** Rule 8 — how strongly connected data supports presenting this item. */
+export type EvidenceStanding = "recommendation" | "hypothesis" | "insufficient_data";
+
+export type EvidenceGrounding = {
+  standing: EvidenceStanding;
+  /** Connected sources that support this item */
+  supportedBy: string[];
+  /** Required sources that are missing */
+  missingRequired: string[];
+  /** Merchant-facing explanation — never frames assumptions as facts */
+  explanation: string;
+  label: string;
+};
 
 export type DataRequirementSpec = {
   /** Stable recommendation family id */
@@ -342,3 +356,121 @@ export function filterPlaybookTitlesForDataAvailability<T extends { title: strin
     return canEmitAsRecommendation(item.title, sources);
   });
 }
+
+const SOURCE_LABELS_SAFE = SOURCE_LABELS;
+
+/**
+ * Rule 8 — Evidence-Based Recommendations.
+ * Classify whether connected data supports a strong recommendation,
+ * a hypothesis to evaluate, or an explicit "more data needed" stance.
+ */
+export function groundRecommendationEvidence(input: {
+  title: string;
+  sources: ConnectedSourcesInput;
+  /** Discrete evidence bullets already attached (metrics, reasons). */
+  evidencePointCount?: number;
+  confidencePct?: number;
+  /** Minimum confidence to keep "recommendation" standing (default 65). */
+  minConfidencePct?: number;
+}): EvidenceGrounding {
+  const availability = resolveSourceAvailability(input.sources);
+  const spec = findRequirementForTitle(input.title);
+  const required = spec?.requiredSources ?? inferDefaultRequiredSources(input.title);
+  const minConfidence = input.minConfidencePct ?? 65;
+  const confidence = input.confidencePct ?? null;
+  const evidenceCount = input.evidencePointCount ?? 0;
+
+  const supportedBy = required
+    .filter((id) => {
+      if (id === "meta_ads" || id === "google_ads") {
+        return availability.meta_ads || availability.google_ads;
+      }
+      return availability[id];
+    })
+    .map((id) => SOURCE_LABELS_SAFE[id])
+    // Dedupe Meta/Google when OR'd
+    .filter((label, i, arr) => arr.indexOf(label) === i);
+
+  const missingRequiredIds = required.filter((id) => {
+    if (id === "meta_ads" || id === "google_ads") {
+      const adReqs = required.filter((r) => r === "meta_ads" || r === "google_ads");
+      if (adReqs.length > 1) {
+        // OR across ad platforms — flag once on the first ad requirement
+        return id === adReqs[0] && !(availability.meta_ads || availability.google_ads);
+      }
+      return !availability[id];
+    }
+    return !availability[id];
+  });
+  const missingRequired = missingRequiredIds.map((id) => {
+    if ((id === "meta_ads" || id === "google_ads") && !availability.meta_ads && !availability.google_ads) {
+      return "Advertising (Meta or Google Ads)";
+    }
+    return SOURCE_LABELS_SAFE[id];
+  });
+
+  // Required data missing → never a strong recommendation
+  if (missingRequired.length > 0 || !canEmitAsRecommendation(input.title, input.sources)) {
+    return {
+      standing: "insufficient_data",
+      supportedBy,
+      missingRequired,
+      label: "More data needed",
+      explanation:
+        missingRequired.length > 0
+          ? `I don't have enough data to recommend this yet. Missing: ${missingRequired.join(", ")}. Connect these sources before treating this as an executive recommendation.`
+          : "I don't have enough connected data to justify this as a recommendation. Treating it as an idea to evaluate only after more evidence syncs.",
+    };
+  }
+
+  const weakEvidence =
+    evidenceCount === 0 ||
+    (confidence != null && confidence < minConfidence) ||
+    (confidence == null && evidenceCount < 2);
+
+  if (weakEvidence) {
+    return {
+      standing: "hypothesis",
+      supportedBy,
+      missingRequired: [],
+      label: "Hypothesis",
+      explanation:
+        confidence != null && confidence < minConfidence
+          ? `Hypothesis to evaluate — connected data (${supportedBy.join(", ") || "limited sources"}) supports exploring this, but confidence (${confidence}%) is below the threshold for a strong recommendation. This is not a fact.`
+          : `Hypothesis to evaluate — supported by ${supportedBy.join(", ") || "connected store data"}, but evidence is still thin. More measured outcomes are needed before treating this as an executive recommendation.`,
+    };
+  }
+
+  return {
+    standing: "recommendation",
+    supportedBy,
+    missingRequired: [],
+    label: "Recommendation",
+    explanation: `Supported by connected data: ${supportedBy.join(", ")}.`,
+  };
+}
+
+function inferDefaultRequiredSources(title: string): ExecutiveDataSourceId[] {
+  if (/\b(cart|customer|retention|vip|lifetime)\b/i.test(title)) {
+    return ["shopify", "customers", "orders"];
+  }
+  if (/\b(inventory|stock|reorder|bundle|clearance|dead)\b/i.test(title)) {
+    return ["shopify", "inventory"];
+  }
+  if (/\b(price|margin|profit|cogs)\b/i.test(title)) {
+    return ["shopify", "orders", "product_costs"];
+  }
+  return ["shopify"];
+}
+
+export function evidenceStandingBadgeClass(standing: EvidenceStanding): string {
+  switch (standing) {
+    case "recommendation":
+      return "evidence-standing-recommendation";
+    case "hypothesis":
+      return "evidence-standing-hypothesis";
+    case "insufficient_data":
+      return "evidence-standing-insufficient";
+  }
+}
+

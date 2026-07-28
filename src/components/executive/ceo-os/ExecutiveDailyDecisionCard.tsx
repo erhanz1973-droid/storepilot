@@ -35,6 +35,7 @@ export function ExecutiveDailyDecisionCard({
 }) {
   if (!decision.hasDecision) {
     const isObserving = mode === "OBSERVE";
+    const needsMoreData = decision.evidenceStanding === "insufficient_data";
 
     return (
       <section
@@ -43,7 +44,11 @@ export function ExecutiveDailyDecisionCard({
       >
         <div className="exec-ceo-decision-hero">
           <span className="exec-ceo-eyebrow">
-            {isObserving ? "Executive Mode · Building Evidence" : "Executive Mode"}
+            {needsMoreData
+              ? "Evidence Rule · More data needed"
+              : isObserving
+                ? "Executive Mode · Building Evidence"
+                : "Executive Mode"}
           </span>
           <h2 id="exec-ceo-decision-heading" className="exec-ceo-decision-action">
             {decision.emptyMessage ?? "No executive decision required today."}
@@ -52,6 +57,11 @@ export function ExecutiveDailyDecisionCard({
             {decision.emptyDetail ??
               "Your business is operating within acceptable thresholds. We'll notify you when a meaningful opportunity appears."}
           </p>
+          {decision.evidenceSupportedBy && decision.evidenceSupportedBy.length > 0 ? (
+            <p className="exec-ceo-supported-by muted">
+              Currently supported by: {decision.evidenceSupportedBy.join(", ")}
+            </p>
+          ) : null}
         </div>
 
         {isObserving && evidencePipeline ? (
@@ -141,11 +151,23 @@ export function ExecutiveDailyDecisionCard({
     >
       <div className="exec-ceo-decision-hero">
         <span className="exec-ceo-eyebrow">
-          {isCritical ? "Critical Executive Decision" : "Today's #1 Executive Decision"}
+          {decision.evidenceStanding === "hypothesis"
+            ? "Hypothesis to evaluate — not a fact"
+            : isCritical
+              ? "Critical Executive Decision"
+              : "Today's #1 Executive Decision"}
         </span>
         <h2 id="exec-ceo-decision-heading" className="exec-ceo-decision-action">
           {decision.action}
         </h2>
+        {decision.evidenceExplanation ? (
+          <p className="exec-ceo-evidence-standing muted">{decision.evidenceExplanation}</p>
+        ) : null}
+        {decision.evidenceSupportedBy && decision.evidenceSupportedBy.length > 0 ? (
+          <p className="exec-ceo-supported-by muted">
+            Supported by: {decision.evidenceSupportedBy.join(", ")}
+          </p>
+        ) : null}
 
         <div className="exec-ceo-impact-hero" aria-label={impact.heroLabel}>
           <span className="exec-ceo-impact-label">
@@ -168,7 +190,11 @@ export function ExecutiveDailyDecisionCard({
 
         <div className="exec-ceo-decision-actions">
           <Link href={decision.approvalHref} className="btn btn-primary exec-ceo-approve-btn">
-            {isCritical ? "Approve immediately" : "Approve this decision"}
+            {decision.evidenceStanding === "hypothesis"
+              ? "Evaluate this hypothesis"
+              : isCritical
+                ? "Approve immediately"
+                : "Approve this decision"}
           </Link>
           {decision.moduleHref ? (
             <Link href={decision.moduleHref} className="btn btn-ghost exec-ceo-secondary-cta">

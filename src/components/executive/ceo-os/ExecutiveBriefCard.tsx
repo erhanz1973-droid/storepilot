@@ -81,12 +81,46 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
       {brief.recommendations.length > 0 ? (
         <div className="exec-brief-section exec-brief-recs">
           <h3 className="exec-brief-section-title">Recommendations</h3>
-          <p className="muted exec-brief-kind-note">Require supporting evidence from connected data.</p>
-          <ul className="exec-brief-finding-list">
+          <p className="muted exec-brief-kind-note">
+            Evidence-based items from connected data. Hypotheses are labeled — never presented as facts.
+          </p>
+          <ul className="exec-brief-rec-list">
             {brief.recommendations.map((r) => (
-              <li key={r.title}>{r.title}</li>
+              <li key={r.title} className={`exec-brief-rec-item evidence-standing-${r.standing}`}>
+                <div className="exec-brief-rec-head">
+                  <span className={`exec-brief-standing-badge evidence-standing-${r.standing}`}>
+                    {r.standingLabel}
+                  </span>
+                  <strong>{r.title}</strong>
+                </div>
+                {r.supportedBy.length > 0 ? (
+                  <p className="muted exec-brief-supported-by">
+                    Supported by: {r.supportedBy.join(", ")}
+                  </p>
+                ) : null}
+                <p className="muted exec-brief-rec-explain">{r.explanation}</p>
+              </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {brief.decisionEvidence ? (
+        <div className="exec-brief-section exec-brief-decision-evidence">
+          <h3 className="exec-brief-section-title">Evidence for today&apos;s decision</h3>
+          <p>
+            <span
+              className={`exec-brief-standing-badge evidence-standing-${brief.decisionEvidence.standing}`}
+            >
+              {brief.decisionEvidence.label}
+            </span>
+          </p>
+          <p className="exec-brief-rec-explain">{brief.decisionEvidence.explanation}</p>
+          {brief.decisionEvidence.supportedBy.length > 0 ? (
+            <p className="muted exec-brief-supported-by">
+              Supported by: {brief.decisionEvidence.supportedBy.join(", ")}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
