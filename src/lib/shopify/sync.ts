@@ -340,6 +340,17 @@ async function syncShopifyStoreInner(
 
   const orderQuery = sixtyDayQuery();
   const rawOrders = await fetchAllOrders(shop, tokenState, orderQuery, graphqlContext);
+  console.log(
+    "[shopify-sync]",
+    JSON.stringify({
+      event: "orders_fetched",
+      shop,
+      query: orderQuery,
+      count: rawOrders.length,
+      orderNames: rawOrders.slice(0, 20).map((o) => o.id),
+      orderIds: rawOrders.slice(0, 20).map((o) => o.id),
+    }),
+  );
 
   const rawCollections = await paginateGraphQL<RawCollection, RawCollection[]>(
     shop,

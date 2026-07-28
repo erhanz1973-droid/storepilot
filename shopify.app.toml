@@ -45,6 +45,10 @@ api_version = "2025-10"
   uri = "/api/shopify/webhooks"
   topics = [ "app/scopes_update" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/api/shopify/webhooks"
+  topics = [ "orders/create", "orders/updated", "orders/paid" ]
+
   # Mandatory App Store compliance webhooks (GDPR). Delivered to the Next.js handler.
   [[webhooks.subscriptions]]
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]

@@ -4,9 +4,12 @@ import {
   updateShopifySyncResult,
 } from "@/lib/db/shopify";
 import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
+import { registerAppWebhooks } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 
 const DEFAULT_STALE_MS = 60 * 60 * 1000; // 1 hour
+/** When the store still has zero orders, refresh aggressively so new test orders appear. */
+const ZERO_ORDERS_STALE_MS = 60 * 1000; // 1 minute
 
 export type EnsureShopifySyncResult = {
   synced: boolean;
@@ -22,6 +25,21 @@ function hasUsableSnapshot(snapshot: Awaited<ReturnType<typeof getCachedShopifyS
   if (snapshot.storeMetrics && typeof snapshot.storeMetrics.orders30d === "number") return true;
   if (snapshot.syncedAt) return true;
   return false;
+}
+
+function resolveStaleWindowMs(
+  cached: Awaited<ReturnType<typeof getCachedShopifySnapshot>>,
+  installationOrderCount: number | null | undefined,
+  requested?: number,
+): number {
+  const configured = requested ?? DEFAULT_STALE_MS;
+  const cachedOrders = cached?.storeMetrics?.orders30d;
+  const orderCount =
+    typeof cachedOrders === "number" ? cachedOrders : (installationOrderCount ?? null);
+  if (orderCount === 0) {
+    return Math.min(configured, ZERO_ORDERS_STALE_MS);
+  }
+  return configured;
 }
 
 /**
@@ -41,9 +59,13 @@ export async function ensureShopifySyncIfNeeded(input: {
   force?: boolean;
   staleAfterMs?: number;
 }): Promise<EnsureShopifySyncResult> {
-  const staleAfterMs = input.staleAfterMs ?? DEFAULT_STALE_MS;
   const installation = await getInstallationForStore(input.storeId);
   const cached = await getCachedShopifySnapshot(input.storeId);
+  const staleAfterMs = resolveStaleWindowMs(
+    cached,
+    installation?.sync_stats?.orderCount,
+    input.staleAfterMs,
+  );
   const lastSyncAt = installation?.last_sync_at ?? null;
   const lastSyncMs = lastSyncAt ? Date.parse(lastSyncAt) : NaN;
   const isFresh =
@@ -58,6 +80,7 @@ export async function ensureShopifySyncIfNeeded(input: {
         shop: input.shop,
         storeId: input.storeId,
         lastSyncAt,
+        staleAfterMs,
         reason: "fresh_cache",
       }),
     );
@@ -92,6 +115,23 @@ export async function ensureShopifySyncIfNeeded(input: {
     const products = syncResult.snapshot.products?.length ?? syncResult.stats.productCount;
     const orders30d = syncResult.snapshot.storeMetrics?.orders30d ?? syncResult.stats.orderCount;
 
+    // Best-effort: ensure order webhooks exist for installs that predate the topic list.
+    if (input.force) {
+      try {
+        await registerAppWebhooks(input.shop, input.accessToken);
+      } catch (webhookError) {
+        console.warn(
+          "[shopify-sync]",
+          JSON.stringify({
+            event: "ensure_webhook_register_failed",
+            shop: input.shop,
+            message:
+              webhookError instanceof Error ? webhookError.message : String(webhookError),
+          }),
+        );
+      }
+    }
+
     console.log(
       "[shopify-sync]",
       JSON.stringify({
@@ -101,6 +141,7 @@ export async function ensureShopifySyncIfNeeded(input: {
         storeId: input.storeId,
         products,
         orders30d,
+        statsOrderCount: syncResult.stats.orderCount,
         shopName: syncResult.shopName,
       }),
     );

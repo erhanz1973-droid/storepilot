@@ -189,7 +189,20 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
       }
 
       const cached = await getCachedShopifySnapshot(storeId);
-      if (cached && (cached.products?.length || cached.storeMetrics)) {
+      const lastSyncMs = installation.last_sync_at
+        ? Date.parse(installation.last_sync_at)
+        : NaN;
+      const cachedOrders = cached?.storeMetrics?.orders30d;
+      // Products-only caches written before the first order must not stick for an hour.
+      const zeroOrdersStale =
+        cachedOrders === 0 &&
+        Number.isFinite(lastSyncMs) &&
+        Date.now() - lastSyncMs > 60_000;
+      if (
+        cached &&
+        (cached.products?.length || cached.storeMetrics) &&
+        !zeroOrdersStale
+      ) {
         return cached;
       }
 

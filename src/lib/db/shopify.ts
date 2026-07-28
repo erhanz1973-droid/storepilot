@@ -541,6 +541,19 @@ export async function updateShopifySyncResult(
       }
     }
     memorySyncCache.set(storeId, { snapshot, synced_at: now });
+    console.log(
+      "[shopify-persist]",
+      JSON.stringify({
+        event: "sync_cache_written",
+        storeId,
+        syncedAt: now,
+        productCount: stats.productCount,
+        orderCount: stats.orderCount,
+        snapshotOrders30d: snapshot.storeMetrics?.orders30d ?? null,
+        commerceOrdersLength: snapshot.commerceOrders?.length ?? null,
+        backend: "memory",
+      }),
+    );
     return;
   }
 
@@ -560,6 +573,19 @@ export async function updateShopifySyncResult(
   await supabase.from("shopify_sync_cache").upsert(
     { store_id: storeId, snapshot, synced_at: now } as Record<string, unknown>,
     { onConflict: "store_id" },
+  );
+
+  console.log(
+    "[shopify-persist]",
+    JSON.stringify({
+      event: "sync_cache_written",
+      storeId,
+      syncedAt: now,
+      productCount: stats.productCount,
+      orderCount: stats.orderCount,
+      snapshotOrders30d: snapshot.storeMetrics?.orders30d ?? null,
+      commerceOrdersLength: snapshot.commerceOrders?.length ?? null,
+    }),
   );
 }
 

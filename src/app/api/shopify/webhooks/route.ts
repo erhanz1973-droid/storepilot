@@ -9,6 +9,7 @@ import {
   type GdprShopRedactPayload,
 } from "@/lib/shopify/gdpr";
 import { verifyWebhookHmac } from "@/lib/shopify/oauth";
+import { resyncShopifyCommerce } from "@/lib/shopify/resync-commerce.server";
 import { deleteAuthSessionsForShop } from "@/lib/shopify/supabase-session-storage";
 import { claimWebhookDelivery } from "@/lib/shopify/webhook-idempotency";
 
@@ -88,6 +89,36 @@ export async function POST(request: Request) {
       }
       case "shop/redact": {
         await handleShopRedact(payload as GdprShopRedactPayload);
+        break;
+      }
+      case "orders/create":
+      case "orders/updated":
+      case "orders/paid": {
+        if (!shop) {
+          logWebhook("orders_resync_skipped", { topic, webhookId, reason: "missing_shop" });
+          break;
+        }
+        const orderId =
+          typeof (payload as { id?: unknown }).id === "number" ||
+          typeof (payload as { id?: unknown }).id === "string"
+            ? (payload as { id: number | string }).id
+            : null;
+        const sync = await resyncShopifyCommerce({
+          shopDomain: shop,
+          source: `webhook:${topic}`,
+          force: true,
+        });
+        logWebhook("orders_resync", {
+          topic,
+          shop,
+          webhookId,
+          orderId,
+          synced: sync.synced,
+          skipped: sync.skipped,
+          reason: sync.reason,
+          products: "products" in sync ? sync.products : undefined,
+          orders30d: "orders30d" in sync ? sync.orders30d : undefined,
+        });
         break;
       }
       default: {
