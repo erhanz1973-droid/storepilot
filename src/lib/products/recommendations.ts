@@ -1,4 +1,5 @@
 import type { ProductAttributionProfile } from "@/lib/attribution/product-types";
+import { classifyInventoryAging } from "@/lib/inventory/aging";
 import type { ProductIntelligenceProfile } from "@/lib/products/types";
 
 export type ProductRecommendationBadge =
@@ -32,6 +33,9 @@ export type ProductDisplayStatus =
   | "Scaling"
   | "Low Margin"
   | "Over Advertised"
+  | "New Product"
+  | "Needs Attention"
+  | "Slow Moving"
   | "Dead Inventory"
   | "Out of Stock"
   | "Losing Money";
@@ -60,7 +64,18 @@ export function displayStatus(
   attr?: ProductAttributionProfile | null,
 ): ProductDisplayStatus {
   if (profile.inventory === 0) return "Out of Stock";
-  if (profile.inventory > 20 && profile.unitsSold < 3) return "Dead Inventory";
+
+  const aging = classifyInventoryAging({
+    createdAt: profile.createdAt,
+    firstInventoryAt: profile.firstInventoryAt,
+    inventoryQuantity: profile.inventory,
+    unitsSold30d: profile.unitsSold,
+  });
+  if (aging === "new_product") return "New Product";
+  if (aging === "needs_attention") return "Needs Attention";
+  if (aging === "slow_moving") return "Slow Moving";
+  if (aging === "dead_inventory") return "Dead Inventory";
+
   if (profile.isLosingMoney) {
     const organic = attr?.sources.organic ?? 0;
     const meta = attr?.sources.meta ?? 0;

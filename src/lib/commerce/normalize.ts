@@ -31,6 +31,8 @@ export function mapLegacyProduct(
     tags: p.tags,
     imageUrl: p.imageUrl,
     cartAdds30d: p.cartAdds30d,
+    createdAt: p.createdAt,
+    firstInventoryAt: p.firstInventoryAt,
   };
 }
 

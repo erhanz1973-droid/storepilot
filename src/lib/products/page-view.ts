@@ -248,7 +248,11 @@ export function assembleProductsPageView(
   const losingMoney = products.filter((p) => p.isLosingMoney).length;
   const outOfStock = products.filter((p) => p.displayStatus === "Out of Stock").length;
   const deadInventory = products.filter(
-    (p) => p.displayStatus === "Dead Inventory" || p.lifecycleStage === "Dead Inventory",
+    (p) =>
+      p.displayStatus === "Dead Inventory" ||
+      p.lifecycleStage === "Dead Inventory" ||
+      p.lifecycleStage === "Slow Moving" ||
+      p.lifecycleStage === "Needs Attention",
   ).length;
   const highest = [...products].sort((a, b) => b.netProfit - a.netProfit)[0] ?? null;
 

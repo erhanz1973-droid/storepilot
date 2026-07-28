@@ -59,18 +59,41 @@ function colId(category: string) {
   return `gid://shopify/Collection/${category}`;
 }
 
+function daysAgoIso(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString();
+}
+
+function createdAtForTier(tier: ProductSeed["tier"], tags?: string[]): string {
+  if (tags?.includes("launching")) return daysAgoIso(5);
+  switch (tier) {
+    case "dead":
+      return daysAgoIso(120);
+    case "slow":
+      return daysAgoIso(60);
+    case "average":
+      return daysAgoIso(40);
+    case "bestseller":
+    default:
+      return daysAgoIso(180);
+  }
+}
+
 export const PEAK_OUTFITTERS_PRODUCTS: ShopifyProduct[] = SEEDS.map((s) => ({
   id: `gid://shopify/Product/${s.id}`,
   title: s.title,
   inventoryQuantity: s.inventoryQuantity,
-  unitsSold30d: s.unitsSold30d,
-  revenue30d: s.revenue30d,
+  // Dead-inventory aging requires no sales in the sales window.
+  unitsSold30d: s.tier === "dead" ? 0 : s.unitsSold30d,
+  revenue30d: s.tier === "dead" ? 0 : s.revenue30d,
   price: s.price,
   unitCost: s.unitCost,
   collectionIds: [colId(s.category)],
   tags: s.tags ?? [s.tier],
   imageUrl: IMG,
   cartAdds30d: s.cartAdds30d,
+  createdAt: createdAtForTier(s.tier, s.tags),
 }));
 
 export function productRevenueTotal(): number {

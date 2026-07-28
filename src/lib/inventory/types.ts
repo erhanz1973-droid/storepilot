@@ -4,6 +4,8 @@ import type { InventoryHealthBreakdown } from "./summary";
 export type InventoryDataStatus = "verified" | "estimated" | "unavailable";
 
 export type InventorySegmentId =
+  | "new"
+  | "needs_attention"
   | "dead"
   | "slow"
   | "fast"
@@ -11,16 +13,20 @@ export type InventorySegmentId =
   | "out_of_stock";
 
 export const INVENTORY_SEGMENT_LABELS: Record<InventorySegmentId, string> = {
+  new: "New Product",
+  needs_attention: "Needs Attention",
   dead: "Dead Inventory",
-  slow: "Slow Movers",
+  slow: "Slow Moving",
   fast: "Fast Movers",
   low_stock: "Low Stock",
   out_of_stock: "Out Of Stock",
 };
 
 export const INVENTORY_SEGMENT_DESCRIPTIONS: Record<InventorySegmentId, string> = {
-  dead: "No sales in 90+ days",
-  slow: "Below velocity target",
+  new: "0–14 days since create / first stock",
+  needs_attention: "15–45 days with little or no sales",
+  dead: "90+ days with no sales",
+  slow: "46–90 days with little or no sales",
   fast: "High velocity SKUs",
   low_stock: "At risk of stockout",
   out_of_stock: "Zero inventory",

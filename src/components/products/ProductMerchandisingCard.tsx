@@ -9,12 +9,18 @@ const STATUS_CLASS: Record<EnrichedProductCard["displayStatus"], string> = {
   Scaling: "status-scaling",
   "Low Margin": "status-low-margin",
   "Over Advertised": "status-over-advertised",
+  "New Product": "status-healthy",
+  "Needs Attention": "status-low-margin",
+  "Slow Moving": "status-over-advertised",
   "Dead Inventory": "status-dead-inventory",
   "Out of Stock": "status-oos",
   "Losing Money": "status-losing",
 };
 
 const LIFECYCLE_CLASS: Record<EnrichedProductCard["lifecycleStage"], string> = {
+  "New Product": "lifecycle-launching",
+  "Needs Attention": "lifecycle-declining",
+  "Slow Moving": "lifecycle-declining",
   Launching: "lifecycle-launching",
   Growing: "lifecycle-growing",
   Winning: "lifecycle-winning",

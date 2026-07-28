@@ -1,6 +1,10 @@
 import type { ProductAttributionDashboard } from "@/lib/attribution/product-types";
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import {
+  classifyInventoryAging,
+  type InventoryAgingThresholds,
+} from "@/lib/inventory/aging";
+import {
   computeInventoryCoverageDays,
   computeInventoryHealthBreakdown,
   computeInventorySummary,
@@ -27,8 +31,6 @@ import {
 } from "./types";
 
 const LOW_STOCK_DAYS = 14;
-const DEAD_UNITS_THRESHOLD = 3;
-const DEAD_MIN_INVENTORY = 20;
 const FAST_VELOCITY_MIN_UNITS = 80;
 const SLOW_OVERSTOCK_MIN = 60;
 const SLOW_MAX_UNITS = 20;
@@ -45,6 +47,10 @@ function classifySegment(
   product: StoreSnapshot["products"][0],
   profile: ProductIntelligenceProfile | undefined,
   medianVelocity: number,
+  agingOptions?: {
+    industry?: string | null;
+    thresholds?: Partial<InventoryAgingThresholds>;
+  },
 ): InventorySegmentId {
   const inv = product.inventoryQuantity;
   const units = product.unitsSold30d;
@@ -52,11 +58,19 @@ function classifySegment(
 
   if (inv === 0) return "out_of_stock";
 
-  if (
-    product.tags?.includes("dead-inventory") ||
-    (units === 0 && inv > 0) ||
-    (units < DEAD_UNITS_THRESHOLD && inv >= DEAD_MIN_INVENTORY)
-  ) {
+  const aging = classifyInventoryAging({
+    createdAt: product.createdAt,
+    firstInventoryAt: product.firstInventoryAt,
+    inventoryQuantity: inv,
+    unitsSold30d: units,
+    industry: agingOptions?.industry,
+    thresholds: agingOptions?.thresholds,
+  });
+
+  if (aging === "new_product") return "new";
+  if (aging === "needs_attention") return "needs_attention";
+  if (aging === "slow_moving") return "slow";
+  if (aging === "dead_inventory" || product.tags?.includes("dead-inventory")) {
     return "dead";
   }
 
@@ -111,7 +125,7 @@ function fallbackRecommendation(
     };
   }
 
-  if (segment === "dead" || segment === "slow") {
+  if (segment === "dead" || segment === "slow" || segment === "needs_attention") {
     return {
       badge: "discount",
       label: RECOMMENDATION_BADGE_LABELS.discount,
@@ -195,8 +209,10 @@ function buildSegments(
   products: StoreSnapshot["products"],
 ): InventorySegmentCard[] {
   const ids: InventorySegmentId[] = [
-    "dead",
+    "new",
+    "needs_attention",
     "slow",
+    "dead",
     "fast",
     "low_stock",
     "out_of_stock",
@@ -412,6 +428,11 @@ export function buildInventoryPageView(input: {
   snapshot: StoreSnapshot;
   intelligence: ProductIntelligenceDashboard | null;
   attribution?: ProductAttributionDashboard | null;
+  /** Optional merchant/industry aging threshold overrides. */
+  aging?: {
+    industry?: string | null;
+    thresholds?: Partial<InventoryAgingThresholds>;
+  };
 }): InventoryPageView | null {
   if (!input.snapshot.products.length) return null;
 
@@ -430,7 +451,7 @@ export function buildInventoryPageView(input: {
 
   const rows = input.snapshot.products.map((product) => {
     const profile = profileById.get(product.id);
-    const segment = classifySegment(product, profile, medianVelocity);
+    const segment = classifySegment(product, profile, medianVelocity, input.aging);
     return buildSkuRow(product, profile, segment, input.attribution ?? null);
   });
 
@@ -441,6 +462,7 @@ export function buildInventoryPageView(input: {
   const opportunities = buildOpportunities(rows);
   const recoveryPotential = opportunities.reduce((s, o) => s + o.estimatedMonthlyImpact, 0);
   const atRiskSegments = new Set<InventorySegmentId>([
+    "needs_attention",
     "dead",
     "slow",
     "low_stock",
@@ -455,8 +477,10 @@ export function buildInventoryPageView(input: {
         out_of_stock: 0,
         low_stock: 1,
         dead: 2,
-        slow: 3,
-        fast: 4,
+        needs_attention: 3,
+        slow: 4,
+        new: 5,
+        fast: 6,
       };
       const pd = priority[a.segment] - priority[b.segment];
       if (pd !== 0) return pd;

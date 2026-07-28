@@ -7,7 +7,14 @@ import {
 } from "@/lib/insights/business-action-groups";
 import { createCommerceOpportunity } from "@/lib/insights/opportunity-schema";
 
-function deadProduct(id: string, title: string, inventory: number, sold = 0, price = 99): ShopifyProduct {
+function deadProduct(
+  id: string,
+  title: string,
+  inventory: number,
+  sold = 0,
+  price = 99,
+  createdAt = "2026-01-01T00:00:00.000Z",
+): ShopifyProduct {
   return {
     id,
     title,
@@ -18,6 +25,7 @@ function deadProduct(id: string, title: string, inventory: number, sold = 0, pri
     collectionIds: [],
     tags: [],
     imageUrl: "",
+    createdAt,
   };
 }
 
@@ -25,8 +33,8 @@ describe("business action grouping", () => {
   it("builds one dead inventory business action for multiple SKUs", () => {
     const action = buildDeadInventoryBusinessAction([
       deadProduct("gid://shopify/Product/1", "Product A", 50, 0, 80),
-      deadProduct("gid://shopify/Product/2", "Product B", 60, 2, 90),
-      deadProduct("gid://shopify/Product/3", "Product C", 45, 1, 70),
+      deadProduct("gid://shopify/Product/2", "Product B", 60, 0, 90),
+      deadProduct("gid://shopify/Product/3", "Product C", 45, 0, 70),
     ]);
 
     expect(action).not.toBeNull();

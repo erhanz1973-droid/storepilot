@@ -2,6 +2,7 @@ import type { ProductAttributionDashboard } from "@/lib/attribution/product-type
 import type { StoreSnapshot } from "@/lib/connectors/types";
 import type { ProductCostRecord } from "@/lib/db/product-costs";
 import { productCostMap } from "@/lib/db/product-costs";
+import { classifyInventoryAging } from "@/lib/inventory/aging";
 import { resolveCostSource } from "@/lib/profit/confidence";
 import {
   DEFAULT_TRANSACTION_FEE_FIXED,
@@ -58,13 +59,20 @@ function productStatus(
 }
 
 function inventoryRiskLevel(
-  inventory: number,
+  product: StoreSnapshot["products"][0],
   units30d: number,
 ): ProductIntelligenceProfile["inventoryRisk"] {
+  const inventory = product.inventoryQuantity;
   const daily = units30d / 30;
-  if (units30d === 0 && inventory > 20) return "dead";
+  const aging = classifyInventoryAging({
+    createdAt: product.createdAt,
+    firstInventoryAt: product.firstInventoryAt,
+    inventoryQuantity: inventory,
+    unitsSold30d: units30d,
+  });
+  if (aging === "dead_inventory") return "dead";
   if (daily > 0 && inventory / daily <= 14) return "low_stock";
-  if (inventory > 60 && units30d < 20) return "overstock";
+  if (aging === "slow_moving" || (inventory > 60 && units30d < 20)) return "overstock";
   return "none";
 }
 
@@ -236,11 +244,13 @@ function buildProductProfile(
     salesTrendLabel: salesTrendLabel(revenueGrowthPct),
     lifecycleStage: "Stable",
     healthBreakdown,
-    inventoryRisk: inventoryRiskLevel(p.inventoryQuantity, w30.units),
+    inventoryRisk: inventoryRiskLevel(p, w30.units),
     status: productStatus(netProfit, marginPct, p.inventoryQuantity, daysUntilStockout),
     costSource: source,
     healthScore: score,
     healthLabel: label,
+    createdAt: p.createdAt ?? null,
+    firstInventoryAt: p.firstInventoryAt ?? null,
     trends: {
       last7d,
       last30d,

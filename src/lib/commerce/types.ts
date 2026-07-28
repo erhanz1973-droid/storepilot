@@ -50,6 +50,8 @@ export type CommerceProduct = {
   tags: string[];
   imageUrl?: string;
   cartAdds30d?: number;
+  createdAt?: string;
+  firstInventoryAt?: string;
 };
 
 export type CommerceCollection = {

@@ -4,6 +4,7 @@ import type { ProductAttributionDashboard } from "@/lib/attribution/product-type
 import { ATTRIBUTION_CONFIDENCE_LABELS } from "@/lib/attribution/product-types";
 import type { DailyMetricPoint, StoreSnapshot } from "@/lib/connectors/types";
 import type { ProfitWaterfall } from "@/lib/decisions/product-economics";
+import { classifyInventoryAging } from "@/lib/inventory/aging";
 import {
   enrichChannelProfitabilityCard,
   estimateChannelTrends,
@@ -653,14 +654,25 @@ export function buildChannelProfitCards(
   return cards.sort((a, b) => b.netContribution - a.netContribution);
 }
 
-function productDisplayStatus(row: ProductProfitRow): string {
-  if (row.inventory > 20 && row.unitsSold < 3) return "Dead Inventory";
+function productDisplayStatus(row: ProductProfitRow & { createdAt?: string | null }): string {
+  const aging = classifyInventoryAging({
+    createdAt: row.createdAt,
+    inventoryQuantity: row.inventory,
+    unitsSold30d: row.unitsSold,
+  });
+  if (aging === "new_product") return "New Product";
+  if (aging === "needs_attention") return "Needs Attention";
+  if (aging === "slow_moving") return "Slow Moving";
+  if (aging === "dead_inventory") return "Dead Inventory";
   if (row.netProfit > 0 && row.marginPct >= 35 && row.unitsSold >= 15) return "Winner";
   return row.status;
 }
 
 function productRecommendation(row: EnrichedProductProfitRow): string {
   if (row.displayStatus === "Dead Inventory") return "Clearance or bundle to move stock";
+  if (row.displayStatus === "Slow Moving") return "Promote or bundle before stock ages further";
+  if (row.displayStatus === "Needs Attention") return "Monitor sell-through; test a light promotion";
+  if (row.displayStatus === "New Product") return "Give the listing time — do not clear as dead stock";
   if (row.displayStatus === "Winner") return "Scale ads and protect inventory";
   if (row.losingMoney) return "Raise price or reduce COGS";
   if (row.displayStatus === "Low Margin") return "Test price increase or reduce ad spend";

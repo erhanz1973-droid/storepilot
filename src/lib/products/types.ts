@@ -12,6 +12,9 @@ export type ProductTrendMetrics = {
 };
 
 export type ProductLifecycleStage =
+  | "New Product"
+  | "Needs Attention"
+  | "Slow Moving"
   | "Launching"
   | "Growing"
   | "Winning"
@@ -65,6 +68,8 @@ export type ProductIntelligenceProfile = {
   costSource: "shopify" | "manual" | "estimated";
   healthScore: number;
   healthLabel: "Excellent" | "Good" | "Fair" | "Poor";
+  createdAt?: string | null;
+  firstInventoryAt?: string | null;
   trends: {
     last7d: ProductTrendMetrics;
     last30d: ProductTrendMetrics;

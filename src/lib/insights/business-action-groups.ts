@@ -1,4 +1,5 @@
 import type { ShopifyProduct } from "@/lib/connectors/types";
+import { isDeadInventoryByAging } from "@/lib/inventory/aging";
 import type { SupportingMetric } from "@/lib/types";
 import type { FutureActionType } from "./actions";
 import { createCommerceOpportunity, type CommerceOpportunity } from "./opportunity-schema";
@@ -22,11 +23,12 @@ const REVENUE_RECOVERY_RATE = 0.32;
 const INVENTORY_REDUCTION_RATE = 0.36;
 
 export function isDeadInventoryProduct(product: ShopifyProduct): boolean {
-  return (
-    product.unitsSold30d <= 5 &&
-    product.inventoryQuantity >= 7 &&
-    product.price > 20
-  );
+  return isDeadInventoryByAging({
+    createdAt: product.createdAt,
+    firstInventoryAt: product.firstInventoryAt,
+    inventoryQuantity: product.inventoryQuantity,
+    unitsSold30d: product.unitsSold30d,
+  });
 }
 
 export function detectDeadInventoryProducts(products: ShopifyProduct[]): ShopifyProduct[] {
@@ -64,8 +66,8 @@ export function buildDeadInventoryBusinessAction(
 
   const productLabel =
     dead.length === 1
-      ? "1 product has not sold in the last 30 days."
-      : `${dead.length} products have not sold in the last 30 days.`;
+      ? "1 product has had no sales for 90+ days."
+      : `${dead.length} products have had no sales for 90+ days.`;
 
   const supportingMetrics: SupportingMetric[] = [
     { label: "Products affected", value: String(dead.length) },

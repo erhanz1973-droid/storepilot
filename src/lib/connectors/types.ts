@@ -28,6 +28,10 @@ export type CommerceProductLegacy = {
   inventoryTracked?: boolean;
   /** Optional funnel metric when checkout analytics are synced */
   cartAdds30d?: number;
+  /** Platform product created timestamp (ISO) — used for inventory aging */
+  createdAt?: string;
+  /** First known inventory/receipt date when available (ISO) */
+  firstInventoryAt?: string;
 };
 
 /** @deprecated Import from @/lib/commerce — provider-neutral collection model */

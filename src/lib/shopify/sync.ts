@@ -39,6 +39,7 @@ const PRODUCTS_QUERY = `
           id
           title
           tags
+          createdAt
           featuredImage { url }
           totalInventory
           variants(first: 20) {
@@ -166,6 +167,7 @@ type RawProduct = {
   id: string;
   title: string;
   tags: string[];
+  createdAt?: string | null;
   featuredImage?: { url: string } | null;
   totalInventory: number;
   variants: {
@@ -752,6 +754,7 @@ function transformProducts(
       unitCost: shopifyUnitCost,
       collectionIds: p.collections.edges.map((e) => e.node.id),
       tags: p.tags,
+      createdAt: p.createdAt ?? undefined,
     };
   });
 }
