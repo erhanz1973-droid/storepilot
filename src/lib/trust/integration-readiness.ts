@@ -50,7 +50,7 @@ function connectorFailed(
   id: DataSourceId,
 ): boolean {
   const status = states?.[id];
-  return status === "error" || status === "sync_failed";
+  return status === "error";
 }
 
 export function assessDataConfidence(input: {
