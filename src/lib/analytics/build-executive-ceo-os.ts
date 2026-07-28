@@ -8,6 +8,7 @@ import {
   buildAdvertisingIntelligencePanel,
   buildBusinessCoverage,
   canEmitAsRecommendation,
+  filterBusinessEvidencePoints,
   filterPlaybookTitlesForDataAvailability,
   groundRecommendationEvidence,
 } from "@/lib/analytics/data-availability";
@@ -185,12 +186,17 @@ export type ExecutiveBrief = {
     standing: import("@/lib/analytics/data-availability").EvidenceStanding;
     standingLabel: string;
     supportedBy: string[];
-    explanation: string;
+    /** Standing context only (hypothesis / more data) — never restates supportedBy */
+    standingNote: string | null;
+    /** Business evidence / reasoning — never a duplicate of supportedBy */
+    evidence: string[];
   }>;
   /** Soft opportunities without campaign evidence (Rule 5) */
   opportunities: Array<{ title: string; detail: string; kind: "opportunity" }>;
   /** Rule 8 — how today's #1 decision is grounded */
-  decisionEvidence: import("@/lib/analytics/data-availability").EvidenceGrounding | null;
+  decisionEvidence: (import("@/lib/analytics/data-availability").EvidenceGrounding & {
+    evidence: string[];
+  }) | null;
   /** Bullet findings for "What did StorePilot find?" */
   findings: string[];
   /** Primary concern heading + body */
@@ -760,18 +766,21 @@ export function buildExecutiveBrief(input: {
     .slice(0, 5);
 
   const recommendations = recommendationTitles.map((title) => {
+    const isTodayDecision =
+      input.dailyDecision.hasDecision && input.dailyDecision.action === title;
     const grounded = groundRecommendationEvidence({
       title,
       sources: src,
-      evidencePointCount:
-        input.dailyDecision.hasDecision && input.dailyDecision.action === title
-          ? input.dailyDecision.evidencePoints.length
-          : 1,
-      confidencePct:
-        input.dailyDecision.hasDecision && input.dailyDecision.action === title
-          ? input.dailyDecision.impactPresentation.confidencePct
-          : 70,
+      evidencePointCount: isTodayDecision
+        ? input.dailyDecision.evidencePoints.length
+        : 1,
+      confidencePct: isTodayDecision
+        ? input.dailyDecision.impactPresentation.confidencePct
+        : 70,
     });
+    const evidence = isTodayDecision
+      ? filterBusinessEvidencePoints(input.dailyDecision.evidencePoints).slice(0, 4)
+      : [];
     return {
       title,
       kind: (grounded.standing === "recommendation" ? "recommendation" : "hypothesis") as
@@ -780,12 +789,20 @@ export function buildExecutiveBrief(input: {
       standing: grounded.standing,
       standingLabel: grounded.label,
       supportedBy: grounded.supportedBy,
-      explanation: grounded.explanation,
+      standingNote: grounded.explanation.trim() ? grounded.explanation : null,
+      evidence,
     };
   });
 
+  const decisionBusinessEvidence = filterBusinessEvidencePoints(
+    input.dailyDecision.evidencePoints,
+  ).slice(0, 4);
+
   const decisionEvidence =
-    input.dailyDecision.evidenceStanding && input.dailyDecision.evidenceExplanation
+    input.dailyDecision.evidenceStanding &&
+    (input.dailyDecision.evidenceExplanation != null ||
+      (input.dailyDecision.evidenceSupportedBy?.length ?? 0) > 0 ||
+      decisionBusinessEvidence.length > 0)
       ? {
           standing: input.dailyDecision.evidenceStanding,
           supportedBy: input.dailyDecision.evidenceSupportedBy ?? [],
@@ -796,15 +813,19 @@ export function buildExecutiveBrief(input: {
               : input.dailyDecision.evidenceStanding === "hypothesis"
                 ? "Hypothesis"
                 : "More data needed",
-          explanation: input.dailyDecision.evidenceExplanation,
+          explanation: input.dailyDecision.evidenceExplanation ?? "",
+          evidence: decisionBusinessEvidence,
         }
       : input.dailyDecision.hasDecision
-        ? groundRecommendationEvidence({
-            title: input.dailyDecision.action,
-            sources: src,
-            evidencePointCount: input.dailyDecision.evidencePoints.length,
-            confidencePct: input.dailyDecision.impactPresentation.confidencePct,
-          })
+        ? {
+            ...groundRecommendationEvidence({
+              title: input.dailyDecision.action,
+              sources: src,
+              evidencePointCount: input.dailyDecision.evidencePoints.length,
+              confidencePct: input.dailyDecision.impactPresentation.confidencePct,
+            }),
+            evidence: decisionBusinessEvidence,
+          }
         : null;
 
   // Soften AI copy when today's decision is only a hypothesis / insufficient
@@ -1217,9 +1238,12 @@ export function buildExecutiveCeoOsLayer(input: {
           netProfitFormatted: "$0/month",
         },
         evidenceStanding: grounded.standing,
-        evidenceExplanation: grounded.explanation,
+        evidenceExplanation: grounded.explanation || undefined,
         evidenceSupportedBy: grounded.supportedBy,
-        evidencePoints: [grounded.explanation, ...(adjusted.limitation ? [adjusted.limitation] : [])],
+        evidencePoints: filterBusinessEvidencePoints([
+          ...dailyDecision.evidencePoints,
+          ...(adjusted.limitation ? [adjusted.limitation] : []),
+        ]),
       };
     } else {
       dailyDecision = {
@@ -1233,13 +1257,12 @@ export function buildExecutiveCeoOsLayer(input: {
           confidencePct: adjusted.confidencePct,
         },
         evidenceStanding: grounded.standing,
-        evidenceExplanation: grounded.explanation,
+        evidenceExplanation: grounded.explanation || undefined,
         evidenceSupportedBy: grounded.supportedBy,
-        evidencePoints: [
+        evidencePoints: filterBusinessEvidencePoints([
           ...dailyDecision.evidencePoints,
-          grounded.explanation,
           ...(adjusted.limitation ? [adjusted.limitation] : []),
-        ],
+        ]),
         ceoOpinion:
           grounded.standing === "hypothesis"
             ? `Hypothesis — not a settled fact. ${grounded.explanation}`

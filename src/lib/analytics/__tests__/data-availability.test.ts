@@ -56,7 +56,7 @@ describe("data availability layer", () => {
       confidencePct: 90,
     });
     expect(insufficient.standing).toBe("insufficient_data");
-    expect(insufficient.explanation).toMatch(/don't have enough data/i);
+    expect(insufficient.explanation).toMatch(/connect/i);
 
     const hypothesis = groundRecommendationEvidence({
       title: "Dead inventory",
@@ -67,6 +67,8 @@ describe("data availability layer", () => {
     expect(hypothesis.standing).toBe("hypothesis");
     expect(hypothesis.label).toBe("Hypothesis");
     expect(hypothesis.supportedBy).toEqual(expect.arrayContaining(["Shopify", "Inventory"]));
+    expect(hypothesis.explanation).not.toMatch(/Shopify/);
+    expect(hypothesis.explanation).toMatch(/confidence/i);
 
     const strong = groundRecommendationEvidence({
       title: "Dead inventory",
@@ -75,6 +77,7 @@ describe("data availability layer", () => {
       confidencePct: 80,
     });
     expect(strong.standing).toBe("recommendation");
-    expect(strong.explanation).toMatch(/Supported by connected data/i);
+    expect(strong.explanation).toBe("");
+    expect(strong.supportedBy).toEqual(expect.arrayContaining(["Shopify", "Inventory"]));
   });
 });

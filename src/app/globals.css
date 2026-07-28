@@ -21935,11 +21935,52 @@ button {
   background: rgba(159, 18, 57, 0.08);
 }
 
-.exec-brief-supported-by,
-.exec-brief-rec-explain,
-.exec-ceo-evidence-standing,
-.exec-ceo-supported-by {
-  margin: 6px 0 0;
+.exec-supported-by {
+  margin: 10px 0 0;
+}
+
+.exec-supported-by-label,
+.exec-evidence-block-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.exec-supported-by-list,
+.exec-evidence-block-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.exec-supported-by-list li,
+.exec-evidence-block-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.exec-supported-by-check {
+  color: #166534;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.exec-evidence-block {
+  margin: 12px 0 0;
+}
+
+.exec-brief-standing-note,
+.exec-ceo-evidence-standing {
+  margin: 8px 0 0;
   font-size: 0.85rem;
   line-height: 1.5;
 }

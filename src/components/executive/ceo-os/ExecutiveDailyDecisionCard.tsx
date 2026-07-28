@@ -11,6 +11,8 @@ import { EvidenceStrengthBadge } from "@/components/executive/advisor/EvidenceSt
 import { MetricInfo } from "@/components/approvals/MetricInfo";
 import { DECISION_IMPACT_COPY } from "@/lib/impact/decision-impact";
 import { explainedFromImpactPresentation } from "@/lib/calculations/audit/from-presentation";
+import { EvidenceBulletList, SupportedByList } from "./SupportedByList";
+import { filterBusinessEvidencePoints } from "@/lib/analytics/data-availability";
 
 function oneLine(text: string, max = 140): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
@@ -57,11 +59,7 @@ export function ExecutiveDailyDecisionCard({
             {decision.emptyDetail ??
               "Your business is operating within acceptable thresholds. We'll notify you when a meaningful opportunity appears."}
           </p>
-          {decision.evidenceSupportedBy && decision.evidenceSupportedBy.length > 0 ? (
-            <p className="exec-ceo-supported-by muted">
-              Currently supported by: {decision.evidenceSupportedBy.join(", ")}
-            </p>
-          ) : null}
+          <SupportedByList sources={decision.evidenceSupportedBy ?? []} />
         </div>
 
         {isObserving && evidencePipeline ? (
@@ -143,6 +141,7 @@ export function ExecutiveDailyDecisionCard({
     confidencePct: impact.confidencePct,
   });
   const isCritical = mode === "CRITICAL";
+  const businessEvidence = filterBusinessEvidencePoints(decision.evidencePoints).slice(0, 4);
 
   return (
     <section
@@ -160,14 +159,11 @@ export function ExecutiveDailyDecisionCard({
         <h2 id="exec-ceo-decision-heading" className="exec-ceo-decision-action">
           {decision.action}
         </h2>
+        <SupportedByList sources={decision.evidenceSupportedBy ?? []} />
         {decision.evidenceExplanation ? (
           <p className="exec-ceo-evidence-standing muted">{decision.evidenceExplanation}</p>
         ) : null}
-        {decision.evidenceSupportedBy && decision.evidenceSupportedBy.length > 0 ? (
-          <p className="exec-ceo-supported-by muted">
-            Supported by: {decision.evidenceSupportedBy.join(", ")}
-          </p>
-        ) : null}
+        <EvidenceBulletList points={businessEvidence} />
 
         <div className="exec-ceo-impact-hero" aria-label={impact.heroLabel}>
           <span className="exec-ceo-impact-label">
@@ -227,19 +223,12 @@ export function ExecutiveDailyDecisionCard({
         {summary ? <p className="exec-ceo-decision-summary">{summary}</p> : null}
       </div>
 
-      {(detail || decision.evidencePoints.length > 0) && (
+      {detail ? (
         <details className="exec-ceo-decision-details">
           <summary>Why this matters</summary>
-          {detail ? <p className="exec-ceo-decision-detail-copy">{detail}</p> : null}
-          {decision.evidencePoints.length > 0 ? (
-            <ul className="exec-ceo-evidence-list">
-              {decision.evidencePoints.slice(0, 4).map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-          ) : null}
+          <p className="exec-ceo-decision-detail-copy">{detail}</p>
         </details>
-      )}
+      ) : null}
     </section>
   );
 }

@@ -416,10 +416,11 @@ export function groundRecommendationEvidence(input: {
       supportedBy,
       missingRequired,
       label: "More data needed",
+      // Do not restate supportedBy — UI lists sources separately. Focus on what's missing.
       explanation:
         missingRequired.length > 0
-          ? `I don't have enough data to recommend this yet. Missing: ${missingRequired.join(", ")}. Connect these sources before treating this as an executive recommendation.`
-          : "I don't have enough connected data to justify this as a recommendation. Treating it as an idea to evaluate only after more evidence syncs.",
+          ? `Connect ${missingRequired.join(", ")} before treating this as an executive recommendation.`
+          : "More connected data is needed before treating this as a recommendation.",
     };
   }
 
@@ -434,10 +435,11 @@ export function groundRecommendationEvidence(input: {
       supportedBy,
       missingRequired: [],
       label: "Hypothesis",
+      // Standing context only — never restate the source checklist.
       explanation:
         confidence != null && confidence < minConfidence
-          ? `Hypothesis to evaluate — connected data (${supportedBy.join(", ") || "limited sources"}) supports exploring this, but confidence (${confidence}%) is below the threshold for a strong recommendation. This is not a fact.`
-          : `Hypothesis to evaluate — supported by ${supportedBy.join(", ") || "connected store data"}, but evidence is still thin. More measured outcomes are needed before treating this as an executive recommendation.`,
+          ? `Confidence (${confidence}%) is below the threshold for a strong recommendation. Treat this as an idea to evaluate — not a fact.`
+          : "Evidence is still thin. More measured outcomes are needed before treating this as an executive recommendation.",
     };
   }
 
@@ -446,7 +448,8 @@ export function groundRecommendationEvidence(input: {
     supportedBy,
     missingRequired: [],
     label: "Recommendation",
-    explanation: `Supported by connected data: ${supportedBy.join(", ")}.`,
+    // Sources are shown once via supportedBy — leave explanation empty for the UI.
+    explanation: "",
   };
 }
 
@@ -472,5 +475,27 @@ export function evidenceStandingBadgeClass(standing: EvidenceStanding): string {
     case "insufficient_data":
       return "evidence-standing-insufficient";
   }
+}
+
+/** True when a string only restates standing / source checklist (not business evidence). */
+export function isEvidenceStandingMetaNote(text: string): boolean {
+  return /supported by connected data|hypothesis to evaluate|don't have enough data|more connected data is needed|connect .+ before treating|evidence is still thin|not a settled fact|confidence \(\d+%\) is below|limited by missing/i.test(
+    text,
+  );
+}
+
+/** Keep business evidence only — drop duplicated standing / source lines. */
+export function filterBusinessEvidencePoints(points: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of points) {
+    const point = raw.replace(/\s+/g, " ").trim();
+    if (!point || isEvidenceStandingMetaNote(point)) continue;
+    const key = point.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(point);
+  }
+  return out;
 }
 

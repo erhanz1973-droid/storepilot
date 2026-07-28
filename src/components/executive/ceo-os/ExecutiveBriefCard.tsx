@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ExecutiveBrief } from "@/lib/analytics/build-executive-ceo-os";
+import { EvidenceBulletList, SupportedByList } from "./SupportedByList";
 
 export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
   return (
@@ -93,12 +94,11 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
                   </span>
                   <strong>{r.title}</strong>
                 </div>
-                {r.supportedBy.length > 0 ? (
-                  <p className="muted exec-brief-supported-by">
-                    Supported by: {r.supportedBy.join(", ")}
-                  </p>
+                <SupportedByList sources={r.supportedBy} />
+                {r.standingNote ? (
+                  <p className="muted exec-brief-standing-note">{r.standingNote}</p>
                 ) : null}
-                <p className="muted exec-brief-rec-explain">{r.explanation}</p>
+                <EvidenceBulletList points={r.evidence} />
               </li>
             ))}
           </ul>
@@ -115,12 +115,11 @@ export function ExecutiveBriefCard({ brief }: { brief: ExecutiveBrief }) {
               {brief.decisionEvidence.label}
             </span>
           </p>
-          <p className="exec-brief-rec-explain">{brief.decisionEvidence.explanation}</p>
-          {brief.decisionEvidence.supportedBy.length > 0 ? (
-            <p className="muted exec-brief-supported-by">
-              Supported by: {brief.decisionEvidence.supportedBy.join(", ")}
-            </p>
+          <SupportedByList sources={brief.decisionEvidence.supportedBy} />
+          {brief.decisionEvidence.explanation.trim() ? (
+            <p className="muted exec-brief-standing-note">{brief.decisionEvidence.explanation}</p>
           ) : null}
+          <EvidenceBulletList points={brief.decisionEvidence.evidence} />
         </div>
       ) : null}
 
