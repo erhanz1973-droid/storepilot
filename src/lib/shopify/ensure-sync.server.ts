@@ -7,7 +7,8 @@ import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { registerAppWebhooks } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
 
-const DEFAULT_STALE_MS = 60 * 60 * 1000; // 1 hour
+/** Default commerce cache TTL — short enough that Admin inventory edits show up without waiting an hour. */
+const DEFAULT_STALE_MS = 5 * 60 * 1000; // 5 minutes
 /** When the store still has zero orders, refresh aggressively so new test orders appear. */
 const ZERO_ORDERS_STALE_MS = 60 * 1000; // 1 minute
 

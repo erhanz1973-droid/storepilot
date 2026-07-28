@@ -193,15 +193,19 @@ export function createShopifyPlugin(storeId: string): ConnectorPlugin {
         ? Date.parse(installation.last_sync_at)
         : NaN;
       const cachedOrders = cached?.storeMetrics?.orders30d;
-      // Products-only caches written before the first order must not stick for an hour.
+      // Products-only caches written before the first order must not stick.
       const zeroOrdersStale =
         cachedOrders === 0 &&
         Number.isFinite(lastSyncMs) &&
         Date.now() - lastSyncMs > 60_000;
+      // Inventory/product edits also go stale quickly when no webhook has fired yet.
+      const commerceStale =
+        Number.isFinite(lastSyncMs) && Date.now() - lastSyncMs > 5 * 60 * 1000;
       if (
         cached &&
         (cached.products?.length || cached.storeMetrics) &&
-        !zeroOrdersStale
+        !zeroOrdersStale &&
+        !commerceStale
       ) {
         return cached;
       }

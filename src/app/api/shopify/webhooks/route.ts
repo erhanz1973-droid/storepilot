@@ -93,26 +93,30 @@ export async function POST(request: Request) {
       }
       case "orders/create":
       case "orders/updated":
-      case "orders/paid": {
+      case "orders/paid":
+      case "products/update":
+      case "inventory_levels/update": {
         if (!shop) {
-          logWebhook("orders_resync_skipped", { topic, webhookId, reason: "missing_shop" });
+          logWebhook("commerce_resync_skipped", { topic, webhookId, reason: "missing_shop" });
           break;
         }
-        const orderId =
+        const entityId =
           typeof (payload as { id?: unknown }).id === "number" ||
           typeof (payload as { id?: unknown }).id === "string"
             ? (payload as { id: number | string }).id
-            : null;
+            : typeof (payload as { inventory_item_id?: unknown }).inventory_item_id === "number"
+              ? (payload as { inventory_item_id: number }).inventory_item_id
+              : null;
         const sync = await resyncShopifyCommerce({
           shopDomain: shop,
           source: `webhook:${topic}`,
           force: true,
         });
-        logWebhook("orders_resync", {
+        logWebhook("commerce_resync", {
           topic,
           shop,
           webhookId,
-          orderId,
+          entityId,
           synced: sync.synced,
           skipped: sync.skipped,
           reason: sync.reason,

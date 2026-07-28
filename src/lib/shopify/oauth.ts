@@ -142,9 +142,16 @@ export async function registerAppWebhooks(shop: string, accessToken: string): Pr
   if (!config) return;
 
   const address = `${config.appUrl}/api/shopify/webhooks`;
-  // Orders topics keep shopify_sync_cache fresh when merchants place new test/live orders
-  // after the initial post-install sync (which often runs before any orders exist).
-  const topics = ["app/uninstalled", "orders/create", "orders/updated", "orders/paid"];
+  // Commerce topics keep shopify_sync_cache fresh when merchants place orders or
+  // change inventory after the initial post-install sync.
+  const topics = [
+    "app/uninstalled",
+    "orders/create",
+    "orders/updated",
+    "orders/paid",
+    "products/update",
+    "inventory_levels/update",
+  ];
 
   console.log(
     "[shopify-webhook]",
