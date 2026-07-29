@@ -104,21 +104,56 @@ export function verifyWebhookHmac(rawBody: string, hmacHeader: string | null): b
   }
 }
 
+/**
+ * Shopify authorization-code exchange result.
+ *
+ * When the app has expiring offline access tokens enabled, Shopify also returns
+ * `refresh_token` / `expires_in` / `refresh_token_expires_in`. These must be
+ * persisted — without the refresh token the first access-token expiry forces the
+ * merchant to reauthorize.
+ */
+export type ShopifyTokenExchangeResult = {
+  access_token: string;
+  scope: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_token_expires_in?: number;
+};
+
+/** Convert a Shopify `*_expires_in` seconds value into an absolute expiry. */
+export function tokenExpiryFromSeconds(
+  expiresInSeconds: number | null | undefined,
+): Date | undefined {
+  if (typeof expiresInSeconds !== "number" || !Number.isFinite(expiresInSeconds)) {
+    return undefined;
+  }
+  return new Date(Date.now() + expiresInSeconds * 1000);
+}
+
 export async function exchangeCodeForToken(
   shop: string,
   code: string,
-): Promise<{ access_token: string; scope: string }> {
+): Promise<ShopifyTokenExchangeResult> {
   const config = getShopifyConfig();
   if (!config) throw new Error("Shopify OAuth is not configured");
 
+  // Shopify defaults authorization-code exchanges to a non-expiring offline
+  // token. `expiring=1` is required to receive expires_in, refresh_token, and
+  // refresh_token_expires_in.
+  const body = new URLSearchParams({
+    client_id: config.apiKey,
+    client_secret: config.apiSecret,
+    code,
+    expiring: "1",
+  });
+
   const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: config.apiKey,
-      client_secret: config.apiSecret,
-      code,
-    }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body,
   });
 
   if (!response.ok) {
@@ -126,7 +161,25 @@ export async function exchangeCodeForToken(
     throw new Error(`Token exchange failed: ${text}`);
   }
 
-  return response.json() as Promise<{ access_token: string; scope: string }>;
+  const json = (await response.json()) as Record<string, unknown>;
+  const accessToken = typeof json.access_token === "string" ? json.access_token : "";
+  if (!accessToken) {
+    throw new Error("Token exchange returned no access_token");
+  }
+
+  return {
+    access_token: accessToken,
+    scope: typeof json.scope === "string" ? json.scope : "",
+    refresh_token:
+      typeof json.refresh_token === "string" && json.refresh_token
+        ? json.refresh_token
+        : undefined,
+    expires_in: typeof json.expires_in === "number" ? json.expires_in : undefined,
+    refresh_token_expires_in:
+      typeof json.refresh_token_expires_in === "number"
+        ? json.refresh_token_expires_in
+        : undefined,
+  };
 }
 
 /**

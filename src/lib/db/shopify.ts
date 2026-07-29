@@ -398,6 +398,10 @@ export async function markShopifyUninstalled(shopDomain: string): Promise<void> 
           connection_health: "disconnected",
           uninstalled_at: now,
           access_token_encrypted: "",
+          refresh_token_encrypted: "",
+          refresh_token_expires_at: null,
+          refreshToken: null,
+          refreshTokenExpires: null,
         });
       }
     }

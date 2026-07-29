@@ -10,6 +10,7 @@ import {
   getShopifyConfig,
   normalizeShopDomain,
   registerAppWebhooks,
+  tokenExpiryFromSeconds,
   verifyOAuthHmac,
 } from "@/lib/shopify/oauth";
 import { syncShopifyStore } from "@/lib/shopify/sync";
@@ -64,19 +65,37 @@ export async function GET(request: Request) {
       storeId = await createStoreForShop(shop, shop);
     }
 
+    // Install and reconnect share this path, so the refresh token must be written
+    // every time Shopify issues one — otherwise a store keeps a stale refresh
+    // token that reconnecting can never repair.
     await upsertShopifyInstallation({
       storeId,
       shopDomain: shop,
       accessToken: tokenResult.access_token,
       scopes,
       clientId: config.apiKey,
+      refreshToken: tokenResult.refresh_token,
+      refreshTokenExpires: tokenExpiryFromSeconds(tokenResult.refresh_token_expires_in),
     });
+
+    console.log(
+      "[shopify-oauth]",
+      JSON.stringify({
+        event: "oauth_callback_tokens_persisted",
+        shop,
+        storeId,
+        hasRefreshToken: Boolean(tokenResult.refresh_token),
+        accessTokenExpiresIn: tokenResult.expires_in ?? null,
+        refreshTokenExpiresIn: tokenResult.refresh_token_expires_in ?? null,
+      }),
+    );
 
     await registerAppWebhooks(shop, tokenResult.access_token);
 
     try {
       const syncResult = await syncShopifyStore(shop, tokenResult.access_token, {
         storedClientId: config.apiKey,
+        refreshToken: tokenResult.refresh_token ?? null,
       });
       await updateShopifySyncResult(storeId, syncResult.stats, syncResult.snapshot, {
         shopName: syncResult.shopName,
