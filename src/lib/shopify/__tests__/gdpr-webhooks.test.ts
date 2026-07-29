@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   deleteAuthSessionsForShop: vi.fn(),
   verifyWebhookHmac: vi.fn(),
   claimWebhookDelivery: vi.fn(),
+  completeWebhookDelivery: vi.fn(),
+  releaseWebhookDelivery: vi.fn(),
   handleCustomersDataRequest: vi.fn(),
   handleCustomersRedact: vi.fn(),
   handleShopRedact: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("@/lib/shopify/oauth", () => ({
 
 vi.mock("@/lib/shopify/webhook-idempotency", () => ({
   claimWebhookDelivery: mocks.claimWebhookDelivery,
+  completeWebhookDelivery: mocks.completeWebhookDelivery,
+  releaseWebhookDelivery: mocks.releaseWebhookDelivery,
 }));
 
 vi.mock("@/lib/shopify/gdpr", () => ({
@@ -63,7 +67,14 @@ function makeRequest(opts: {
 describe("Shopify webhook GDPR compliance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.claimWebhookDelivery.mockResolvedValue({ shouldProcess: true, webhookId: "wh-1" });
+    mocks.claimWebhookDelivery.mockResolvedValue({
+      shouldProcess: true,
+      webhookId: "wh-1",
+      reason: "claimed",
+      degraded: false,
+    });
+    mocks.completeWebhookDelivery.mockResolvedValue(undefined);
+    mocks.releaseWebhookDelivery.mockResolvedValue(undefined);
     mocks.handleCustomersDataRequest.mockResolvedValue({ ok: true });
     mocks.handleCustomersRedact.mockResolvedValue({ ok: true });
     mocks.handleShopRedact.mockResolvedValue({ ok: true });
@@ -137,7 +148,12 @@ describe("Shopify webhook GDPR compliance", () => {
   });
 
   it("skips duplicate webhook ids with 200", async () => {
-    mocks.claimWebhookDelivery.mockResolvedValue({ shouldProcess: false, webhookId: "dup" });
+    mocks.claimWebhookDelivery.mockResolvedValue({
+      shouldProcess: false,
+      webhookId: "dup",
+      reason: "already_completed",
+      degraded: false,
+    });
     const res = await POST(
       makeRequest({ topic: "customers/redact", webhookId: "dup", body: { shop_domain: "x.myshopify.com" } }),
     );

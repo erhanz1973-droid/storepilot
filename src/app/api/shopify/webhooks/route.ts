@@ -11,7 +11,35 @@ import {
 import { verifyWebhookHmac } from "@/lib/shopify/oauth";
 import { resyncShopifyCommerce } from "@/lib/shopify/resync-commerce.server";
 import { deleteAuthSessionsForShop } from "@/lib/shopify/supabase-session-storage";
-import { claimWebhookDelivery } from "@/lib/shopify/webhook-idempotency";
+import {
+  claimWebhookDelivery,
+  completeWebhookDelivery,
+  releaseWebhookDelivery,
+} from "@/lib/shopify/webhook-idempotency";
+
+/**
+ * A commerce resync that failed for a transient reason. Surfaced as a non-2xx so
+ * Shopify redelivers instead of the failure being silently accepted.
+ */
+class WebhookProcessingError extends Error {}
+
+/**
+ * `ensureShopifySyncIfNeeded` reports failures in its result instead of throwing,
+ * because page bootstrap must still render. Webhooks need the opposite: a failed
+ * sync has to become a retryable response.
+ *
+ * A confirmed missing installation and a fresh cache are successful terminal
+ * outcomes. Lookup failures, sync failures, and reauthorization requirements are
+ * not acknowledged: merchant action during Shopify's retry window can make a
+ * later `reinstall_required:*` delivery succeed.
+ */
+function isRetryableSyncFailure(reason: string): boolean {
+  return (
+    reason.startsWith("failed:") ||
+    reason.startsWith("reinstall_required:") ||
+    reason === "installation_lookup_failed"
+  );
+}
 
 function logWebhook(event: string, payload: Record<string, unknown>): void {
   console.log(
@@ -46,7 +74,7 @@ export async function POST(request: Request) {
   });
 
   if (!claim.shouldProcess) {
-    logWebhook("duplicate_skipped", { topic, shop, webhookId });
+    logWebhook("duplicate_skipped", { topic, shop, webhookId, reason: claim.reason });
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
@@ -54,6 +82,9 @@ export async function POST(request: Request) {
   try {
     payload = rawBody ? JSON.parse(rawBody) : {};
   } catch {
+    // Deterministic failure — redelivering the same body cannot succeed, so the
+    // delivery is consumed rather than released for a pointless retry loop.
+    await completeWebhookDelivery(claim.webhookId);
     logWebhook("invalid_json", { topic, shop, webhookId });
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -123,6 +154,9 @@ export async function POST(request: Request) {
           products: "products" in sync ? sync.products : undefined,
           orders30d: "orders30d" in sync ? sync.orders30d : undefined,
         });
+        if (!sync.synced && isRetryableSyncFailure(sync.reason)) {
+          throw new WebhookProcessingError(`commerce resync failed: ${sync.reason}`);
+        }
         break;
       }
       default: {
@@ -132,10 +166,14 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Release before responding so the retry for this webhook id is not treated
+    // as an already-handled duplicate.
+    await releaseWebhookDelivery(claim.webhookId);
     logWebhook("handler_error", { topic, shop, webhookId, message });
     // Non-2xx so Shopify retries; handlers are idempotent.
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 
+  await completeWebhookDelivery(claim.webhookId);
   return NextResponse.json({ ok: true });
 }
