@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     try {
       const { recordExecutiveMemoryEvent } = await import("@/lib/db/executive-memory");
       const { getRecommendationById } = await import("@/lib/db/recommendations");
-      const rec = await getRecommendationById(parsed.data.recommendationId);
+      const rec = await getRecommendationById(parsed.data.recommendationId, feedback.storeId);
       await recordExecutiveMemoryEvent({
         storeId: feedback.storeId,
         eventType: "learned",

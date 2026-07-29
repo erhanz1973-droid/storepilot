@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runEmbeddedShopifyBootstrap } from "@/lib/shopify/embedded-bootstrap.server";
 import { embeddedActiveStoreCookieValue } from "@/lib/store/context";
+import { tenantBindingCookie } from "@/lib/store/tenant-binding";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,6 +13,8 @@ export const runtime = "nodejs";
  * (Route Handler), never in a React Server Component / layout.tsx.
  *
  * Client: EmbeddedShopifyBootstrap fetches this with the page search params.
+ * On success, sets ACTIVE_STORE_COOKIE + signed TENANT_BINDING_COOKIE so RSC
+ * can resolve the merchant without trusting ?shop=.
  */
 export async function GET(request: Request) {
   try {
@@ -34,6 +37,11 @@ export async function GET(request: Request) {
     if (result.storeId) {
       const { name, value, options } = embeddedActiveStoreCookieValue(result.storeId);
       response.cookies.set(name, value, options);
+
+      const binding = tenantBindingCookie(result.storeId, result.shop);
+      if (binding) {
+        response.cookies.set(binding.name, binding.value, binding.options);
+      }
     }
 
     return response;
@@ -44,7 +52,6 @@ export async function GET(request: Request) {
         location: errorOrResponse.headers.get("location"),
         contentType: errorOrResponse.headers.get("content-type"),
       });
-      // Forward Shopify redirects / App Bridge bounce responses (includes Set-Cookie).
       return errorOrResponse;
     }
 

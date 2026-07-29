@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { buildGa4OAuthUrl, getGa4OAuthConfig, isGa4OAuthConfigured } from "@/lib/ga4/oauth";
 import { OAUTH_BASE_URL_COOKIE, resolveOAuthBaseUrl } from "@/lib/oauth/base-url";
 import { ACTIVE_STORE_COOKIE, resolveActiveStoreId } from "@/lib/store/context";
+import { createOAuthState } from "@/lib/oauth/state";
 
 export async function GET(request: Request) {
   const config = getGa4OAuthConfig();
@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   // Store is resolved from the server-side (bootstrap-bound) context only —
   // never from a client-supplied ?store_id= to prevent cross-tenant binding.
   const storeId = await resolveActiveStoreId();
-  const state = randomBytes(16).toString("hex");
+  // B1-C: storeId is embedded and signed inside the state — the callback
+  // reads it from the verified token, never from a separate cookie.
+  const state = createOAuthState(storeId);
 
   const response = NextResponse.redirect(buildGa4OAuthUrl(state, oauthBaseUrl));
   const cookieOptions = {
@@ -29,7 +31,6 @@ export async function GET(request: Request) {
   };
 
   response.cookies.set("ga4_oauth_state", state, cookieOptions);
-  response.cookies.set("ga4_oauth_store_id", storeId, cookieOptions);
   response.cookies.set(OAUTH_BASE_URL_COOKIE.ga4, oauthBaseUrl, cookieOptions);
   response.cookies.set(ACTIVE_STORE_COOKIE, storeId, cookieOptions);
 

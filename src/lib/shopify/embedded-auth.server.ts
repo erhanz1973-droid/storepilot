@@ -152,7 +152,7 @@ export async function runEmbeddedAuth(request: Request): Promise<Response> {
     });
     logEmbeddedBootstrap("authenticate.admin", {
       shopDomain: session.shop,
-      shopSource: pre.shop ? "header" : null,
+      shopSource: pre.shop ? "unverified_request_hint" : null,
       storeId,
       installationFound: storeId != null,
     });

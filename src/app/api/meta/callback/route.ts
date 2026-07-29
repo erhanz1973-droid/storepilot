@@ -8,6 +8,7 @@ import {
   getMetaConfig,
 } from "@/lib/meta/oauth";
 import { ACTIVE_STORE_COOKIE } from "@/lib/store/context";
+import { parseOAuthState } from "@/lib/oauth/state";
 
 export async function GET(request: Request) {
   const config = getMetaConfig();
@@ -30,21 +31,20 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const savedState = cookieStore.get("meta_oauth_state")?.value;
   const state = params.get("state");
+  // B1-C: verify state MAC first, then extract storeId from the signed token.
   if (!savedState || !state || savedState !== state) {
     return NextResponse.redirect(`${config.appUrl}/connections?tab=advertising&error=invalid_state`);
   }
 
+  const parsed = parseOAuthState(state);
+  if (!parsed) {
+    return NextResponse.redirect(`${config.appUrl}/connections?tab=advertising&error=invalid_state_sig`);
+  }
+  const storeId = parsed.storeId;
+
   const code = params.get("code");
   if (!code) {
     return NextResponse.redirect(`${config.appUrl}/connections?tab=advertising&error=missing_params`);
-  }
-
-  const storeId =
-    cookieStore.get("meta_oauth_store_id")?.value ??
-    cookieStore.get(ACTIVE_STORE_COOKIE)?.value;
-
-  if (!storeId) {
-    return NextResponse.redirect(`${config.appUrl}/connections?tab=advertising&error=missing_store`);
   }
 
   try {
@@ -71,7 +71,6 @@ export async function GET(request: Request) {
       `${config.appUrl}/connections/meta/select?session=${pending.id}`,
     );
     response.cookies.delete("meta_oauth_state");
-    response.cookies.delete("meta_oauth_store_id");
     response.cookies.set(ACTIVE_STORE_COOKIE, storeId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

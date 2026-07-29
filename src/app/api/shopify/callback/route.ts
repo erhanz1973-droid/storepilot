@@ -15,6 +15,8 @@ import {
 import { syncShopifyStore } from "@/lib/shopify/sync";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
 import { ACTIVE_STORE_COOKIE } from "@/lib/store/context";
+import { tenantBindingCookie } from "@/lib/store/tenant-binding";
+import { buildEmbeddedAdminReturnUrl } from "@/lib/shopify/embedded-return-url";
 import { trackAlphaEvent } from "@/lib/analytics/alpha-funnel";
 
 export async function GET(request: Request) {
@@ -123,7 +125,13 @@ export async function GET(request: Request) {
     await trackAlphaEvent(storeId, "installation_completed", { shop });
     await trackAlphaEvent(storeId, "shopify_connected", { shop, source: "oauth_callback" });
 
-    const response = NextResponse.redirect(`${config.appUrl}/first-run?installed=1`);
+    const embeddedReturnUrl = await buildEmbeddedAdminReturnUrl(
+      storeId,
+      "/first-run?installed=1",
+    );
+    const response = NextResponse.redirect(
+      embeddedReturnUrl ?? `${config.appUrl}/auth/login?shop=${encodeURIComponent(shop)}`,
+    );
     response.cookies.set(ACTIVE_STORE_COOKIE, storeId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -131,6 +139,14 @@ export async function GET(request: Request) {
       maxAge: 60 * 60 * 24 * 365,
       path: "/",
     });
+    const binding = tenantBindingCookie(storeId, shop);
+    if (binding) {
+      response.cookies.set(binding.name, binding.value, {
+        ...binding.options,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
     response.cookies.delete("shopify_oauth_state");
     response.cookies.delete("shopify_oauth_shop");
 

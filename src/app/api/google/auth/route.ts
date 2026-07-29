@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { buildGoogleAdsOAuthUrl, getGoogleAdsConfig, isGoogleAdsOAuthConfigured } from "@/lib/google-ads/oauth";
 import { OAUTH_BASE_URL_COOKIE, resolveOAuthBaseUrl } from "@/lib/oauth/base-url";
 import { ACTIVE_STORE_COOKIE, resolveActiveStoreId } from "@/lib/store/context";
-import { randomBytes } from "crypto";
+import { createOAuthState } from "@/lib/oauth/state";
 
 export async function GET(request: Request) {
   const config = getGoogleAdsConfig();
@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   // Store is resolved from the server-side (bootstrap-bound) context only —
   // never from a client-supplied ?store_id= to prevent cross-tenant binding.
   const storeId = await resolveActiveStoreId();
-  const state = randomBytes(16).toString("hex");
+  // B1-C: storeId is embedded and signed inside the state — the callback
+  // reads it from the verified token, never from a separate cookie.
+  const state = createOAuthState(storeId);
 
   const response = NextResponse.redirect(buildGoogleAdsOAuthUrl(state, oauthBaseUrl));
   const cookieOptions = {
@@ -29,7 +31,6 @@ export async function GET(request: Request) {
   };
 
   response.cookies.set("google_oauth_state", state, cookieOptions);
-  response.cookies.set("google_oauth_store_id", storeId, cookieOptions);
   response.cookies.set(OAUTH_BASE_URL_COOKIE.google, oauthBaseUrl, cookieOptions);
   response.cookies.set(ACTIVE_STORE_COOKIE, storeId, cookieOptions);
 

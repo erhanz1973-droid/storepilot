@@ -51,7 +51,7 @@ export async function runEmbeddedShopifyBootstrap(
         ? shopDomain
         : `${shopDomain}.myshopify.com`
       : null,
-    shopSource: shopParam ? "header" : headerShop ? "header" : null,
+    shopSource: shopParam || headerShop ? "unverified_request_hint" : null,
     storeId: shopDomain ? await getActiveStoreIdForShopDomain(
       shopDomain.includes(".") ? shopDomain : `${shopDomain}.myshopify.com`,
     ) : null,

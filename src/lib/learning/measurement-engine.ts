@@ -42,7 +42,7 @@ export async function runPendingOutcomeMeasurements(
     if (result) {
       measured.push(result);
       if (result.recommendationId) {
-        const rec = await getRecommendationById(result.recommendationId);
+        const rec = await getRecommendationById(result.recommendationId, storeId);
         const audit = await getLatestAuditByRecommendationId(storeId, result.recommendationId);
         if (rec) {
           await finalizeRecommendationOutcome({
@@ -118,7 +118,7 @@ export async function captureBaselineOnImplement(
   recommendationId: string,
   storeId = DEMO_STORE_ID,
 ): Promise<Recommendation | null> {
-  const rec = await getRecommendationById(recommendationId);
+  const rec = await getRecommendationById(recommendationId, storeId);
   if (!rec) return null;
 
   const { snapshot } = await getVerifiedStoreData(storeId);

@@ -168,7 +168,7 @@ export async function listFeedbackForLearning(
       const rows: FeedbackLearningRow[] = [];
       for (const r of plain ?? []) {
         const { getRecommendationById } = await import("@/lib/db/recommendations");
-        const rec = await getRecommendationById(r.recommendation_id as string);
+        const rec = await getRecommendationById(r.recommendation_id as string, r.store_id as string);
         rows.push({
           id: r.id as string,
           recommendationId: r.recommendation_id as string,
@@ -207,7 +207,7 @@ export async function listFeedbackForLearning(
   const rows: FeedbackLearningRow[] = [];
   for (const f of memoryFeedback.filter((x) => x.storeId === storeId).slice(-limit)) {
     const { getRecommendationById } = await import("@/lib/db/recommendations");
-    const rec = await getRecommendationById(f.recommendationId);
+    const rec = await getRecommendationById(f.recommendationId, f.storeId);
     rows.push({
       ...f,
       category: rec?.category ?? null,

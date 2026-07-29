@@ -93,8 +93,47 @@ describe("middleware API authentication", () => {
     // NextResponse.next() resolves to status 200 with rewritten request headers.
     expect(response.status).toBe(200);
     // The authenticated shop is forwarded as a request header on the rewritten request.
-    const requestHeaders = response.headers.get("x-middleware-request-x-storepilot-shop-domain");
+    const requestHeaders = response.headers.get("x-middleware-request-x-storepilot-authenticated-shop");
     expect(requestHeaders).toBe(SHOP);
+    expect(response.headers.get("x-middleware-request-x-storepilot-authenticated")).toBe("1");
+  });
+
+  it("does not stamp tenant identity from forged ?shop= on HTML documents — redirects unauthenticated embedded request", async () => {
+    // B1-A: unauthenticated embedded HTML requests must not pass through
+    // (no session token means no tenant). The middleware now redirects to /auth/login.
+    const response = await middleware(
+      new NextRequest(
+        `https://app.example.com/?shop=victim.myshopify.com&host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdmljdGlt&embedded=1`,
+      ),
+    );
+    // Must not be 200 (no authenticated HTML page should be served).
+    expect([301, 302, 303, 307, 308, 401]).toContain(response.status);
+    expect(
+      response.headers.get("x-middleware-request-x-storepilot-authenticated-shop"),
+    ).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-storepilot-authenticated")).toBeNull();
+  });
+
+  it("ignores client-forged authenticated shop header on protected APIs", async () => {
+    const response = await middleware(
+      apiRequest("/api/dashboard", {
+        "x-storepilot-authenticated-shop": SHOP,
+        "x-storepilot-authenticated": "1",
+        "x-storepilot-shop-domain": SHOP,
+      }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("stamps verified shop from id_token on document requests", async () => {
+    const token = await signToken();
+    const response = await middleware(
+      new NextRequest(
+        `https://app.example.com/?shop=attacker.myshopify.com&id_token=${token}&embedded=1`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-request-x-storepilot-authenticated-shop")).toBe(SHOP);
     expect(response.headers.get("x-middleware-request-x-storepilot-authenticated")).toBe("1");
   });
 
@@ -118,7 +157,6 @@ describe("middleware API authentication", () => {
       "/api/debug",
     ]) {
       const response = await middleware(apiRequest(path));
-      // Public paths pass through middleware with 200 (handler does its own auth).
       expect(response.status, path).toBe(200);
       expect(response.headers.get("content-type") ?? "").not.toContain("application/json");
     }

@@ -38,7 +38,7 @@ export async function markRecommendationImplemented(
     { baselineMetrics },
     storeId,
   );
-  return getRecommendationById(recommendationId);
+  return getRecommendationById(recommendationId, storeId);
 }
 
 export async function updateRecommendationWithOutcome(

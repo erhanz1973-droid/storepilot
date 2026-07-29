@@ -16,6 +16,16 @@ vi.mock("@/lib/shopify/persist-installation.server", () => ({
 
 vi.mock("@/lib/db/shopify", () => ({
   getActiveStoreIdForShopDomain: (...args: unknown[]) => getActiveStoreId(...args),
+  getInstallationForStore: vi.fn().mockResolvedValue(null),
+  getCachedShopifySnapshot: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/lib/shopify/ensure-sync.server", () => ({
+  ensureShopifySyncIfNeeded: vi.fn().mockResolvedValue({
+    synced: false,
+    skipped: true,
+    reason: "test_skip",
+  }),
 }));
 
 import { runEmbeddedShopifyBootstrap } from "@/lib/shopify/embedded-bootstrap.server";
@@ -57,7 +67,7 @@ describe("runEmbeddedShopifyBootstrap", () => {
 
     expect(authenticateAdmin).toHaveBeenCalledOnce();
     expect(persistInstallation).toHaveBeenCalledOnce();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       shop: "demo.myshopify.com",
       storeId: "store-1",
       sessionId: "offline_demo.myshopify.com",

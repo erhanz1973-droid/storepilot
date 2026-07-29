@@ -51,6 +51,7 @@ export async function submitApprovalAction(input: {
     input.recommendationId,
     input.status,
     { note: input.note, snoozeDays: input.snoozeDays },
+    storeId,
   );
 
   revalidatePath("/");

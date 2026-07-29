@@ -1,10 +1,18 @@
 import { getBearerToken } from "@/lib/shopify/session-token";
 
-/** Request header carrying the merchant shop verified from a session token. */
-export const AUTHENTICATED_SHOP_HEADER = "x-storepilot-shop-domain";
+/**
+ * Merchant shop domain verified from a Shopify session token (or stamped only
+ * after authenticate.admin). Never set from ?shop= / host / client headers.
+ */
+export const AUTHENTICATED_SHOP_HEADER = "x-storepilot-authenticated-shop";
 /** Request header flag set once a request passed merchant session verification. */
 export const AUTHENTICATED_FLAG_HEADER = "x-storepilot-authenticated";
 
+/**
+ * Decorative / CSP-only shop hint. MUST NOT be used for tenant resolution.
+ * @deprecated Prefer AUTHENTICATED_SHOP_HEADER for identity.
+ */
+export const CSP_SHOP_HINT_HEADER = "x-storepilot-csp-shop";
 /**
  * API paths that are intentionally public and must NOT require an embedded
  * merchant session token. Each has its own authentication where relevant:

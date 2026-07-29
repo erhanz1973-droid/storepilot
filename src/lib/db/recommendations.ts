@@ -297,19 +297,37 @@ export async function listStoredRecommendations(
   return recommendationService.listAsLegacy(storeId);
 }
 
+export class RecommendationOwnershipError extends Error {
+  readonly status = 403;
+
+  constructor(message = "Recommendation does not belong to the authenticated store") {
+    super(message);
+    this.name = "RecommendationOwnershipError";
+  }
+}
+
 export async function getRecommendationById(
   id: string,
+  storeId: string,
 ): Promise<Recommendation | null> {
   const record = await recommendationService.getById(id);
-  return record ? recordToLegacyRecommendation(record) : null;
+  if (!record) return null;
+  if (record.storeId !== storeId) throw new RecommendationOwnershipError();
+  return recordToLegacyRecommendation(record);
 }
 
 export async function updateRecommendationStatus(
   recommendationId: string,
   status: RecommendationStatus,
-  options?: { note?: string; snoozeDays?: number; baselineMetrics?: MeasurementKpis },
-  storeId = DEMO_STORE_ID,
+  options: { note?: string; snoozeDays?: number; baselineMetrics?: MeasurementKpis } | undefined,
+  storeId: string,
 ): Promise<RecommendationApproval> {
+  // Ownership guard: reject before any mutation attempt.
+  const owned = await recommendationService.getById(recommendationId);
+  if (!owned || owned.storeId !== storeId) {
+    throw new RecommendationOwnershipError();
+  }
+
   const now = new Date();
   const snoozedUntil =
     status === "snoozed"
@@ -354,6 +372,7 @@ export async function updateRecommendationStatus(
     .from("recommendations")
     .select("status")
     .eq("id", recommendationId)
+    .eq("store_id", storeId)
     .single();
 
   if (existingError) throw new Error(existingError.message);
@@ -375,7 +394,8 @@ export async function updateRecommendationStatus(
   const { error: updateError } = await supabase
     .from("recommendations")
     .update(updates as Record<string, string | null>)
-    .eq("id", recommendationId);
+    .eq("id", recommendationId)
+    .eq("store_id", storeId);
 
   if (updateError) throw new Error(updateError.message);
 

@@ -8,6 +8,7 @@ import {
 } from "@/lib/google-ads/oauth";
 import { OAUTH_BASE_URL_COOKIE, resolveOAuthBaseUrl } from "@/lib/oauth/base-url";
 import { ACTIVE_STORE_COOKIE } from "@/lib/store/context";
+import { parseOAuthState } from "@/lib/oauth/state";
 
 export async function GET(request: Request) {
   const config = getGoogleAdsConfig();
@@ -37,23 +38,24 @@ export async function GET(request: Request) {
 
   const savedState = cookieStore.get("google_oauth_state")?.value;
   const state = params.get("state");
+  // B1-C: verify state MAC first, then extract storeId from the signed token.
   if (!savedState || !state || savedState !== state) {
     return NextResponse.redirect(
       `${oauthBaseUrl}/connections?error=invalid_state&provider=google`,
     );
   }
 
+  const parsedState = parseOAuthState(state);
+  if (!parsedState) {
+    return NextResponse.redirect(
+      `${oauthBaseUrl}/connections?error=invalid_state_sig&provider=google`,
+    );
+  }
+  const storeId = parsedState.storeId;
+
   const code = params.get("code");
   if (!code) {
     return NextResponse.redirect(`${oauthBaseUrl}/connections?error=missing_params`);
-  }
-
-  const storeId =
-    cookieStore.get("google_oauth_store_id")?.value ??
-    cookieStore.get(ACTIVE_STORE_COOKIE)?.value;
-
-  if (!storeId) {
-    return NextResponse.redirect(`${oauthBaseUrl}/connections?error=missing_store`);
   }
 
   try {
@@ -83,7 +85,6 @@ export async function GET(request: Request) {
       `${oauthBaseUrl}/connections/google/select?session=${pending.id}`,
     );
     response.cookies.delete("google_oauth_state");
-    response.cookies.delete("google_oauth_store_id");
     response.cookies.delete(OAUTH_BASE_URL_COOKIE.google);
     response.cookies.set(ACTIVE_STORE_COOKIE, storeId, {
       httpOnly: true,

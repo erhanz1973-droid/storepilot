@@ -1,57 +1,58 @@
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { getActiveStoreIdForShopDomain } from "@/lib/db/shopify";
 import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
-import { EMBEDDED_SHOP_COOKIE } from "@/lib/store/embedded-shop";
+import {
+  AUTHENTICATED_FLAG_HEADER,
+  AUTHENTICATED_SHOP_HEADER,
+} from "@/lib/api/route-auth";
+import { normalizeShopDomain } from "@/lib/store/embedded-shop";
 
 export type EmbeddedBootstrapDiagnostics = {
   shopDomain: string | null;
-  shopSource: "header" | "cookie" | null;
+  /**
+   * Diagnostic-only origin of a shop string.
+   * - `authenticated_header`: middleware-verified Shopify session shop
+   * - `unverified_request_hint`: pre-auth ?shop= / host / request metadata (logging only — never tenant identity)
+   */
+  shopSource: "authenticated_header" | "unverified_request_hint" | null;
   storeId: string | null;
   installationFound: boolean;
 };
 
-/** Resolve shop domain from middleware header or embedded shop cookie. */
+/**
+ * Resolve shop domain from verified tenant signals only.
+ * Never reads ?shop=, host, EMBEDDED_SHOP_COOKIE, or unverified x-storepilot-shop-domain.
+ */
 export async function resolveEmbeddedShopDomain(): Promise<string | null> {
   const headerStore = await headers();
-  const fromHeader = headerStore.get("x-storepilot-shop-domain")?.trim().toLowerCase();
-  if (fromHeader) {
-    return fromHeader.includes(".") ? fromHeader : `${fromHeader}.myshopify.com`;
+  const authFlag = headerStore.get(AUTHENTICATED_FLAG_HEADER);
+  if (authFlag === "1") {
+    const fromAuth = normalizeShopDomain(headerStore.get(AUTHENTICATED_SHOP_HEADER));
+    if (fromAuth) return fromAuth;
   }
 
-  const cookieStore = await cookies();
-  const fromCookie = cookieStore.get(EMBEDDED_SHOP_COOKIE)?.value?.trim().toLowerCase();
-  if (!fromCookie) return null;
-  return fromCookie.includes(".") ? fromCookie : `${fromCookie}.myshopify.com`;
+  return null;
 }
 
 export async function readEmbeddedBootstrapDiagnostics(): Promise<EmbeddedBootstrapDiagnostics> {
   const headerStore = await headers();
-  const cookieStore = await cookies();
-  const fromHeader = headerStore.get("x-storepilot-shop-domain");
-  const fromCookie = cookieStore.get(EMBEDDED_SHOP_COOKIE)?.value;
+  const authFlag = headerStore.get(AUTHENTICATED_FLAG_HEADER);
+  const authenticatedShop =
+    authFlag === "1"
+      ? normalizeShopDomain(headerStore.get(AUTHENTICATED_SHOP_HEADER))
+      : null;
 
-  let shopDomain: string | null = null;
-  let shopSource: EmbeddedBootstrapDiagnostics["shopSource"] = null;
-
-  if (fromHeader) {
-    shopDomain = fromHeader.includes(".") ? fromHeader : `${fromHeader}.myshopify.com`;
-    shopSource = "header";
-  } else if (fromCookie) {
-    shopDomain = fromCookie.includes(".") ? fromCookie : `${fromCookie}.myshopify.com`;
-    shopSource = "cookie";
+  if (authenticatedShop) {
+    const storeId = await getActiveStoreIdForShopDomain(authenticatedShop);
+    return {
+      shopDomain: authenticatedShop,
+      shopSource: "authenticated_header",
+      storeId,
+      installationFound: storeId != null,
+    };
   }
 
-  if (!shopDomain) {
-    return { shopDomain: null, shopSource: null, storeId: null, installationFound: false };
-  }
-
-  const storeId = await getActiveStoreIdForShopDomain(shopDomain);
-  return {
-    shopDomain,
-    shopSource,
-    storeId,
-    installationFound: storeId != null,
-  };
+  return { shopDomain: null, shopSource: null, storeId: null, installationFound: false };
 }
 
 export function logEmbeddedBootstrap(phase: string, diagnostics: EmbeddedBootstrapDiagnostics): void {
@@ -65,8 +66,7 @@ export function logEmbeddedBootstrap(phase: string, diagnostics: EmbeddedBootstr
 }
 
 /**
- * Resolve merchant store id from embedded Shopify context.
- * Uses metadata-only lookup so tenant selection never depends on token decryption.
+ * Resolve merchant store id from verified embedded Shopify context only.
  */
 export async function resolveStoreIdForEmbeddedShop(): Promise<string | null> {
   const diagnostics = await readEmbeddedBootstrapDiagnostics();
@@ -75,6 +75,7 @@ export async function resolveStoreIdForEmbeddedShop(): Promise<string | null> {
   if (!diagnostics.shopDomain) return null;
 
   try {
+    if (diagnostics.storeId) return diagnostics.storeId;
     return await getActiveStoreIdForShopDomain(diagnostics.shopDomain);
   } catch (error) {
     if (isShopifyReinstallRequiredError(error)) {

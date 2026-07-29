@@ -23,7 +23,8 @@ type Props = {
 export default async function RecommendationDetailPage({ params }: Props) {
   const { id } = await params;
   const storeId = await resolveActiveStoreId();
-  const recommendation = await getRecommendationById(id);
+  // Pass storeId so getRecommendationById throws on ownership mismatch.
+  const recommendation = await getRecommendationById(id, storeId);
 
   if (!recommendation) {
     notFound();

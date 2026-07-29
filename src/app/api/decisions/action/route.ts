@@ -97,7 +97,7 @@ export async function POST(request: Request) {
       body.action === "approve" ? "approved" : body.action === "reject" ? "ignored" : "snoozed";
     await updateRecommendationStatus(body.recommendationId, status, {
       snoozeDays: body.action === "later" ? 7 : undefined,
-    });
+    }, storeId);
 
     await recordMerchantAction({
       storeId,
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
       };
     }
   } else if (body.action === "approve" && body.recommendationId) {
-    const rec = await getRecommendationById(body.recommendationId);
+    const rec = await getRecommendationById(body.recommendationId, storeId);
     const { snapshot } = await getVerifiedStoreData(storeId);
     const baselineMetrics = captureKpisForEntity(
       snapshot,
