@@ -158,6 +158,18 @@ describe("middleware API authentication", () => {
     }
   });
 
+  it("allows public logo and icon files without a session", async () => {
+    for (const path of ["/images/logo.png", "/icon.png"]) {
+      const response = await middleware(
+        new NextRequest(`https://storepilotai.pro${path}`, {
+          headers: { host: "storepilotai.pro" },
+        }),
+      );
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get("content-type") ?? "").not.toContain("application/json");
+    }
+  });
+
   it("leaves public routes (webhooks, oauth, bootstrap, cron) unguarded by session tokens", async () => {
     for (const path of [
       "/api/shopify/webhooks",

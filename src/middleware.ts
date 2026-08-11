@@ -23,6 +23,20 @@ import {
   resolveRequestHost,
 } from "@/lib/marketing/site";
 
+/** Public files under /public — must not require a Shopify session. */
+function isPublicStaticPath(pathname: string): boolean {
+  if (
+    pathname.startsWith("/images/") ||
+    pathname === "/icon.png" ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
+  ) {
+    return true;
+  }
+  return /\.(?:avif|gif|ico|jpe?g|png|svg|webp|woff2?)$/i.test(pathname);
+}
+
 function logEmbeddedRequest(request: NextRequest, phase: string, cspShop: string | null): void {
   const shopParam = request.nextUrl.searchParams.get("shop");
   const host = request.nextUrl.searchParams.get("host");
@@ -183,6 +197,7 @@ export async function middleware(request: NextRequest) {
   if (!isApiPath(pathname) && !verifiedShop) {
     const isPublicDocument =
       pathname.startsWith("/auth") ||
+      isPublicStaticPath(pathname) ||
       (isMarketingPath(pathname) &&
         isMarketingHost(resolveRequestHost(request.headers)));
 
@@ -212,5 +227,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
