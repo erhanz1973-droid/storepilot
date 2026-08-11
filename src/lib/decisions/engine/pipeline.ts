@@ -3,6 +3,7 @@ import { collectGroupedProductIds } from "@/lib/insights/business-action-groups"
 import { scoreStrategyForMode } from "@/lib/decisions/merchant-mode";
 import { filterDecisionsByPack } from "@/lib/decision-packs/registry";
 import { applyDnaPersonalizationToDecisions } from "@/lib/merchant-dna/personalization";
+import { applyMerchantStageToDecisions } from "@/lib/growth-copilot/personalization";
 import { buildDecisionConfidenceBreakdown } from "./confidence-breakdown";
 import { computeDecisionExplainability } from "./explainability-score";
 import { formatModeWeights } from "./mode-weights";
@@ -87,7 +88,11 @@ export function buildDecisionEngine(input: DecisionEngineInput): EnrichedDecisio
       }))
     : modelFiltered;
 
-  return withDna.sort((a, b) => {
+  const withStage = input.merchantStage
+    ? applyMerchantStageToDecisions(withDna, input.merchantStage)
+    : withDna;
+
+  return withStage.sort((a, b) => {
     const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
     return (
       SEVERITY_RANK[a.priority] - SEVERITY_RANK[b.priority] ||

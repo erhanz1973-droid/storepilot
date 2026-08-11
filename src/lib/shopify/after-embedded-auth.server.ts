@@ -43,6 +43,10 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
       shop: session.shop,
       source: "embedded_afterAuth",
     });
+    await trackAlphaEvent(persisted.storeId, "oauth_completed", {
+      shop: session.shop,
+      source: "embedded_afterAuth",
+    });
     await trackMetaCapiEvent("ConnectShopify");
   }
 

@@ -13,6 +13,7 @@ export function ShopifyAppBridgeNav() {
       <a href="/" rel="home">
         Home
       </a>
+      <a href="/grow">Grow My Store</a>
       <a href="/health">Health</a>
       <a href="/advertising">Advertising</a>
       <a href="/decisions">Decisions</a>

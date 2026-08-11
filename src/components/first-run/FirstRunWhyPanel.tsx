@@ -6,7 +6,7 @@ export function FirstRunWhyPanel({ decision }: { decision: FirstRunDecision }) {
   const { why, evidencePoints } = decision;
   return (
     <section className="card first-run-why" aria-label="Why this recommendation">
-      <h3 style={{ marginTop: 0 }}>Why this recommendation</h3>
+      <h3 style={{ marginTop: 0 }}>Why StorePilot is recommending this</h3>
       <ul className="first-run-why-stats">
         <li>
           <strong>{why.productsAnalyzed.toLocaleString()}</strong> products analyzed
@@ -18,11 +18,12 @@ export function FirstRunWhyPanel({ decision }: { decision: FirstRunDecision }) {
           <strong>{why.campaignsAnalyzed.toLocaleString()}</strong> campaigns analyzed
         </li>
       </ul>
+      <p>{decision.whyThisMatters}</p>
       <p>{why.confidenceSummary}</p>
       {evidencePoints.length > 0 ? (
         <>
           <p className="muted" style={{ marginBottom: 6 }}>
-            Evidence from your store
+            Based on
           </p>
           <ul>
             {evidencePoints.map((point) => (
@@ -31,11 +32,10 @@ export function FirstRunWhyPanel({ decision }: { decision: FirstRunDecision }) {
           </ul>
         </>
       ) : null}
-      {decision.reason ? (
-        <p className="muted" style={{ marginBottom: 0 }}>
-          {decision.reason}
-        </p>
-      ) : null}
+      <h3>What to do next</h3>
+      <p className="muted" style={{ marginBottom: 0 }}>
+        {decision.whatToDoNext}
+      </p>
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { PlanScaleBanner } from "@/components/billing/PlanScaleBanner";
 import { ExecutiveBriefCard } from "./ExecutiveBriefCard";
 import { ExecutiveDailyDecisionCard } from "./ExecutiveDailyDecisionCard";
 import { ExecutiveSinceLastVisitCard } from "./ExecutiveSinceLastVisitCard";
+import { StoreFirstValueGuidance } from "@/components/first-run/StoreFirstValueGuidance";
 import {
   ExecutiveAccountabilityCard,
   ExecutiveDecisionModelAccuracyCard,
@@ -26,6 +27,10 @@ export function ExecutiveCeoOperatingPanel({ view, onShowFull, planUsage }: Prop
 
   return (
     <div className={`exec-ceo-os exec-ceo-mode-${ceo.mode.toLowerCase()}`}>
+      {ceo.firstValueGuidance ? (
+        <StoreFirstValueGuidance insight={ceo.firstValueGuidance} />
+      ) : null}
+
       {/* 1. Executive Brief — the first thing the CEO sees */}
       <ExecutiveBriefCard brief={ceo.executiveBrief} />
 

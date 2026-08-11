@@ -24,6 +24,10 @@ export type CommerceProductLegacy = {
   collectionIds: string[];
   tags: string[];
   imageUrl?: string;
+  /** Plain-text product description when synced from Shopify. Omitted on older caches. */
+  description?: string;
+  /** Full description length in characters (before truncation). */
+  descriptionLength?: number;
   /** When false, Shopify is not tracking inventory quantities for this product */
   inventoryTracked?: boolean;
   /** Optional funnel metric when checkout analytics are synced */
@@ -44,6 +48,20 @@ export type CommerceCollectionLegacy = {
 };
 
 export type { CommercePlatformId } from "@/lib/commerce/types";
+
+/** Shop-level fields used by Growth Copilot. Omitted when not yet synced. */
+export type ShopPolicyFlags = {
+  refund: boolean;
+  privacy: boolean;
+  shipping: boolean;
+  terms: boolean;
+};
+
+export type ShopProfile = {
+  name?: string;
+  createdAt?: string;
+  policies?: ShopPolicyFlags;
+};
 
 export type ProductWindowStats = {
   units: number;
@@ -184,6 +202,8 @@ export type StoreSnapshot = {
   /** Shopify customersCount when available from store sync */
   shopifyCustomersCount?: number;
   connectorStates: Partial<Record<DataSourceId, ConnectorStatus>>;
+  /** Shop identity + legal pages when Shopify sync included them */
+  shopProfile?: ShopProfile;
   /** Active demo business scenario when source is demo */
   demoScenario?: import("@/lib/demo/scenarios/types").DemoScenarioId;
 };

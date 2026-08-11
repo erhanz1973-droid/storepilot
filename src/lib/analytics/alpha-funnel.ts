@@ -3,14 +3,27 @@ import { getSupabaseAdmin } from "@/lib/supabase/client";
 export type AlphaFunnelEvent =
   | "installation_completed"
   | "shopify_connected"
+  | "oauth_completed"
   | "first_run_opened"
+  | "first_run_started"
+  | "first_recommendation_generated"
   | "first_recommendation_shown"
+  | "first_recommendation_clicked"
   | "see_why_clicked"
   | "recommendation_approved"
   | "recommendation_rejected"
+  | "recommendation_viewed"
+  | "recommendation_clicked"
   | "first_run_completed"
+  | "app_opened"
+  | "dashboard_viewed"
   | "ttv_recommendation_ms"
-  | "ttv_approval_ms";
+  | "ttv_approval_ms"
+  | "store_stage_detected"
+  | "growth_checklist_viewed"
+  | "growth_task_viewed"
+  | "next_best_action_shown"
+  | "next_best_action_clicked";
 
 export type AlphaFunnelRow = {
   id: string;

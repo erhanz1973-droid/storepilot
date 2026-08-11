@@ -15,6 +15,11 @@ import {
 import type { ExecutiveAiBehavior } from "@/lib/analytics/executive-ai-behavior";
 import type { AiEvidence, PriorityAction } from "@/lib/analytics/executive-advisor";
 import type { ExecutiveVisitSnapshot } from "@/lib/analytics/executive-visit";
+import {
+  buildFirstValueInsight,
+  shouldSurfaceFirstValueOnDashboard,
+  type FirstValueInsight,
+} from "@/lib/first-run/first-value";
 import type { DecisionImpactPresentation } from "@/lib/impact/decision-impact";
 import { buildDecisionImpactPresentation, DECISION_IMPACT_COPY } from "@/lib/impact/decision-impact";
 import {
@@ -246,6 +251,8 @@ export type ExecutiveCeoOsLayer = {
   /** Visual pipeline + reasoning for OBSERVE state */
   evidencePipeline: ExecutiveEvidencePipeline | null;
   observeContext: ExecutiveObserveContext | null;
+  /** Honest catalog/sales guidance when the store is too early for a $ rec */
+  firstValueGuidance: FirstValueInsight | null;
 };
 
 function fmt(n: number): string {
@@ -1463,6 +1470,19 @@ export function buildExecutiveCeoOsLayer(input: {
     recommendationTitles,
   });
 
+  const firstValueInsight = input.snapshot
+    ? buildFirstValueInsight(input.snapshot)
+    : null;
+  const firstValueGuidance =
+    firstValueInsight &&
+    shouldSurfaceFirstValueOnDashboard({
+      insight: firstValueInsight,
+      hasExecutiveDecision: dailyDecision.hasDecision,
+      shopifyConnected: Boolean(input.connectedSources?.shopify),
+    })
+      ? firstValueInsight
+      : null;
+
   return {
     mode,
     executiveBrief,
@@ -1478,6 +1498,7 @@ export function buildExecutiveCeoOsLayer(input: {
     deepAiBrief,
     evidencePipeline,
     observeContext,
+    firstValueGuidance,
   };
 }
 

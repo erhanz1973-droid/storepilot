@@ -18,7 +18,8 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "dashboard",
     label: "Dashboard",
     items: [
-      { href: "/", label: "Executive" },
+      { href: "/", label: "Today" },
+      { href: "/grow", label: "Grow My Store" },
       { href: "/health", label: "Health" },
     ],
   },
@@ -48,7 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "ai",
     label: "AI",
     items: [
-      { href: "/insights", label: "AI Insights" },
+      { href: "/insights", label: "AI Recommendations" },
       { href: "/decisions", label: "Decisions" },
       { href: "/ask-ai", label: "Ask AI" },
       { href: "/autopilot", label: "Autopilot" },
@@ -81,6 +82,7 @@ export function isNavItemActive(pathname: string, item: NavItem): boolean {
   if (item.href === "/" && pathname === "/") return true;
   if (item.href !== "/" && pathname === item.href) return true;
   if (pathname === "/analytics/executive" && item.href === "/") return true;
+  if (pathname === "/grow" && item.href === "/grow") return true;
   if (item.children?.some((child) => isNavItemActive(pathname, child))) return true;
   return false;
 }

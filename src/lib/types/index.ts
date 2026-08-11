@@ -266,6 +266,8 @@ export type DashboardSnapshot = {
   dashboardWidgets?: DashboardWidgetId[];
   merchantDna?: MerchantDNA;
   merchantBenchmark?: MerchantBenchmark;
+  merchantStage?: import("@/lib/growth-copilot/types").MerchantStage;
+  growthCopilot?: import("@/lib/growth-copilot/types").GrowthCopilotView;
   predictiveInsights?: PredictiveInsight[];
   opportunityHistory?: OpportunityHistorySummary;
   lastAnalyzedAt: string;

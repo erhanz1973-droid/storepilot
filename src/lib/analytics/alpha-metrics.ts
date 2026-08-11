@@ -52,7 +52,7 @@ export async function buildAlphaDashboardMetrics(): Promise<AlphaDashboardMetric
 
   const installationCompleted = countStores("installation_completed");
   const shopifyConnected = countStores("shopify_connected");
-  const firstRunOpened = countStores("first_run_opened");
+  const firstRunOpened = countStores("first_run_opened") || countStores("first_run_started");
   const firstRecommendationShown = countStores("first_recommendation_shown");
   const seeWhyClicked = countStores("see_why_clicked");
   const recommendationApproved = countStores("recommendation_approved");
@@ -86,10 +86,17 @@ export async function buildAlphaDashboardMetrics(): Promise<AlphaDashboardMetric
   // Return visits: stores with more than one first_run_opened or executive-ish reopen
   let returnVisits = 0;
   for (const storeId of storeIds) {
-    const opens = events.filter(
-      (e) => e.storeId === storeId && (e.event === "first_run_opened" || e.event === "first_run_completed"),
-    ).length;
-    if (opens >= 2) returnVisits += 1;
+    const sessionEvents = events.filter(
+      (e) =>
+        e.storeId === storeId &&
+        (e.event === "app_opened" ||
+          e.event === "dashboard_viewed" ||
+          e.event === "recommendation_viewed" ||
+          e.event === "first_run_opened" ||
+          e.event === "first_run_started"),
+    );
+    const days = new Set(sessionEvents.map((e) => e.occurredAt.slice(0, 10)));
+    if (days.size >= 2 || sessionEvents.length >= 2) returnVisits += 1;
   }
 
   let storesWithZeroRecommendations = 0;

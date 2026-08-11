@@ -157,6 +157,7 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
   let googleAdsSnapshot: StoreSnapshot["googleAdsSnapshot"];
   let ga4Snapshot: StoreSnapshot["ga4Snapshot"];
   let productOrderStats: StoreSnapshot["productOrderStats"];
+  let shopProfile: StoreSnapshot["shopProfile"];
   let attributionEvents: StoreSnapshot["attributionEvents"];
   let customerSnapshot: StoreSnapshot["customerSnapshot"];
 
@@ -185,6 +186,9 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
     }
     if (result.partial.ga4Snapshot) {
       ga4Snapshot = result.partial.ga4Snapshot;
+    }
+    if (result.partial.shopProfile) {
+      shopProfile = result.partial.shopProfile;
     }
     if (result.partial.campaigns?.length) {
       campaigns = campaigns.concat(result.partial.campaigns);
@@ -235,6 +239,7 @@ export async function aggregateStoreSnapshot(storeId?: string): Promise<StoreSna
     googleAdsSnapshot,
     ga4Snapshot,
     connectorStates,
+    shopProfile,
   };
 
   base = mergeIntegrationIntoSnapshot(base);

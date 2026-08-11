@@ -2,6 +2,7 @@ import { AppNav } from "@/components/AppNav";
 import { DemoDataBadge } from "@/components/DemoDataBadge";
 import { MarketingShell } from "@/components/marketing/MarketingShell";
 import { MetaPixel } from "@/components/marketing/MetaPixel";
+import { AppSessionTracker } from "@/components/analytics/AppSessionTracker";
 import { EmbeddedShopifyBootstrap } from "@/components/shopify/EmbeddedShopifyBootstrap";
 import { ShopifyAppBridgeNav } from "@/components/shopify/ShopifyAppBridgeNav";
 import { marketingSiteMetadata } from "@/lib/marketing/metadata";
@@ -50,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <EmbeddedShopifyBootstrap />
+        <AppSessionTracker />
         {appBridgeApiKey ? <ShopifyAppBridgeNav /> : null}
         <div className="app-shell">
           <AppNav />

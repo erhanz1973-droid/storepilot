@@ -5,6 +5,7 @@ import type { ProfitWaterfall } from "@/lib/decisions/product-economics";
 import type { BusinessModel, MerchantBusinessProfile } from "@/lib/business-model/types";
 import type { DecisionPackContext } from "@/lib/decision-packs/types";
 import type { MerchantDNA } from "@/lib/merchant-dna/types";
+import type { MerchantStage } from "@/lib/growth-copilot/types";
 
 export type DecisionRejectionReason =
   | "too_aggressive"
@@ -83,4 +84,5 @@ export type DecisionEngineInput = Parameters<
   businessProfile?: MerchantBusinessProfile;
   decisionPackContext?: DecisionPackContext;
   merchantDna?: MerchantDNA;
+  merchantStage?: MerchantStage;
 };

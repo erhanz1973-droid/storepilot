@@ -20998,6 +20998,70 @@ button {
   background: rgba(0, 0, 0, 0.03);
 }
 
+.first-run-section-title {
+  margin: 16px 0 8px;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.first-run-decision-reason {
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.first-run-insight-copy p,
+.first-run-based-on p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.first-run-based-on ul,
+.first-run-next-list,
+.first-run-fact-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.first-run-based-on li,
+.first-run-next-list li {
+  margin: 0 0 6px;
+  line-height: 1.45;
+}
+
+.first-run-next-list {
+  list-style: decimal;
+  padding-left: 1.2rem;
+}
+
+.first-run-known-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+
+.first-run-fact-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.first-run-first-value h1,
+.first-run-first-value h2 {
+  margin: 6px 0 10px;
+  line-height: 1.25;
+}
+
+.exec-first-value {
+  margin-bottom: 16px;
+}
+
 .alpha-metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -23085,5 +23149,175 @@ button {
 @media (min-width: 641px) {
   .marketing-hero {
     padding: 56px 0 48px;
+  }
+}
+
+/* Growth Copilot — New Store home */
+.growth-copilot {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 880px;
+}
+
+.growth-copilot-welcome h1 {
+  margin: 6px 0 10px;
+  font-size: 1.75rem;
+  line-height: 1.25;
+}
+
+.growth-copilot-lede {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.growth-copilot-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.growth-copilot-stage {
+  margin: 0 0 4px;
+}
+
+.growth-copilot-nba h2 {
+  margin: 8px 0 16px;
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+.growth-copilot-nba-flow {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.growth-copilot-nba-flow dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.growth-copilot-nba-flow dd {
+  margin: 4px 0 0;
+}
+
+.growth-copilot-known-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.growth-copilot-fact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.growth-copilot-fact-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.growth-copilot-progress-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 4px 0 12px;
+}
+
+.growth-copilot-progress-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.growth-copilot-progress-list li {
+  margin: 6px 0;
+}
+
+.growth-copilot-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.growth-copilot-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.growth-copilot-step-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.growth-copilot-pill {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.growth-copilot-pill-ready {
+  color: var(--low);
+  border-color: var(--low);
+}
+
+.growth-copilot-pill-needs_attention {
+  color: var(--high);
+  border-color: var(--high);
+}
+
+.growth-copilot-pill-missing {
+  color: var(--critical);
+  border-color: var(--critical);
+}
+
+.growth-copilot-check-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.growth-copilot-check-list li {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.growth-copilot-check-list p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.growth-copilot-profit-note,
+.growth-copilot-analytics-link {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .growth-copilot-known-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .growth-copilot-welcome h1 {
+    font-size: 1.45rem;
+  }
+
+  .growth-copilot-step-header {
+    flex-wrap: wrap;
   }
 }

@@ -144,6 +144,7 @@ export async function GET(request: Request) {
 
     await trackAlphaEvent(storeId, "installation_completed", { shop });
     await trackAlphaEvent(storeId, "shopify_connected", { shop, source: "oauth_callback" });
+    await trackAlphaEvent(storeId, "oauth_completed", { shop, source: "oauth_callback" });
     await trackMetaCapiEvent("ConnectShopify");
 
     const embeddedReturnUrl = await buildEmbeddedAdminReturnUrl(

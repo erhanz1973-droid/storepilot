@@ -4,8 +4,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { FirstRunApprovePreview } from "@/components/first-run/FirstRunApprovePreview";
 import { FirstRunDecisionCard } from "@/components/first-run/FirstRunDecisionCard";
+import { FirstRunErrorCard } from "@/components/first-run/FirstRunErrorCard";
+import { FirstRunLowDataCard } from "@/components/first-run/FirstRunLowDataCard";
 import { FirstRunProgress } from "@/components/first-run/FirstRunProgress";
 import { FirstRunWhyPanel } from "@/components/first-run/FirstRunWhyPanel";
+import { ACTIVATION_EVENTS, activationTrackPayload } from "@/lib/analytics/activation-events";
+import { resolveFirstRunPhase } from "@/lib/first-run/types";
 import type { FirstRunAnalyzeResult, FirstRunStage } from "@/lib/first-run/types";
 
 const WELCOME_STAGES: FirstRunStage[] = [
@@ -26,8 +30,6 @@ const WELCOME_STAGES: FirstRunStage[] = [
   },
 ];
 
-type Phase = "welcome" | "analyzing" | "decision" | "empty";
-
 async function track(event: string, props?: Record<string, unknown>) {
   try {
     await fetch("/api/first-run/track", {
@@ -42,46 +44,60 @@ async function track(event: string, props?: Record<string, unknown>) {
 
 export function FirstRunExperience({ installed }: { installed?: boolean }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("welcome");
+  const [analyzing, setAnalyzing] = useState(true);
   const [stages, setStages] = useState<FirstRunStage[]>(WELCOME_STAGES);
   const [result, setResult] = useState<FirstRunAnalyzeResult | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const phase = resolveFirstRunPhase({ result, error, analyzing });
+
   const runAnalyze = useCallback(async () => {
-    setPhase("analyzing");
+    setAnalyzing(true);
     setError(null);
     try {
       const res = await fetch("/api/first-run/analyze", { method: "POST" });
       const data = (await res.json()) as FirstRunAnalyzeResult;
-      if (!res.ok) {
-        setError("Analysis could not finish. You can retry or open Connections.");
-        setPhase("empty");
+      if (!res.ok || data.ok === false) {
+        setError(
+          data.emptyReason ?? "Analysis could not finish. You can retry or open Connections.",
+        );
+        setResult(data.ok === false ? data : null);
+        setAnalyzing(false);
         return;
       }
       setResult(data);
       setStages(data.stages);
-      if (data.decision) {
-        setPhase("decision");
-      } else {
-        setPhase("empty");
-      }
+      setAnalyzing(false);
     } catch {
       setError("Analysis could not finish. You can retry or open Connections.");
-      setPhase("empty");
+      setAnalyzing(false);
     }
   }, []);
 
   useEffect(() => {
-    void track("first_run_opened", { installed: Boolean(installed) });
+    const opened = activationTrackPayload({ source: "first_run" });
+    void track(ACTIVATION_EVENTS.firstRunOpened, { ...opened, installed: Boolean(installed) });
+    void track(ACTIVATION_EVENTS.firstRunStarted, { ...opened, installed: Boolean(installed) });
     const timer = window.setTimeout(() => {
       void runAnalyze();
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [installed, runAnalyze]);
 
-  // Progressive stage animation while waiting for analyze
+  useEffect(() => {
+    if (!result?.decision) return;
+    void track(
+      ACTIVATION_EVENTS.recommendationViewed,
+      activationTrackPayload({
+        source: "first_run",
+        recommendationId: result.decision.recommendationId,
+        recommendationType: result.decision.recommendationType,
+      }),
+    );
+  }, [result?.decision]);
+
   useEffect(() => {
     if (phase !== "analyzing" && phase !== "welcome") return;
     let i = 1;
@@ -103,6 +119,17 @@ export function FirstRunExperience({ installed }: { installed?: boolean }) {
     await fetch("/api/first-run/complete", { method: "POST" });
   }
 
+  async function trackRecommendationClicked() {
+    if (!result?.decision) return;
+    const props = activationTrackPayload({
+      source: "first_run",
+      recommendationId: result.decision.recommendationId,
+      recommendationType: result.decision.recommendationType,
+    });
+    await track(ACTIVATION_EVENTS.firstRecommendationClicked, props);
+    await track(ACTIVATION_EVENTS.recommendationClicked, props);
+  }
+
   async function handleSeeWhy() {
     setShowWhy(true);
     await track("see_why_clicked", {
@@ -114,6 +141,7 @@ export function FirstRunExperience({ installed }: { installed?: boolean }) {
     if (!result?.decision) return;
     setApproving(true);
     try {
+      await trackRecommendationClicked();
       const res = await fetch("/api/decisions/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -167,9 +195,24 @@ export function FirstRunExperience({ installed }: { installed?: boolean }) {
     }
   }
 
-  async function handleSkipEmpty() {
+  async function handlePrimaryInsight() {
+    await trackRecommendationClicked();
     await completeFirstRun();
-    router.push("/connections?tab=advertising");
+    router.push(result?.decision?.primaryCta.href ?? "/");
+  }
+
+  async function handleLowDataPrimary() {
+    await track("next_best_action_clicked", {
+      source: "first_run",
+      href: result?.firstValue?.primaryAction.href,
+    });
+    await completeFirstRun();
+    router.push(result?.firstValue?.primaryAction.href ?? "/connections?tab=advertising");
+  }
+
+  async function handleLowDataGrow() {
+    await completeFirstRun();
+    router.push("/");
   }
 
   return (
@@ -179,10 +222,10 @@ export function FirstRunExperience({ installed }: { installed?: boolean }) {
           <>
             <header className="first-run-welcome">
               <p className="first-run-eyebrow">Welcome to StorePilot</p>
-              <h1>We&apos;re analyzing your business.</h1>
+              <h1>We&apos;re analyzing your store.</h1>
               <p className="first-run-lede">
-                This usually takes 1–2 minutes. Today you&apos;ll receive your first executive
-                recommendation.
+                This usually takes 1–2 minutes. Today you&apos;ll receive your first AI
+                recommendation from your live Shopify data.
               </p>
             </header>
             <FirstRunProgress stages={stages} />
@@ -192,47 +235,44 @@ export function FirstRunExperience({ installed }: { installed?: boolean }) {
         {phase === "decision" && result?.decision && (
           <>
             <header className="first-run-welcome">
-              <p className="first-run-eyebrow">Your briefing is ready</p>
-              <h1>One decision worth your attention</h1>
+              <p className="first-run-eyebrow">Your first AI recommendation</p>
+              <h1>StorePilot found something useful in your store.</h1>
             </header>
             <FirstRunDecisionCard
               decision={result.decision}
               onSeeWhy={() => void handleSeeWhy()}
               onApprove={() => void handleApprove()}
               onReject={() => void handleReject()}
+              onPrimary={() => void handlePrimaryInsight()}
               approving={approving}
             />
-            {showWhy ? <FirstRunWhyPanel decision={result.decision} /> : null}
-            <FirstRunApprovePreview decision={result.decision} />
+            {showWhy || result.decision.presentation === "first_insight" ? (
+              <FirstRunWhyPanel decision={result.decision} />
+            ) : null}
+            {result.decision.presentation === "executive_decision" ? (
+              <FirstRunApprovePreview decision={result.decision} />
+            ) : null}
           </>
         )}
 
-        {phase === "empty" && (
-          <section className="card first-run-empty">
-            <h1 style={{ marginTop: 0 }}>Still gathering signal</h1>
-            <p>
-              {result?.emptyReason ??
-                error ??
-                "We're still analyzing your store. Connect advertising accounts to unlock more recommendations."}
-            </p>
-            <div className="first-run-decision-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => void runAnalyze()}>
-                Retry analysis
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void handleSkipEmpty()}>
-                Connect advertising
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  void completeFirstRun().then(() => router.push("/"));
-                }}
-              >
-                Go to Executive
-              </button>
-            </div>
-          </section>
+        {phase === "low_data" && result?.firstValue && (
+          <FirstRunLowDataCard
+            firstValue={result.firstValue}
+            onPrimary={() => void handleLowDataPrimary()}
+            onGrow={() => void handleLowDataGrow()}
+          />
+        )}
+
+        {phase === "error" && (
+          <FirstRunErrorCard
+            message={
+              error ??
+              result?.emptyReason ??
+              "Analysis could not finish. Retry, or open Connections."
+            }
+            onRetry={() => void runAnalyze()}
+            onConnections={() => router.push("/connections")}
+          />
         )}
 
         {error && phase === "decision" ? (

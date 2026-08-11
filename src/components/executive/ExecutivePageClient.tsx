@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ExecutivePageData } from "@/lib/services/analytics";
 import { recordExecutiveVisitSnapshot } from "@/actions/visit-tracking";
+import { ACTIVATION_EVENTS, activationTrackPayload } from "@/lib/analytics/activation-events";
 import { LazyWhenVisible } from "@/components/performance/LazyWhenVisible";
 import { ExecutiveCeoOperatingPanel } from "@/components/executive/ceo-os/ExecutiveCeoOperatingPanel";
 import { ExecutiveHeroSection } from "@/components/executive/advisor/ExecutiveHeroSection";
@@ -124,6 +125,14 @@ export function ExecutivePageClient({
       openDecisionCount: view.autopilot.pendingCount,
       threatLabel: view.executiveMode.biggestThreat.label,
     });
+    void fetch("/api/first-run/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: ACTIVATION_EVENTS.dashboardViewed,
+        props: activationTrackPayload({ source: "executive" }),
+      }),
+    }).catch(() => undefined);
   }, []);
 
   return (

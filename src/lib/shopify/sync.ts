@@ -1,6 +1,7 @@
 import type {
   ProfitOrderBucket,
   ProfitOrderRollups,
+  ShopProfile,
   ShopifyCollection,
   ShopifyProduct,
   StoreSnapshot,
@@ -40,6 +41,7 @@ const PRODUCTS_QUERY = `
           title
           tags
           createdAt
+          description
           featuredImage { url }
           totalInventory
           variants(first: 20) {
@@ -154,6 +156,18 @@ const SHOP_QUERY = `
   }
 `;
 
+const SHOP_PROFILE_QUERY = `
+  query ShopProfile {
+    shop {
+      createdAt
+      shopPolicies {
+        type
+        body
+      }
+    }
+  }
+`;
+
 const DISCOUNTS_COUNT_QUERY = `
   query DiscountCount($cursor: String) {
     discountNodes(first: 50, after: $cursor) {
@@ -168,6 +182,7 @@ type RawProduct = {
   title: string;
   tags: string[];
   createdAt?: string | null;
+  description?: string | null;
   featuredImage?: { url: string } | null;
   totalInventory: number;
   variants: {
@@ -400,6 +415,8 @@ async function syncShopifyStoreInner(
   const productOrderStats = Object.fromEntries(productOrderStatsMap);
   const commerceOrders = transformCommerceOrders(rawOrders, unitCostByProduct);
 
+  const shopProfile = await fetchShopProfile(shop, tokenState, graphqlContext);
+
   const inventoryCount = products.reduce((s, p) => s + p.inventoryQuantity, 0);
 
   const stats: ShopifySyncStats = {
@@ -425,6 +442,9 @@ async function syncShopifyStoreInner(
       productOrderStats,
       commerceOrders,
       shopifyCustomersCount: shopInfo.customersCount.count,
+      shopProfile: shopProfile ?? {
+        name: shopInfo.shop.name,
+      },
     },
     stats,
     shopName: shopInfo.shop.name,
@@ -445,6 +465,72 @@ type DiscountQueryResult = {
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
   };
 };
+
+type ShopPolicyNode = {
+  type?: string | null;
+  body?: string | null;
+};
+
+function policyPresent(policies: ShopPolicyNode[] | undefined, type: string): boolean {
+  const match = (policies ?? []).find((p) => (p.type ?? "").toUpperCase() === type);
+  return Boolean(match?.body && match.body.replace(/<[^>]+>/g, "").trim().length > 0);
+}
+
+async function fetchShopProfile(
+  shop: string,
+  tokenState: { accessToken: string },
+  context?: ShopifyGraphQLContext,
+): Promise<ShopProfile | null> {
+  try {
+    const result = await shopifyGraphQLResult<{
+      shop: {
+        createdAt?: string | null;
+        shopPolicies?: ShopPolicyNode[] | null;
+      };
+    }>(shop, tokenState.accessToken, SHOP_PROFILE_QUERY, undefined, context);
+
+    if (result.errors.length > 0) {
+      if (
+        isGraphQLFieldAccessDenied(result.errors, "shopPolicies") ||
+        isGraphQLFieldAccessDenied(result.errors, "shop")
+      ) {
+        console.warn("[shopify-sync] shop profile unavailable", {
+          shop,
+          message: result.errors.map((e) => e.message).join("; "),
+        });
+        return null;
+      }
+      console.warn("[shopify-sync] shop profile query errors", {
+        shop,
+        message: result.errors.map((e) => e.message).join("; "),
+      });
+      return result.data?.shop
+        ? { createdAt: result.data.shop.createdAt ?? undefined }
+        : null;
+    }
+
+    const node = result.data?.shop;
+    if (!node) return null;
+    const policies = node.shopPolicies ?? undefined;
+    return {
+      createdAt: node.createdAt ?? undefined,
+      policies: policies
+        ? {
+            refund: policyPresent(policies, "REFUND_POLICY"),
+            privacy: policyPresent(policies, "PRIVACY_POLICY"),
+            shipping: policyPresent(policies, "SHIPPING_POLICY"),
+            terms: policyPresent(policies, "TERMS_OF_SERVICE"),
+          }
+        : undefined,
+    };
+  } catch (error) {
+    console.warn(
+      "[shopify-sync] shop profile skipped",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
 
 async function fetchAllOrders(
   shop: string,
@@ -739,10 +825,13 @@ function transformProducts(
     const allUntracked =
       variantItems.length > 0 && variantItems.every((item) => item?.tracked === false);
 
+    const description = (p.description ?? "").trim();
     return {
       id: p.id,
       title: p.title,
       imageUrl: p.featuredImage?.url ?? undefined,
+      description: description ? description.slice(0, 500) : "",
+      descriptionLength: description.length,
       inventoryQuantity: inventory,
       inventoryTracked: allUntracked ? false : anyTracked ? true : undefined,
       unitsSold30d: sale?.units ?? 0,

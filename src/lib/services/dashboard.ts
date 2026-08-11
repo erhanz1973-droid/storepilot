@@ -27,6 +27,7 @@ import { resolveMerchantBusinessProfile } from "@/lib/business-model/profile";
 import { buildDecisionPackContext } from "@/lib/decision-packs/registry";
 import { computeBusinessModelHealth } from "@/lib/business-model/health";
 import { resolveMerchantDNA } from "@/lib/merchant-dna/resolver";
+import { buildGrowthCopilotView, classifyMerchantStage } from "@/lib/growth-copilot";
 import {
   getCachedVerifiedStoreData,
   getVerifiedStoreDataForSnapshot,
@@ -523,6 +524,18 @@ export async function buildDashboard(
     productIntelligence,
     skipPersist: options?.readOnly,
   });
+  const merchantStage = classifyMerchantStage({
+    snapshot,
+    profitDashboard,
+    hasProductCosts: costRecords.length > 0,
+  }).stage;
+  const growthCopilot = buildGrowthCopilotView({
+    storeId,
+    snapshot,
+    profitDashboard,
+    hasProductCosts: costRecords.length > 0,
+    recommendations: activeRecs,
+  });
   const profitEngine = profitDashboard
     ? buildProfitDecisionEngine({
         snapshot,
@@ -562,6 +575,7 @@ export async function buildDashboard(
     businessProfile,
     decisionPackContext,
     merchantDna,
+    merchantStage,
   });
 
   const decisionCenter = filterMerchantReadyDecisions(enrichDecisionsWithQa(allDecisions));
@@ -631,6 +645,8 @@ export async function buildDashboard(
     dashboardWidgets: decisionPackContext.pack.dashboardWidgets,
     merchantDna,
     merchantBenchmark,
+    merchantStage,
+    growthCopilot,
   };
 }
 
