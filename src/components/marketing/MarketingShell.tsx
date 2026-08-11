@@ -17,9 +17,12 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           />
           <span>StorePilot AI</span>
         </Link>
+        <Link href="/#start" className="marketing-header-cta">
+          Start Free
+        </Link>
         <nav className="marketing-nav" aria-label="Primary">
-          <a href="#features">Features</a>
-          <a href="#about">About</a>
+          <a href="/#benefits">Why StorePilot</a>
+          <a href="/#how-it-works">How it works</a>
           <Link href="/contact">Contact</Link>
         </nav>
       </header>
@@ -31,6 +34,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         <nav className="marketing-footer-links" aria-label="Legal">
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms of Service</Link>
+          <Link href="/data-deletion">Data Deletion</Link>
           <Link href="/contact">Contact</Link>
         </nav>
         <p className="marketing-footer-copy">

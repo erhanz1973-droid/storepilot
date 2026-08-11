@@ -19,6 +19,7 @@ import { ACTIVE_STORE_COOKIE } from "@/lib/store/context";
 import { tenantBindingCookie } from "@/lib/store/tenant-binding";
 import { buildEmbeddedAdminReturnUrl } from "@/lib/shopify/embedded-return-url";
 import { trackAlphaEvent } from "@/lib/analytics/alpha-funnel";
+import { trackMetaCapiEvent } from "@/lib/marketing/capi";
 
 export async function GET(request: Request) {
   const config = getShopifyConfig();
@@ -143,6 +144,7 @@ export async function GET(request: Request) {
 
     await trackAlphaEvent(storeId, "installation_completed", { shop });
     await trackAlphaEvent(storeId, "shopify_connected", { shop, source: "oauth_callback" });
+    await trackMetaCapiEvent("ConnectShopify");
 
     const embeddedReturnUrl = await buildEmbeddedAdminReturnUrl(
       storeId,

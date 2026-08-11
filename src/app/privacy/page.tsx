@@ -3,7 +3,7 @@ import Link from "next/link";
 import { marketingPageMetadata } from "@/lib/marketing/metadata";
 import { MARKETING_SITE_URL, MARKETING_SUPPORT_EMAIL } from "@/lib/marketing/site";
 
-const LAST_UPDATED = "July 20, 2026";
+const LAST_UPDATED = "August 11, 2026";
 const CONTACT_EMAIL = MARKETING_SUPPORT_EMAIL;
 
 export const metadata: Metadata = marketingPageMetadata(
@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
       <header className="page-header">
         <h1>Privacy Policy</h1>
         <p className="muted">
-          Last Updated: <time dateTime="2026-07-20">{LAST_UPDATED}</time>
+          Last Updated: <time dateTime="2026-08-11">{LAST_UPDATED}</time>
         </p>
       </header>
 
@@ -178,9 +178,9 @@ export default function PrivacyPolicyPage() {
         <section aria-labelledby="cookies">
           <h2 id="cookies">7. Cookies</h2>
           <p>
-            StorePilot AI uses only strictly necessary, first-party cookies. We do not use
-            advertising, tracking, or third-party analytics cookies, and we do not respond to
-            cross-site tracking. The cookies we set are:
+            The StorePilot AI application opened from Shopify Admin uses only strictly necessary,
+            first-party cookies. We do not load advertising pixels inside Shopify Admin. The
+            cookies we set in the app are:
           </p>
           <ul>
             <li>
@@ -195,8 +195,23 @@ export default function PrivacyPolicyPage() {
             </li>
           </ul>
           <p>
-            Because these cookies are essential for the service to function, they do not require
-            consent under the ePrivacy rules; the app cannot operate without them.
+            Because these app cookies are essential for the service to function, they do not
+            require consent under the ePrivacy rules; the app cannot operate without them.
+          </p>
+          <p>
+            Our public marketing website ({MARKETING_SITE_URL.replace(/^https?:\/\//, "")}) may
+            load the Meta Pixel when advertising measurement is configured, so we can understand
+            which ads led visitors to the site and to start a free Shopify connection. That pixel
+            may set Meta cookies such as <code>_fbp</code>. It is not loaded inside the Shopify
+            Admin app. You can control Meta ads cookies in your{" "}
+            <a
+              href="https://www.facebook.com/settings?tab=ads"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Meta ad settings
+            </a>
+            .
           </p>
         </section>
 

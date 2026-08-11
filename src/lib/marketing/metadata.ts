@@ -3,14 +3,17 @@ import { MARKETING_SITE_URL } from "./site";
 
 const OG_IMAGE = `${MARKETING_SITE_URL}/images/logo.png`;
 
+const TITLE = "StorePilot AI — Your AI Store Manager for Shopify";
+const DESCRIPTION =
+  "StorePilot AI analyzes your Shopify store, profitability and advertising to tell you what to do next.";
+
 export const marketingSiteMetadata: Metadata = {
   metadataBase: new URL(MARKETING_SITE_URL),
   title: {
-    default: "StorePilot AI | Shopify Analytics & AI Insights",
+    default: TITLE,
     template: "%s | StorePilot AI",
   },
-  description:
-    "Analyze sales, advertising and profitability with AI-powered insights for Shopify.",
+  description: DESCRIPTION,
   alternates: {
     canonical: MARKETING_SITE_URL,
   },
@@ -19,9 +22,8 @@ export const marketingSiteMetadata: Metadata = {
     locale: "en_US",
     url: MARKETING_SITE_URL,
     siteName: "StorePilot AI",
-    title: "StorePilot AI | Shopify Analytics & AI Insights",
-    description:
-      "Analyze sales, advertising and profitability with AI-powered insights for Shopify.",
+    title: TITLE,
+    description: DESCRIPTION,
     images: [
       {
         url: OG_IMAGE,
@@ -33,9 +35,8 @@ export const marketingSiteMetadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "StorePilot AI | Shopify Analytics & AI Insights",
-    description:
-      "Analyze sales, advertising and profitability with AI-powered insights for Shopify.",
+    title: TITLE,
+    description: DESCRIPTION,
     images: [OG_IMAGE],
   },
   robots: {

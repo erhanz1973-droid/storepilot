@@ -1,24 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { marketingPageMetadata } from "@/lib/marketing/metadata";
+import { MARKETING_SITE_URL } from "@/lib/marketing/site";
 
-const SITE_URL = "https://storepilot-production-d591.up.railway.app";
 const LAST_UPDATED = "July 18, 2026";
 const CONTACT_EMAIL = "erhanz1973@gmail.com";
 
-export const metadata: Metadata = {
-  title: "User Data Deletion — StorePilot AI",
-  description:
-    "How to request deletion of your StorePilot AI data, including Shopify, Google Ads, GA4, and Meta Ads connection data, OAuth tokens, and stored analytics.",
-  alternates: { canonical: `${SITE_URL}/data-deletion` },
-  openGraph: {
-    title: "User Data Deletion — StorePilot AI",
-    description:
-      "Instructions for requesting deletion of StorePilot AI connection data, OAuth tokens, and stored analytics.",
-    url: `${SITE_URL}/data-deletion`,
-    type: "article",
-  },
-  robots: { index: true, follow: true },
-};
+export const metadata: Metadata = marketingPageMetadata(
+  "/data-deletion",
+  "User Data Deletion — StorePilot AI",
+  "How to request deletion of your StorePilot AI data, including Shopify, Google Ads, GA4, and Meta Ads connection data, OAuth tokens, and stored analytics.",
+);
 
 export default function DataDeletionPage() {
   return (
@@ -192,7 +184,7 @@ export default function DataDeletionPage() {
             our systems, use Option A above (email{" "}
             <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>) or disconnect Meta Ads from
             Connections and uninstall the app. This URL —{" "}
-            <a href={`${SITE_URL}/data-deletion`}>{SITE_URL}/data-deletion</a> — is the official
+            <a href={`${MARKETING_SITE_URL}/data-deletion`}>{MARKETING_SITE_URL}/data-deletion</a> — is the official
             User Data Deletion instructions page for our Meta app listing.
           </p>
         </section>
@@ -207,7 +199,7 @@ export default function DataDeletionPage() {
               {CONTACT_EMAIL}
             </a>
             <br />
-            Website: <a href={SITE_URL}>{SITE_URL}</a>
+            Website: <a href={MARKETING_SITE_URL}>{MARKETING_SITE_URL}</a>
           </p>
         </section>
 

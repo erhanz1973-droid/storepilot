@@ -3,7 +3,7 @@ import { MARKETING_SITE_URL } from "@/lib/marketing/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
-  const routes = ["/", "/privacy", "/terms", "/contact"];
+  const routes = ["/", "/privacy", "/terms", "/contact", "/data-deletion"];
 
   return routes.map((path) => ({
     url: `${MARKETING_SITE_URL}${path}`,

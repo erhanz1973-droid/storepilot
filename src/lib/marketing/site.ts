@@ -66,7 +66,13 @@ export async function isMarketingRequest(): Promise<boolean> {
   return isMarketingHost(host);
 }
 
-export const MARKETING_PATHS = new Set(["/", "/privacy", "/terms", "/contact"]);
+export const MARKETING_PATHS = new Set([
+  "/",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/data-deletion",
+]);
 
 export function isMarketingPath(pathname: string): boolean {
   return MARKETING_PATHS.has(pathname);

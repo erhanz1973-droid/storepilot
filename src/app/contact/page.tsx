@@ -6,7 +6,7 @@ import { MARKETING_SUPPORT_EMAIL } from "@/lib/marketing/site";
 export const metadata: Metadata = marketingPageMetadata(
   "/contact",
   "Contact — StorePilot AI",
-  "Contact StorePilot AI support for help with our Shopify analytics app.",
+  "Contact StorePilot AI support for help connecting your Shopify store and using your AI Store Manager.",
 );
 
 export default function ContactPage() {

@@ -1,6 +1,7 @@
 import { AppNav } from "@/components/AppNav";
 import { DemoDataBadge } from "@/components/DemoDataBadge";
 import { MarketingShell } from "@/components/marketing/MarketingShell";
+import { MetaPixel } from "@/components/marketing/MetaPixel";
 import { EmbeddedShopifyBootstrap } from "@/components/shopify/EmbeddedShopifyBootstrap";
 import { ShopifyAppBridgeNav } from "@/components/shopify/ShopifyAppBridgeNav";
 import { marketingSiteMetadata } from "@/lib/marketing/metadata";
@@ -29,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en">
         <body>
+          <MetaPixel />
           <MarketingShell>{children}</MarketingShell>
         </body>
       </html>

@@ -1,5 +1,6 @@
 import type { Session } from "@shopify/shopify-api";
 import { trackAlphaEvent } from "@/lib/analytics/alpha-funnel";
+import { trackMetaCapiEvent } from "@/lib/marketing/capi";
 import { updateShopifySyncResult } from "@/lib/db/shopify";
 import { isShopifyReinstallRequiredError } from "@/lib/shopify/auth-errors";
 import { persistInstallationFromSession } from "@/lib/shopify/persist-installation.server";
@@ -42,6 +43,7 @@ export async function runAfterEmbeddedAuth(session: Session): Promise<void> {
       shop: session.shop,
       source: "embedded_afterAuth",
     });
+    await trackMetaCapiEvent("ConnectShopify");
   }
 
   try {

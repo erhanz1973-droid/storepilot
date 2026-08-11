@@ -1,75 +1,103 @@
 import Image from "next/image";
+import { LandingTracker } from "@/components/marketing/LandingTracker";
+import { ProductPreviews } from "@/components/marketing/ProductPreviews";
+import { StartFreeForm } from "@/components/marketing/StartFreeForm";
 
-const FEATURES = [
+const BENEFITS = [
   {
-    title: "Unified Analytics",
-    description: "See sales, traffic, and advertising metrics in one place.",
+    title: "Know what to do next",
+    description:
+      "StorePilot turns your store and advertising data into actionable AI recommendations.",
   },
   {
-    title: "AI Recommendations",
-    description: "Actionable insights to grow revenue and reduce wasted spend.",
+    title: "Understand real profitability",
+    description: "See which products, channels and campaigns actually make money.",
   },
   {
-    title: "Profitability Tracking",
-    description: "Understand margins, costs, and true store performance.",
-  },
-  {
-    title: "Advertising Performance",
-    description: "Connect Google Ads and Meta Ads to measure ROAS alongside sales.",
-  },
-  {
-    title: "Store Health Score",
-    description: "A clear signal of inventory, orders, and operational health.",
-  },
-  {
-    title: "Custom Reports",
-    description: "Executive summaries and reports built for Shopify merchants.",
+    title: "Manage your store with AI",
+    description:
+      "Get a clear view of what needs attention instead of jumping between multiple dashboards.",
   },
 ] as const;
+
+const FLOW = ["Data", "Analysis", "Recommendation", "Action"] as const;
 
 export function LandingPage() {
   return (
     <>
+      <LandingTracker />
+
       <section className="marketing-hero" aria-labelledby="hero-title">
         <div className="marketing-hero-inner">
           <Image
             src="/images/logo.png"
             alt=""
-            width={88}
-            height={88}
+            width={64}
+            height={64}
             className="marketing-hero-logo"
             priority
           />
-          <h1 id="hero-title">StorePilot AI</h1>
-          <p className="marketing-hero-subtitle">
-            AI-powered analytics, profitability and advertising insights for Shopify merchants.
+          <p className="marketing-hero-brand">StorePilot AI</p>
+          <h1 id="hero-title">Your AI Store Manager for Shopify</h1>
+          <p className="marketing-hero-lead">
+            Stop staring at dashboards. Start making better decisions.
           </p>
-          <p className="marketing-cta" role="status">
-            Coming Soon on Shopify App Store
+          <p className="marketing-hero-subtitle">
+            StorePilot AI analyzes your sales, products, profitability and advertising to tell you{" "}
+            <strong>what to do next</strong>.
+          </p>
+          <StartFreeForm id="start" variant="hero" />
+          <p className="marketing-connect-hint">
+            Connect your Shopify store and start analyzing your business with AI.
+          </p>
+          <p className="marketing-trust-line">
+            Sales · Profitability · Meta Ads · Google Ads · AI Recommendations
           </p>
         </div>
       </section>
 
-      <section id="features" className="marketing-section" aria-labelledby="features-title">
-        <h2 id="features-title">Features</h2>
+      <section id="benefits" className="marketing-section" aria-labelledby="benefits-title">
+        <h2 id="benefits-title">What you get</h2>
         <ul className="marketing-features">
-          {FEATURES.map((feature) => (
-            <li key={feature.title} className="marketing-feature-card">
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
+          {BENEFITS.map((benefit) => (
+            <li key={benefit.title} className="marketing-feature-card">
+              <h3>{benefit.title}</h3>
+              <p>{benefit.description}</p>
             </li>
           ))}
         </ul>
       </section>
 
-      <section id="about" className="marketing-section marketing-about" aria-labelledby="about-title">
-        <h2 id="about-title">About</h2>
+      <section
+        id="how-it-works"
+        className="marketing-section marketing-about"
+        aria-labelledby="how-title"
+      >
+        <h2 id="how-title">Your Shopify store already has the data. StorePilot turns it into decisions.</h2>
         <p>
-          StorePilot AI helps Shopify merchants monitor sales, advertising, profitability, and store
-          performance from a single dashboard. Install from Shopify Admin, connect your store, and
-          optionally link Google Ads, Meta Ads, and Google Analytics 4 for a complete picture of
-          what drives growth.
+          StorePilot connects your Shopify store with your advertising and analytics data, analyzes
+          performance and identifies the actions that can improve your business.
         </p>
+        <ol className="marketing-flow">
+          {FLOW.map((step, index) => (
+            <li key={step}>
+              <span className="marketing-flow-step">{step}</span>
+              {index < FLOW.length - 1 ? (
+                <span className="marketing-flow-arrow" aria-hidden="true">
+                  →
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <ProductPreviews />
+
+      <section className="marketing-section marketing-bottom-cta" aria-labelledby="bottom-cta-title">
+        <h2 id="bottom-cta-title">Start analyzing your store with AI</h2>
+        <p>Connect Shopify. StorePilot shows you what to do next. No credit card required.</p>
+        <StartFreeForm id="start-bottom" variant="footer" />
       </section>
     </>
   );

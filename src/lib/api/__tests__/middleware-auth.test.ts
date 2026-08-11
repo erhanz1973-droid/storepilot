@@ -147,6 +147,17 @@ describe("middleware API authentication", () => {
     );
   });
 
+  it("allows marketing documents on the public marketing host without a session", async () => {
+    for (const path of ["/", "/privacy", "/terms", "/contact", "/data-deletion"]) {
+      const response = await middleware(
+        new NextRequest(`https://storepilotai.pro${path}`, {
+          headers: { host: "storepilotai.pro" },
+        }),
+      );
+      expect(response.status, path).toBe(200);
+    }
+  });
+
   it("leaves public routes (webhooks, oauth, bootstrap, cron) unguarded by session tokens", async () => {
     for (const path of [
       "/api/shopify/webhooks",

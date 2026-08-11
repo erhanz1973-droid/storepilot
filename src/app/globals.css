@@ -22518,11 +22518,11 @@ button {
 }
 
 .marketing-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 24px;
+  gap: 12px 16px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   background: rgba(26, 29, 39, 0.85);
   backdrop-filter: blur(8px);
@@ -22539,12 +22539,47 @@ button {
   font-size: 1.05rem;
 }
 
+.marketing-header-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.marketing-header-cta:hover {
+  background: var(--accent-dim);
+}
+
 .marketing-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px 20px;
   font-size: 0.9rem;
   color: var(--muted);
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 720px) {
+  .marketing-header {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .marketing-nav {
+    grid-column: auto;
+    justify-content: flex-end;
+    margin-right: 4px;
+    order: 0;
+  }
+
+  .marketing-header-cta {
+    order: 1;
+  }
 }
 
 .marketing-nav a:hover {
@@ -22560,7 +22595,7 @@ button {
 }
 
 .marketing-hero {
-  padding: 72px 0 56px;
+  padding: 28px 0 32px;
   text-align: center;
 }
 
@@ -22570,22 +22605,45 @@ button {
 }
 
 .marketing-hero-logo {
-  margin: 0 auto 20px;
-  border-radius: 16px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+}
+
+.marketing-hero-brand {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .marketing-hero h1 {
-  margin: 0 0 16px;
-  font-size: clamp(2rem, 5vw, 3rem);
-  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  font-size: clamp(1.55rem, 6vw, 2.6rem);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.marketing-hero-lead {
+  margin: 0 auto 12px;
+  max-width: 540px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .marketing-hero-subtitle {
-  margin: 0 auto 28px;
+  margin: 0 auto 20px;
   max-width: 560px;
-  font-size: 1.15rem;
-  line-height: 1.55;
+  font-size: 1rem;
+  line-height: 1.5;
   color: var(--muted);
+}
+
+.marketing-hero-subtitle strong {
+  color: var(--text);
+  font-weight: 650;
 }
 
 .marketing-cta {
@@ -22593,11 +22651,312 @@ button {
   margin: 0;
   padding: 12px 22px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
   font-size: 0.95rem;
-  box-shadow: var(--shadow);
+}
+
+.marketing-cta-note {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.marketing-connect-hint {
+  margin: 16px auto 0;
+  max-width: 480px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.marketing-trust-line {
+  margin: 18px auto 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.marketing-start-form {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.marketing-start-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.marketing-start-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.marketing-start-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.marketing-start-input::placeholder {
+  color: var(--muted);
+}
+
+.marketing-start-submit {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 12px 22px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.marketing-start-error {
+  margin: 8px 0 0;
+  color: var(--critical);
+  font-size: 0.85rem;
+}
+
+.marketing-section-lead {
+  margin: -8px auto 24px;
+  max-width: 560px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.marketing-flow {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 4px;
+  margin: 28px 0 0;
+  padding: 0;
+}
+
+.marketing-flow li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing-flow-step {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.marketing-flow-arrow {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.marketing-previews {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.marketing-preview-card {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.marketing-preview-card h3 {
+  margin: 14px 0 6px;
+  font-size: 1rem;
+}
+
+.marketing-preview-card > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.marketing-preview-ui {
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.marketing-preview-ui-head,
+.marketing-preview-eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.marketing-preview-health {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.marketing-preview-ring {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-color: var(--low);
+}
+
+.marketing-preview-ring .health-ring-value {
+  font-size: 1.3rem;
+}
+
+.marketing-preview-status {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--low);
+}
+
+.marketing-preview-factors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.marketing-preview-factors li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.marketing-preview-rec-title {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.marketing-preview-metrics,
+.marketing-preview-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.marketing-preview-metrics div,
+.marketing-preview-kpis div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marketing-preview-metrics span,
+.marketing-preview-kpis span {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.marketing-preview-metrics strong,
+.marketing-preview-kpis strong {
+  font-size: 0.88rem;
+}
+
+.marketing-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.marketing-preview-chip {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.marketing-preview-chip.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.marketing-preview-table {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.marketing-preview-table li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketing-preview-table li:last-child {
+  border-bottom: 0;
+}
+
+.marketing-preview-table .positive {
+  color: var(--low);
+}
+
+.marketing-preview-table .negative {
+  color: var(--critical);
+}
+
+.marketing-preview-note {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.marketing-bottom-cta {
+  text-align: center;
+  padding: 40px 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.marketing-bottom-cta h2 {
+  margin-bottom: 8px;
+}
+
+.marketing-bottom-cta > p {
+  margin: 0 auto 20px;
+  max-width: 480px;
+  color: var(--muted);
 }
 
 .marketing-section {
@@ -22693,9 +23052,7 @@ button {
 
 @media (max-width: 640px) {
   .marketing-header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 14px 16px;
+    padding: 10px 16px;
   }
 
   .marketing-main {
@@ -22703,10 +23060,30 @@ button {
   }
 
   .marketing-hero {
-    padding: 48px 0 40px;
+    padding: 20px 0 24px;
+  }
+
+  .marketing-hero-logo {
+    width: 48px;
+    height: 48px;
   }
 
   .marketing-nav {
-    gap: 14px;
+    gap: 12px 16px;
+    font-size: 0.82rem;
+  }
+
+  .marketing-section {
+    padding: 36px 0;
+  }
+
+  .marketing-start-submit {
+    flex: 1 1 100%;
+  }
+}
+
+@media (min-width: 641px) {
+  .marketing-hero {
+    padding: 56px 0 48px;
   }
 }
